@@ -29,4 +29,3 @@ permissions:
   Owner.Core:
     description: ꜰᴜʟʟ ᴀᴄᴄᴇꜱꜱ ᴛᴏ ᴇᴠᴇʀʏ ᴘᴠᴘᴄᴏʀᴇ ꜰᴇᴀᴛᴜʀᴇ.
     default: op
-}
