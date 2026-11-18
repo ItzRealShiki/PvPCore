@@ -75,9 +75,7 @@ public final class WorldManager {
                 int surface=height(wx,wz,seed);
                 if (biome != null) biomeGrid.setBiome(x,z,biome);
                 data.setBlock(x,minY,z,Material.BEDROCK);
-                for (int y=minY+1; y<surface-4; y++) {
-                    data.setBlock(x, y, z, y <= 0 ? Material.DEEPSLATE : Material.STONE);
-                }
+                for (int y=minY+1; y<surface-4; y++) data.setBlock(x,y,z,y <= 0 ? Material.DEEPSLATE : Material.STONE);
                 for (int y=surface-4; y<surface; y++) data.setBlock(x,y,z,filler);
                 data.setBlock(x,surface,z,top);
                 if (terrainKey.equals("snow")) data.setBlock(x,surface+1,z,Material.SNOW);
@@ -97,78 +95,49 @@ public final class WorldManager {
             int[] ceilings = {120, 64, 48, 32, 16, 24, 16, 24};
             for (int i=0;i<types.length;i++) for (int vein=0;vein<counts[i];vein++) {
                 int ox=ores.nextInt(16), oz=ores.nextInt(16);
-                int oy=minY+5+ores.nextInt(Math.ma            // Natural, less frequent trees with persistent leaves that never decay.
+                int oy=minY+5+ores.nextInt(Math.max(1, ceilings[i]-minY-4));
+                for (int j=0;j<sizes[i];j++) {
+                    int px=ox+ores.nextInt(3)-1, py=oy+ores.nextInt(3)-1, pz=oz+ores.nextInt(3)-1;
+                    if (px<0||px>15||pz<0||pz>15||py<=minY||py>=height(chunkX*16+px,chunkZ*16+pz,seed)-4) continue;
+                    Material base = data.getType(px,py,pz);
+                    if (base == Material.STONE || base == Material.DEEPSLATE) {
+                        data.setBlock(px,py,pz,py <= 0 ? deepslateTypes[i] : types[i]);
+                    }
+                }
+            }
+
+            // Natural trees are 60% less common than the previous generator.
             Random flora = new Random(seed + chunkX * 73428767L + chunkZ * 912931L);
-            if (!terrainKey.equals("desert") && flora.nextInt(100) < 40) {
-                int tx = flora.nextInt(8) + 4, tz = flora.nextInt(8) + 4;
-                int wx = chunkX * 16 + tx, wz = chunkZ * 16 + tz;
-                int sy = height(wx, wz, seed);
-                Material log = terrainKey.equals("snow") ? Material.SPRUCE_LOG
-                        : terrainKey.equals("badlands") ? Material.ACACIA_LOG : Material.OAK_LOG;
-                Material leaves = terrainKey.equals("snow") ? Material.SPRUCE_LEAVES
-                        : terrainKey.equals("badlands") ? Material.ACACIA_LEAVES : Material.OAK_LEAVES;
-                int trunkHeight = 5 + flora.nextInt(2);
-                for (int y = 1; y <= trunkHeight; y++) {
-                    data.setBlock(tx, sy + y, tz, log);
-                }
-
-                // Overlapping foliage layers create a rounded, uneven canopy instead of a flat cube.
-                org.bukkit.block.data.BlockData persistentLeaves = Bukkit.createBlockData(leaves);
-                if (persistentLeaves instanceof org.bukkit.block.data.type.Leaves leafData) {
-                    leafData.setPersistent(true);
-                }
-                for (int layer = 0; layer < 4; layer++) {
-                    int canopyY = sy + trunkHeight - 2 + layer;
-                    int radius = (layer == 1 || layer == 2) ? 3 : 2;
-                    for (int dx = -radius; dx <= radius; dx++) {
-                        for (int dz = -radius; dz <= radius; dz++) {
-                            double distance = dx * dx + dz * dz;
-                            if (distance > radius * radius + 1) continue;
-                            if (flora.nextDouble() < 0.13 && distance > 1) continue;
-                            int lx = tx + dx, lz = tz + dz;
-                            if (lx < 0 || lx >= 16 || lz < 0 || lz >= 16) continue;
-                            if (data.getType(lx, canopyY, lz).isAir()) {
-                                data.setBlock(lx, canopyY, lz, persistentLeaves);
-                            }
-                        }
-                    }
-                }
-                // A few lower leaves make the canopy blend naturally into the trunk.
-                for (int dy = -1; dy <= 0; dy++) {
-                    for (int dx = -1; dx <= 1; dx++) {
-                        for (int dz = -1; dz <= 1; dz++) {
-                            if (Math.abs(dx) + Math.abs(dz) > 2) continue;
-                            int lx = tx + dx, lz = tz + dz, ly = sy + trunkHeight + dy;
-                            if (lx >= 0 && lx < 16 && lz >= 0 && lz < 16
-                                    && data.getType(lx, ly, lz).isAir()) {
-                                data.setBlock(lx, ly, lz, persistentLeaves);
-                            }
-                        }
+            if (flora.nextInt(100) < 40 && !terrainKey.equals("desert")) {
+                int tx=flora.nextInt(8)+4, tz=flora.nextInt(8)+4;
+                int wx=chunkX*16+tx, wz=chunkZ*16+tz, sy=height(wx,wz,seed);
+                Material log=terrainKey.equals("snow")?Material.SPRUCE_LOG:
+                        terrainKey.equals("badlands")?Material.ACACIA_LOG:Material.OAK_LOG;
+                Material leaves=terrainKey.equals("snow")?Material.SPRUCE_LEAVES:
+                        terrainKey.equals("badlands")?Material.ACACIA_LEAVES:Material.OAK_LEAVES;
+                int trunkHeight=5+flora.nextInt(2);
+                for(int y=1;y<=trunkHeight;y++) data.setBlock(tx,sy+y,tz,log);
+                org.bukkit.block.data.BlockData leafBlock=Bukkit.createBlockData(leaves);
+                if(leafBlock instanceof org.bukkit.block.data.type.Leaves leafData) leafData.setPersistent(true);
+                for(int layer=0;layer<4;layer++) {
+                    int canopyY=sy+trunkHeight-2+layer;
+                    int radius=(layer==1||layer==2)?3:2;
+                    for(int dx=-radius;dx<=radius;dx++) for(int dz=-radius;dz<=radius;dz++) {
+                        int distance=dx*dx+dz*dz;
+                        if(distance>radius*radius+1 || (distance>1 && flora.nextDouble()<0.13)) continue;
+                        int lx=tx+dx,lz=tz+dz;
+                        if(lx>=0&&lx<16&&lz>=0&&lz<16&&data.getType(lx,canopyY,lz).isAir())
+                            data.setBlock(lx,canopyY,lz,leafBlock);
                     }
                 }
             }
-
-            // Sparse dead bushes in the desert, placed only on sand.
-            if (terrainKey.equals("desert") && flora.nextInt(100) < 85) {
-                int bushes = 1 + flora.nextInt(3);
-                for (int bush = 0; bush < bushes; bush++) {
-                    int bx = flora.nextInt(16), bz = flora.nextInt(16);
-                    int surface = height(chunkX * 16 + bx, chunkZ * 16 + bz, seed);
-                    if (data.getType(bx, surface, bz) == Material.SAND
-                            && data.getType(bx, surface + 1, bz).isAir()) {
-                        data.setBlock(bx, surface + 1, bz, Material.DEAD_BUSH);
-                    }
-                }
-            }
-           terrainKey.equals("badlands")?Material.ACACIA_LEAVES:Material.OAK_LEAVES;
-                for(int y=1;y<=4;y++) data.setBlock(tx,sy+y,tz,log);
-                for(int dx=-2;dx<=2;dx++) for(int dz=-2;dz<=2;dz++) {
-                    if(Math.abs(dx)+Math.abs(dz)>3) continue;
-                    for(int dy=2;dy<=5;dy++) {
-                        int lx=tx+dx, lz=tz+dz, ly=sy+dy;
-                        if(lx>=0&&lx<16&&lz>=0&&lz<16&&data.getType(lx,ly,lz).isAir())
-                            data.setBlock(lx,ly,lz,leaves);
-                    }
+            if(terrainKey.equals("desert") && flora.nextInt(100)<85) {
+                int count=1+flora.nextInt(3);
+                for(int i=0;i<count;i++) {
+                    int bx=flora.nextInt(16),bz=flora.nextInt(16);
+                    int surface=height(chunkX*16+bx,chunkZ*16+bz,seed);
+                    if(data.getType(bx,surface,bz)==Material.SAND && data.getType(bx,surface+1,bz).isAir())
+                        data.setBlock(bx,surface+1,bz,Material.DEAD_BUSH);
                 }
             }
             return data;
@@ -181,14 +150,51 @@ public final class WorldManager {
         @Override public boolean shouldGenerateStructures(){return false;}
     }
 
+    public void initializeWorldsOnce() {
+        if (plugin.getConfig().getBoolean("worlds.initialized", false)) return;
+        for (String key : WORLD_KEYS) {
+            World world = loadOrCreateWorld(key);
+            if (world == null) {
+                plugin.getLogger().severe("Could not initialize arena world: " + key);
+                return;
+            }
+        }
+        plugin.getConfig().set("worlds.initialized", true);
+        plugin.saveConfig();
+        plugin.getLogger().info("All PvPCore arena worlds were created on first startup.");
+    }
+
+    private World loadOrCreateWorld(String key) {
+        String name = plugin.getConfig().getString("worlds." + key + ".name", "pvp_" + key + "_arena");
+        World world = Bukkit.getWorld(name);
+        if (world == null) {
+            world = new WorldCreator(name).environment(World.Environment.NORMAL)
+                    .type(WorldType.NORMAL).generator(new PvPGenerator(key)).generateStructures(false).createWorld();
+        }
+        if (world != null) world.setGameRule(GameRule.DO_MOB_SPAWNING, false);
+        return world;
+    }
+
+    public void teleportToSpawn(Player player) {
+        World spawnWorld = Bukkit.getWorlds().stream()
+                .filter(world -> !isManagedWorldName(world.getName())).findFirst().orElse(null);
+        if (spawnWorld == null) {
+            spawnWorld = Bukkit.getWorld("pvpcore_regeneration_holding");
+            if (spawnWorld == null) spawnWorld = new WorldCreator("pvpcore_regeneration_holding")
+                    .environment(World.Environment.NORMAL).type(WorldType.NORMAL).createWorld();
+        }
+        if (spawnWorld == null) {
+            plugin.message(player, "&cThe server spawn world is unavailable.");
+            return;
+        }
+        player.teleport(spawnWorld.getSpawnLocation());
+        plugin.message(player, "&aTeleported to spawn.");
+    }
+
     public boolean teleport(Player player, String key) {
         String base="worlds."+key+".";
-        String name=plugin.getConfig().getString(base+"name","pvp_"+key+"_arena");
-        World world=Bukkit.getWorld(name);
-        if(world==null) world=new WorldCreator(name).environment(World.Environment.NORMAL)
-                .type(WorldType.NORMAL).generator(new PvPGenerator(key)).generateStructures(false).createWorld();
+        World world=loadOrCreateWorld(key);
         if(world==null){plugin.message(player,"&cThe world could not be loaded or created.");return false;}
-        world.setGameRule(GameRule.DO_MOB_SPAWNING, false);
         int radius=Math.max(100,plugin.getConfig().getInt(base+"radius",5000));
         ThreadLocalRandom random=ThreadLocalRandom.current();
         for(int attempt=0;attempt<200;attempt++){
@@ -257,12 +263,11 @@ public final class WorldManager {
             return;
         }
 
-        List<ReturnTarget> returnTargets = new ArrayList<>();
+        Location serverSpawn = holding.getSpawnLocation();
         for (Player player : Bukkit.getOnlinePlayers()) {
-            String key = keyForWorldName(player.getWorld().getName());
-            if (key != null) {
-                returnTargets.add(new ReturnTarget(player, key));
-                player.teleport(holding.getSpawnLocation());
+            if (isManagedWorldName(player.getWorld().getName())) {
+                player.teleport(serverSpawn);
+                plugin.message(player, "&eYour arena was regenerated. You were sent to spawn.");
             }
         }
 
@@ -294,15 +299,6 @@ public final class WorldManager {
             }
         }
 
-        for (ReturnTarget target : returnTargets) {
-            Player player = target.player();
-            if (player.isOnline()) {
-                World regenerated = Bukkit.getWorld(plugin.getConfig().getString(
-                        "worlds." + target.worldKey() + ".name", "pvp_" + target.worldKey() + "_arena"));
-                if (regenerated != null) teleport(player, target.worldKey());
-                else player.teleport(holding.getSpawnLocation());
-            }
-        }
         Bukkit.broadcastMessage(plugin.color("&8[&aPvPCore&8] &aAll shared arena worlds have been regenerated!"));
     }
 
