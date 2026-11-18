@@ -14,7 +14,14 @@ import java.util.stream.Stream;
 
 public final class WorldManager {
     private final PvPCore plugin;
-    public WorldManager(PvPCore plugin) { this.plugin = plugin; }
+    private static final int RTP_CACHE_TARGET = 12;
+    private final Map<String, Deque<Location>> rtpLocationCache = new HashMap<>();
+    private final Set<String> rtpCacheWarming = new HashSet<>();
+
+    public WorldManager(PvPCore plugin) {
+        this.plugin = plugin;
+        for (String key : WORLD_KEYS) rtpLocationCache.put(key, new ArrayDeque<>());
+    }
 
     private static final class PvPGenerator extends ChunkGenerator {
         private final Biome biome;
@@ -167,7 +174,6 @@ public final class WorldManager {
                 String seedPath = "worlds." + arena[0] + ".seed";
                 if (!plugin.getConfig().contains(seedPath)) plugin.getConfig().set(seedPath, Long.parseLong(arena[3]));
             }
-            plugin.getConfig().set("worlds.regeneration.enabled", false);
             plugin.getConfig().set("worlds.fixed-format-migrated", true);
         }
 
@@ -188,7 +194,6 @@ public final class WorldManager {
             }
             plugin.getConfig().set("worlds.custom-terrain-migrated", true);
         }
-        plugin.getConfig().set("worlds.regeneration.enabled", false);
         plugin.saveConfig();
     }
 
@@ -284,7 +289,7 @@ public final class WorldManager {
             return false;
         }
         int radius = Math.max(100, plugin.getConfig().getInt("worlds." + key + ".radius", 5000));
-        findSafeRtpLocation(player, world, key, radius, 0);
+        if (!teleportToCachedLocation(player, world, key)) findSafeRtpLocation(player, world, key, radius, 0);
         return true;
     }
 
@@ -350,7 +355,7 @@ public final class WorldManager {
             World world = loadOrCreateWorld(key);
             if (world != null) {
                 int radius = Math.max(100, plugin.getConfig().getInt("worlds." + key + ".radius", 5000));
-                findSafeRtpLocation(player, world, key, radius, 0);
+                if (!teleportToCachedLocation(player, world, key)) findSafeRtpLocation(player, world, key, radius, 0);
                 return;
             }
         }
@@ -359,7 +364,62 @@ public final class WorldManager {
     }
 
     public void startRegenerationCycle() {
+        // Keep safe, already-generated destinations ready before players request RTP.
+        Bukkit.getScheduler().runTaskTimer(plugin, this::warmRtpCaches, 20L, 10L);
         scheduleNextRegeneration();
+    }
+
+    private void warmRtpCaches() {
+        for (String key : WORLD_KEYS) {
+            Deque<Location> cache = rtpLocationCache.get(key);
+            if (cache == null || cache.size() >= RTP_CACHE_TARGET || rtpCacheWarming.contains(key)) continue;
+            World world = Bukkit.getWorld(plugin.getConfig().getString("worlds." + key + ".name", "pvp_" + key + "_arena"));
+            if (world == null) continue;
+
+            rtpCacheWarming.add(key);
+            int radius = Math.max(100, plugin.getConfig().getInt("worlds." + key + ".radius", 5000));
+            ThreadLocalRandom random = ThreadLocalRandom.current();
+            int x = random.nextInt(-radius, radius + 1);
+            int z = random.nextInt(-radius, radius + 1);
+            world.getChunkAtAsync(x >> 4, z >> 4, true).whenComplete((chunk, error) ->
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        try {
+                            if (error == null && chunk != null && Bukkit.getWorld(world.getUID()) != null) {
+                                Location safe = highestSafeLocationAt(world, x, z);
+                                if (safe != null && cache.size() < RTP_CACHE_TARGET) cache.addLast(safe);
+                            }
+                        } finally {
+                            rtpCacheWarming.remove(key);
+                        }
+                    }));
+        }
+    }
+
+    private Location highestSafeLocationAt(World world, int x, int z) {
+        Block floor = world.getHighestBlockAt(x, z);
+        Block feet = floor.getRelative(0, 1, 0);
+        Block head = floor.getRelative(0, 2, 0);
+        if (!floor.getType().isSolid() || !feet.isPassable() || !head.isPassable() || floor.isLiquid()) return null;
+        return new Location(world, x + 0.5, floor.getY() + 1, z + 0.5);
+    }
+
+    private boolean teleportToCachedLocation(Player player, World world, String key) {
+        Deque<Location> cache = rtpLocationCache.get(key);
+        Location destination = cache == null ? null : cache.pollFirst();
+        if (destination == null) return false;
+        destination.setYaw(player.getLocation().getYaw());
+        player.teleportAsync(destination).whenComplete((success, error) ->
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    if (error == null && Boolean.TRUE.equals(success) && player.isOnline()) {
+                        plugin.message(player, "&aTeleported to &f" + key.toUpperCase(Locale.ROOT) + "&a.");
+                    } else if (player.isOnline()) {
+                        findSafeRtpLocation(player, world, key,
+                                Math.max(100, plugin.getConfig().getInt("worlds." + key + ".radius", 5000)), 0);
+                        return;
+                    }
+                    plugin.finishRtp(player);
+                }));
+        return true;
     }
 
     private void scheduleNextRegeneration() {
@@ -411,13 +471,19 @@ public final class WorldManager {
 
         for (String key : WORLD_KEYS) {
             String name = plugin.getConfig().getString("worlds." + key + ".name", "pvp_" + key + "_arena");
+            rtpLocationCache.get(key).clear();
             World oldWorld = Bukkit.getWorld(name);
-            if (oldWorld != null) {
-                oldWorld.save();
-                if (!Bukkit.unloadWorld(oldWorld, false)) {
-                    plugin.getLogger().severe("Could not unload " + name + "; skipping its regeneration.");
-                    continue;
-                }
+            Path worldFolder = oldWorld != null ? oldWorld.getWorldFolder().toPath()
+                    : Bukkit.getWorldContainer().toPath().resolve(name);
+            if (oldWorld != null && !Bukkit.unloadWorld(oldWorld, false)) {
+                plugin.getLogger().severe("Could not unload " + name + "; skipping its regeneration.");
+                continue;
+            }
+            try {
+                deleteWorldFolder(worldFolder);
+            } catch (IOException exception) {
+                plugin.getLogger().severe("Could not delete old arena folder " + name + ": " + exception.getMessage());
+                continue;
             }
 
             World fresh = new WorldCreator(name).environment(World.Environment.NORMAL)
@@ -430,6 +496,7 @@ public final class WorldManager {
         }
 
         Bukkit.broadcastMessage(plugin.color("&8[&aPvPCore&8] &aAll shared arena worlds have been regenerated!"));
+        // The cache task will immediately begin preparing fresh destinations in the new worlds.
     }
 
     private Location highestSafeLocation(World world) {
