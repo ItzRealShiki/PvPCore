@@ -41,9 +41,11 @@ public final class Menus implements Listener {
         Inventory inv = create("pvp", plugin.getConfig().getString("menus.title-pvp", "&8ᴛʀᴀɪɴɪɴɢ ʙᴏᴛ"), 54);
         boolean totem = botOption(p, "infinite-totem", true);
         boolean knockback = botOption(p, "knockback", true);
+        boolean shield = botOption(p, "shield", false);
         inv.setItem(10, item(Material.IRON_CHESTPLATE, "&aSurvival Player", "&7Real server-side player entity.", "&7Vanilla gravity, collisions and movement."));
         inv.setItem(13, item(totem ? Material.TOTEM_OF_UNDYING : Material.GRAY_DYE, (totem ? "&a" : "&c") + "Infinite Totem", "&7Uses vanilla totem resurrection.", "&7Automatically replaces a used totem.", "&7Status: " + (totem ? "&aEnabled" : "&cDisabled")));
         inv.setItem(16, item(knockback ? Material.IRON_CHESTPLATE : Material.GRAY_DYE, (knockback ? "&a" : "&c") + "Knockback", "&7Allows normal player knockback.", "&7Status: " + (knockback ? "&aEnabled" : "&cDisabled")));
+        inv.setItem(22, item(shield ? Material.SHIELD : Material.GRAY_DYE, (shield ? "&a" : "&c") + "Shield", "&7Makes the bot hold its shield up.", "&7The shield is in the main hand;", "&7the totem stays in the offhand.", "&7Status: " + (shield ? "&aEnabled" : "&cDisabled"), "&eClick to toggle"));
         inv.setItem(28, blastItem(p, "helmet", Material.NETHERITE_HELMET, "Helmet"));
         inv.setItem(30, blastItem(p, "chestplate", Material.NETHERITE_CHESTPLATE, "Chestplate"));
         inv.setItem(32, blastItem(p, "leggings", Material.NETHERITE_LEGGINGS, "Leggings"));
@@ -114,6 +116,7 @@ public final class Menus implements Listener {
                 switch (slot) {
                     case 13 -> toggleBotOption(p, "infinite-totem", true);
                     case 16 -> toggleBotOption(p, "knockback", true);
+                    case 22 -> toggleBotOption(p, "shield", false);
                     case 28 -> toggleBotOption(p, "blast-helmet", false);
                     case 30 -> toggleBotOption(p, "blast-chestplate", false);
                     case 32 -> toggleBotOption(p, "blast-leggings", false);
