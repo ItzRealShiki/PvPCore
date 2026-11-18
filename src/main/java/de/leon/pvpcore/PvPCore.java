@@ -2,6 +2,9 @@ package de.leon.pvpcore;
 
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.NamespacedKey;
+import org.bukkit.Registry;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.command.*;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
@@ -34,11 +37,34 @@ public final class PvPCore extends JavaPlugin implements Listener {
         register("gm", new GamemodeCommand(this));
         itemEdit = new ItemEditCommand(this);
         register("it", itemEdit);
+        logCompatibilityDiagnostics();
         Bukkit.getPluginManager().registerEvents(this, this);
         Bukkit.getPluginManager().registerEvents(menus, this);
         Bukkit.getPluginManager().registerEvents(bots, this);
         Bukkit.getPluginManager().registerEvents(itemEdit, this);
         getLogger().info("PvPCore enabled.");
+    }
+
+
+    private void logCompatibilityDiagnostics() {
+        String serverName = Bukkit.getName();
+        String serverVersion = Bukkit.getBukkitVersion();
+        boolean paper = serverName != null && serverName.toLowerCase(java.util.Locale.ROOT).contains("paper");
+        boolean paper262 = paper && serverVersion != null
+                && serverVersion.matches("(?s).*\\b26\\.2(?:\\D|$).*");
+
+        boolean lungeAvailable = Registry.ENCHANTMENT.get(NamespacedKey.minecraft("lunge")) != null;
+
+        getLogger().info("Compatibility check: " + serverName + " " + serverVersion);
+        getLogger().info("Lunge enchantment available: " + lungeAvailable);
+
+        if (paper262) {
+            getLogger().warning("Paper 26.2 detected. Its equipment-update behavior may affect vanilla spear attribute-swap interactions.");
+            getLogger().warning("PvPCore does not modify Paper's server settings or override vanilla combat mechanics.");
+        }
+        if (!lungeAvailable) {
+            getLogger().warning("The Lunge enchantment is not registered on this server version.");
+        }
     }
 
     public boolean beginRtp(Player player) {
