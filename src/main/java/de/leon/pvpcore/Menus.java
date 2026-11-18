@@ -78,7 +78,8 @@ public final class Menus implements Listener {
         inv.setItem(12, item(Material.SAND, "&6Desert", "&7Natural desert terrain", "&eClick to teleport"));
         inv.setItem(14, item(Material.SNOW_BLOCK, "&bSnow", "&7Natural snowy terrain", "&eClick to teleport"));
         inv.setItem(16, item(Material.TERRACOTTA, "&cBadlands", "&7Natural badlands terrain", "&eClick to teleport"));
-        inv.setItem(22, item(Material.BARRIER, "&cClose", "&7Close this menu."));
+        inv.setItem(22, item(Material.COMPASS, "&dRandom", "&7Choose a random arena world", "&eClick to teleport"));
+        inv.setItem(26, item(Material.BARRIER, "&cClose", "&7Close this menu."));
         p.openInventory(inv);
     }
 
@@ -148,7 +149,8 @@ public final class Menus implements Listener {
                     case 12 -> { p.closeInventory(); plugin.worlds().teleport(p, "desert"); }
                     case 14 -> { p.closeInventory(); plugin.worlds().teleport(p, "snow"); }
                     case 16 -> { p.closeInventory(); plugin.worlds().teleport(p, "badlands"); }
-                    case 22 -> p.closeInventory();
+                    case 22 -> { p.closeInventory(); plugin.worlds().randomTeleport(p); }
+                    case 26 -> p.closeInventory();
                     default -> { }
                 }
             }
