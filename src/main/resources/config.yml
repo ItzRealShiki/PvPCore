@@ -25,3 +25,8 @@ menus:
   title-pvp: "&8ᴛʀᴀɪɴɪɴɢ ʙᴏᴛ"
   title-rtp: "&8ʀᴀɴᴅᴏᴍ ᴛᴇʟᴇᴘᴏʀᴛ"
   title-admin: "&8ᴘᴠᴘᴄᴏʀᴇ ᴀᴅᴍɪɴ"
+
+  regeneration:
+    enabled: true
+    interval-seconds: 300
+    countdown-seconds: 5
