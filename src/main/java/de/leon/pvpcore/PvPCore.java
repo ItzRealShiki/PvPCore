@@ -49,18 +49,26 @@ public final class PvPCore extends JavaPlugin implements Listener {
     private void logCompatibilityDiagnostics() {
         String serverName = Bukkit.getName();
         String serverVersion = Bukkit.getBukkitVersion();
-        boolean paper = serverName != null && serverName.toLowerCase(java.util.Locale.ROOT).contains("paper");
-        boolean paper262 = paper && serverVersion != null
-                && serverVersion.matches("(?s).*\\b26\\.2(?:\\D|$).*");
+        String normalizedName = serverName == null ? "" : serverName.toLowerCase(java.util.Locale.ROOT);
+        boolean purpur = normalizedName.contains("purpur");
+        boolean paperFamily = purpur || normalizedName.contains("paper");
+        String minecraftVersion = Bukkit.getMinecraftVersion();
+        boolean supportedNmsVersion = "26.2".equals(minecraftVersion);
 
         boolean lungeAvailable = Registry.ENCHANTMENT.get(NamespacedKey.minecraft("lunge")) != null;
 
-        getLogger().info("Compatibility check: " + serverName + " " + serverVersion);
-        getLogger().info("Lunge enchantment available: " + lungeAvailable);
+        getLogger().info("Server platform: " + serverName + (purpur ? " (Purpur / Paper-compatible)" : ""));
+        getLogger().info("Server version: " + serverVersion + " | Minecraft: " + minecraftVersion);
+        getLogger().info("Paper API family detected: " + paperFamily);
+        getLogger().info("Training bot NMS version supported: " + supportedNmsVersion);
+        getLogger().info("Lunge enchantment registered: " + lungeAvailable);
 
-        if (paper262) {
-            getLogger().warning("Paper 26.2 detected. Its equipment-update behavior may affect vanilla spear attribute-swap interactions.");
-            getLogger().warning("PvPCore does not modify Paper's server settings or override vanilla combat mechanics.");
+        if (purpur) {
+            getLogger().info("Purpur detected. PvPCore uses the Paper API and does not require a separate Purpur API dependency.");
+            getLogger().info("The training bot uses version-specific server internals; /bot is enabled only for the validated Minecraft version.");
+        }
+        if (!paperFamily) {
+            getLogger().warning("This server is not identified as Paper or Purpur. Plugin compatibility is not guaranteed.");
         }
         if (!lungeAvailable) {
             getLogger().warning("The Lunge enchantment is not registered on this server version.");
