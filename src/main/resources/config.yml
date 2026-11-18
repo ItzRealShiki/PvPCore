@@ -12,17 +12,21 @@ rtp:
   cooldown-seconds: 300
 worlds:
   plains:
-    name: "pvp_plains_arena_v2"
+    name: "pvp_plains_arena_v3"
     radius: 5000
+    seed: 731942105
   desert:
-    name: "pvp_desert_arena_v2"
+    name: "pvp_desert_arena_v3"
     radius: 5000
+    seed: 284710639
   snow:
-    name: "pvp_snow_arena_v2"
+    name: "pvp_snow_arena_v3"
     radius: 5000
+    seed: 918273645
   badlands:
-    name: "pvp_badlands_arena_v2"
+    name: "pvp_badlands_arena_v3"
     radius: 5000
+    seed: 563829174
   regeneration:
     enabled: false
     interval-seconds: 300
