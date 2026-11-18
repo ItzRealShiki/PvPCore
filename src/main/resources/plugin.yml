@@ -3,28 +3,30 @@ version: '${project.version}'
 main: de.leon.pvpcore.PvPCore
 api-version: '26.2'
 author: Leon
-description: Standalone PvP training and server core with GUI administration.
+description: ꜱᴛᴀɴᴅᴀʟᴏɴᴇ ᴘᴠᴘ ᴛʀᴀɪɴɪɴɢ ᴀɴᴅ ꜱᴇʀᴠᴇʀ ᴄᴏʀᴇ ᴡɪᴛʜ ɢᴜɪ ᴀᴅᴍɪɴɪꜱᴛʀᴀᴛɪᴏɴ.
 commands:
-  pvp:
-    description: Opens the PvP training menu.
-    usage: /pvp
+  bot:
+    description: ᴏᴘᴇɴꜱ ᴛʜᴇ ᴘᴠᴘ ᴛʀᴀɪɴɪɴɢ ᴍᴇɴᴜ.
+    usage: /bot
+    aliases: [pvp]
   rtp:
-    description: Opens the random teleport world selector.
+    description: ᴏᴘᴇɴꜱ ᴛʜᴇ ʀᴀɴᴅᴏᴍ ᴛᴇʟᴇᴘᴏʀᴛ ᴡᴏʀʟᴅ ꜱᴇʟᴇᴄᴛᴏʀ.
     usage: /rtp
   admin:
-    description: Opens the PvPCore administration dashboard.
+    description: ᴏᴘᴇɴꜱ ᴛʜᴇ ᴘᴠᴘᴄᴏʀᴇ ᴀᴅᴍɪɴɪꜱᴛʀᴀᴛɪᴏɴ ᴅᴀꜱʜʙᴏᴀʀᴅ.
     usage: /admin
   gm:
-    description: Opens the gamemode menu or changes a gamemode.
+    description: ᴏᴘᴇɴꜱ ᴛʜᴇ ɢᴀᴍᴇᴍᴏᴅᴇ ᴍᴇɴᴜ ᴏʀ ᴄʜᴀɴɢᴇꜱ ᴀ ɢᴀᴍᴇᴍᴏᴅᴇ.
     usage: /gm [survival|creative|adventure|spectator] [player]
     aliases: [gamemode, gms, gmc, gma, gmsp]
 permissions:
   Member.Core:
-    description: Access to PvP training and RTP features.
+    description: ᴀᴄᴄᴇꜱꜱ ᴛᴏ ᴘᴠᴘ ᴛʀᴀɪɴɪɴɢ ᴀɴᴅ ʀᴛᴘ ꜰᴇᴀᴛᴜʀᴇꜱ.
     default: true
   Admin.Core:
-    description: Access to administration and moderation features.
+    description: ᴀᴄᴄᴇꜱꜱ ᴛᴏ ᴀᴅᴍɪɴɪꜱᴛʀᴀᴛɪᴏɴ ᴀɴᴅ ᴍᴏᴅᴇʀᴀᴛɪᴏɴ ꜰᴇᴀᴛᴜʀᴇꜱ.
     default: op
   Owner.Core:
-    description: Full access to every PvPCore feature.
+    description: ꜰᴜʟʟ ᴀᴄᴄᴇꜱꜱ ᴛᴏ ᴇᴠᴇʀʏ ᴘᴠᴘᴄᴏʀᴇ ꜰᴇᴀᴛᴜʀᴇ.
     default: op
+}
