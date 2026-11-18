@@ -192,20 +192,58 @@ public final class WorldManager {
     }
 
     public boolean teleport(Player player, String key) {
-        String base="worlds."+key+".";
-        World world=loadOrCreateWorld(key);
-        if(world==null){plugin.message(player,"&cThe world could not be loaded or created.");return false;}
-        int radius=Math.max(100,plugin.getConfig().getInt(base+"radius",5000));
-        ThreadLocalRandom random=ThreadLocalRandom.current();
-        for(int attempt=0;attempt<200;attempt++){
-            int x=random.nextInt(-radius,radius+1), z=random.nextInt(-radius,radius+1);
-            Block floor=world.getHighestBlockAt(x,z), feet=floor.getRelative(0,1,0), head=floor.getRelative(0,2,0);
-            if(!floor.getType().isSolid()||!feet.isPassable()||!head.isPassable()||floor.isLiquid())continue;
-            Location dest=new Location(world,x+.5,floor.getY()+1,z+.5);
-            dest.setYaw(player.getLocation().getYaw()); player.teleport(dest);
-            plugin.message(player,"&aTeleported to &f"+key.toUpperCase()+"&a."); return true;
+        if (!isWorldKey(key)) {
+            plugin.message(player, "&cUnknown arena world.");
+            return false;
         }
-        plugin.message(player,"&cNo safe spawn point was found. Please try again."); return false;
+        World world = loadOrCreateWorld(key);
+        if (world == null) {
+            plugin.message(player, "&cThe world could not be loaded or created.");
+            return false;
+        }
+        int radius = Math.max(100, plugin.getConfig().getInt("worlds." + key + ".radius", 5000));
+        findSafeRtpLocation(player, world, key, radius, 0);
+        return true;
+    }
+
+    private void findSafeRtpLocation(Player player, World world, String key, int radius, int attempt) {
+        if (!player.isOnline()) return;
+        if (attempt >= 24) {
+            plugin.message(player, "&cNo safe spawn point was found. Please try again.");
+            return;
+        }
+
+        ThreadLocalRandom random = ThreadLocalRandom.current();
+        int x = random.nextInt(-radius, radius + 1);
+        int z = random.nextInt(-radius, radius + 1);
+        world.getChunkAtAsync(x >> 4, z >> 4, true).whenComplete((chunk, error) ->
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    if (!player.isOnline()) return;
+                    if (error != null || chunk == null) {
+                        findSafeRtpLocation(player, world, key, radius, attempt + 1);
+                        return;
+                    }
+
+                    Block floor = world.getHighestBlockAt(x, z);
+                    Block feet = floor.getRelative(0, 1, 0);
+                    Block head = floor.getRelative(0, 2, 0);
+                    if (!floor.getType().isSolid() || !feet.isPassable() || !head.isPassable()
+                            || floor.isLiquid()) {
+                        findSafeRtpLocation(player, world, key, radius, attempt + 1);
+                        return;
+                    }
+
+                    Location destination = new Location(world, x + 0.5, floor.getY() + 1, z + 0.5);
+                    destination.setYaw(player.getLocation().getYaw());
+                    player.teleportAsync(destination).thenAccept(success ->
+                            Bukkit.getScheduler().runTask(plugin, () -> {
+                                if (success && player.isOnline()) {
+                                    plugin.message(player, "&aTeleported to &f" + key.toUpperCase(Locale.ROOT) + "&a.");
+                                } else if (player.isOnline()) {
+                                    findSafeRtpLocation(player, world, key, radius, attempt + 1);
+                                }
+                            }));
+                }));
     }
 
     private static final List<String> WORLD_KEYS = List.of("plains", "desert", "snow", "badlands");
