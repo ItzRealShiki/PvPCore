@@ -2,7 +2,6 @@ name: PvPCore
 version: '${project.version}'
 main: de.leon.pvpcore.PvPCore
 api-version: '26.2'
-depend: [Citizens]
 author: Leon
 description: ꜱᴛᴀɴᴅᴀʟᴏɴᴇ ᴘᴠᴘ ᴛʀᴀɪɴɪɴɢ ᴀɴᴅ ꜱᴇʀᴠᴇʀ ᴄᴏʀᴇ ᴡɪᴛʜ ɢᴜɪ ᴀᴅᴍɪɴɪꜱᴛʀᴀᴛɪᴏɴ.
 commands:
