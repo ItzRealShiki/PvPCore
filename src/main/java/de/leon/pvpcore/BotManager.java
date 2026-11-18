@@ -24,7 +24,6 @@ import org.bukkit.util.Vector;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Level;
 
@@ -58,13 +57,11 @@ public final class BotManager implements Listener {
         at.setDirection(owner.getLocation().toVector().subtract(at.toVector()));
 
         try {
-            String botName = owner.getName() + "_Bot";
-            if (botName.length() > 16) botName = botName.substring(0, 16);
-
+            String botName = "Training_Bot";
             FakePlayer fake = FakePlayer.spawn(at, botName, owner);
             fake.clearSpawnInvulnerability();
             Player bot = fake.bukkit();
-            bot.setCustomName(plugin.color("&e" + owner.getName()));
+            bot.setCustomName(plugin.color("&eᴛʀᴀɪɴɪɴɢ ʙᴏᴛ"));
             bot.setCustomNameVisible(true);
             bot.setInvulnerable(false);
             bot.setGravity(true);
@@ -102,8 +99,20 @@ public final class BotManager implements Listener {
         inventory.setChestplate(armor(owner, Material.NETHERITE_CHESTPLATE, "chestplate"));
         inventory.setLeggings(armor(owner, Material.NETHERITE_LEGGINGS, "leggings"));
         inventory.setBoots(armor(owner, Material.NETHERITE_BOOTS, "boots"));
+
+        if (option(owner, "shield", false)) {
+            ItemStack shield = new ItemStack(Material.SHIELD);
+            ItemMeta shieldMeta = shield.getItemMeta();
+            shieldMeta.setUnbreakable(true);
+            shield.setItemMeta(shieldMeta);
+            inventory.setItemInMainHand(shield);
+        } else {
+            inventory.setItemInMainHand(new ItemStack(Material.AIR));
+        }
+
         inventory.setItemInOffHand(option(owner, "infinite-totem", true)
                 ? new ItemStack(Material.TOTEM_OF_UNDYING) : new ItemStack(Material.AIR));
+        fake.setShieldRaised(option(owner, "shield", false));
     }
 
     public void refreshOwned(Player owner) {
@@ -143,6 +152,7 @@ public final class BotManager implements Listener {
                         && bot.getInventory().getItemInOffHand().getType().isAir()) {
                     bot.getInventory().setItemInOffHand(new ItemStack(Material.TOTEM_OF_UNDYING));
                 }
+                fake.setShieldRaised(option(owner, "shield", false));
                 fake.tick();
             }
         } catch (LinkageError error) {
