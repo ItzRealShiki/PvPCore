@@ -15,24 +15,25 @@ public final class WorldManager {
 
     public boolean teleport(Player player, String key) {
         String base = "worlds." + key + ".";
-        String name = plugin.getConfig().getString(base + "name", "pvp_" + key);
+        String name = plugin.getConfig().getString(base + "name", "pvp_" + key + "_natural");
         World world = Bukkit.getWorld(name);
         if (world == null) {
+            // Use Minecraft's normal terrain generator: mountains, caves, ores,
+            // natural biome transitions, trees and the standard -64 world bottom.
             WorldCreator creator = new WorldCreator(name)
                     .environment(World.Environment.NORMAL)
-                    .type(WorldType.FLAT)
-                    .generateStructures(false)
-                    .generatorSettings(generatorSettings(key));
+                    .type(WorldType.NORMAL)
+                    .generateStructures(true);
             world = creator.createWorld();
         }
         if (world == null) {
-            plugin.message(player, "&cDie Welt konnte nicht geladen oder erstellt werden.");
+            plugin.message(player, "&cThe world could not be loaded or created.");
             return false;
         }
 
         int radius = Math.max(100, plugin.getConfig().getInt(base + "radius", 5000));
         ThreadLocalRandom random = ThreadLocalRandom.current();
-        for (int attempt = 0; attempt < 50; attempt++) {
+        for (int attempt = 0; attempt < 60; attempt++) {
             int x = random.nextInt(-radius, radius + 1);
             int z = random.nextInt(-radius, radius + 1);
             Block floor = world.getHighestBlockAt(x, z);
@@ -45,20 +46,11 @@ public final class WorldManager {
             destination.setYaw(player.getLocation().getYaw());
             destination.setPitch(0);
             player.teleport(destination);
-            plugin.message(player, "&aDu wurdest nach &f" + key.toUpperCase() + " &ateleportiert.");
+            plugin.message(player, "&aTeleported to &f" + key.toUpperCase() + "&a.");
             return true;
         }
 
-        plugin.message(player, "&cEs konnte kein sicherer Spawnpunkt gefunden werden. Bitte erneut versuchen.");
+        plugin.message(player, "&cNo safe spawn point was found. Please try again.");
         return false;
-    }
-
-    private String generatorSettings(String key) {
-        return switch (key.toLowerCase()) {
-            case "desert" -> "{\"biome\":\"minecraft:desert\",\"layers\":[{\"block\":\"minecraft:bedrock\",\"height\":1},{\"block\":\"minecraft:sandstone\",\"height\":2},{\"block\":\"minecraft:sand\",\"height\":1}],\"structures\":{}}";
-            case "snow" -> "{\"biome\":\"minecraft:snowy_plains\",\"layers\":[{\"block\":\"minecraft:bedrock\",\"height\":1},{\"block\":\"minecraft:dirt\",\"height\":2},{\"block\":\"minecraft:snow_block\",\"height\":1}],\"structures\":{}}";
-            case "badlands" -> "{\"biome\":\"minecraft:badlands\",\"layers\":[{\"block\":\"minecraft:bedrock\",\"height\":1},{\"block\":\"minecraft:terracotta\",\"height\":3}],\"structures\":{}}";
-            default -> "{\"biome\":\"minecraft:plains\",\"layers\":[{\"block\":\"minecraft:bedrock\",\"height\":1},{\"block\":\"minecraft:dirt\",\"height\":2},{\"block\":\"minecraft:grass_block\",\"height\":1}],\"structures\":{}}";
-        };
     }
 }
