@@ -13,6 +13,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityResurrectEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -51,13 +52,10 @@ public final class BotManager implements Listener {
         }
 
         removeOwned(owner);
-        Location at = owner.getLocation().clone()
-                .add(owner.getLocation().getDirection().normalize().multiply(2.5));
-        at.setY(owner.getLocation().getY());
-        at.setDirection(owner.getLocation().toVector().subtract(at.toVector()));
+        Location at = owner.getLocation().clone();
 
         try {
-            String botName = "Training_Bot";
+            String botName = "Training Bot";
             FakePlayer fake = FakePlayer.spawn(at, botName, owner);
             fake.clearSpawnInvulnerability();
             Player bot = fake.bukkit();
@@ -84,8 +82,9 @@ public final class BotManager implements Listener {
     private ItemStack armor(Player owner, Material material, String piece) {
         ItemStack item = new ItemStack(material);
         ItemMeta meta = item.getItemMeta();
-        meta.setUnbreakable(true);
-        meta.addEnchant(Enchantment.UNBREAKING, 1, true);
+        meta.setUnbreakable(option(owner, "armor-unbreakable", true));
+        int protection = Math.max(0, Math.min(4, plugin.getConfig().getInt("bots.options." + owner.getUniqueId() + ".protection-level", 4)));
+        if (protection > 0) meta.addEnchant(Enchantment.PROTECTION, protection, true);
         if (option(owner, "blast-" + piece, false)) {
             meta.addEnchant(Enchantment.BLAST_PROTECTION, 4, true);
         }
@@ -164,28 +163,56 @@ public final class BotManager implements Listener {
     public void onResurrect(EntityResurrectEvent event) {
         UUID ownerId = ownerOf(event.getEntity());
         if (ownerId == null) return;
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        Player owner = Bukkit.getPlayer(ownerId);
+        if (owner == null || !option(owner, "infinite-totem", true)) return;
+        int delay = difficultyTicks(owner, "totem-difficulty");
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
             FakePlayer fake = owned.get(ownerId);
-            Player owner = Bukkit.getPlayer(ownerId);
-            if (fake == null || owner == null || !fake.isValid()
-                    || !option(owner, "infinite-totem", true)) return;
+            Player currentOwner = Bukkit.getPlayer(ownerId);
+            if (fake == null || currentOwner == null || !fake.isValid()
+                    || !option(currentOwner, "infinite-totem", true)) return;
             Player bot = fake.bukkit();
             if (bot.getInventory().getItemInOffHand().getType().isAir()) {
                 bot.getInventory().setItemInOffHand(new ItemStack(Material.TOTEM_OF_UNDYING));
             }
-        });
+        }, delay);
     }
 
     @EventHandler
-    public void onDamage(EntityDamageByEntityEvent event) {
+    public void onDamage(EntityDamageEvent event) {
         UUID ownerId = ownerOf(event.getEntity());
         if (ownerId == null) return;
         Player owner = Bukkit.getPlayer(ownerId);
-        if (owner == null || option(owner, "knockback", true)) return;
+        if (owner == null) return;
         FakePlayer fake = owned.get(ownerId);
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            if (fake != null && fake.isValid()) fake.bukkit().setVelocity(new Vector(0, 0, 0));
-        });
+        if (fake == null) return;
+
+        if (!option(owner, "knockback", true)) {
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (fake.isValid()) fake.bukkit().setVelocity(new Vector(0, 0, 0));
+            });
+        }
+
+        if (option(owner, "shield", false)) {
+            fake.setShieldRaised(false);
+            int delay = difficultyTicks(owner, "shield-difficulty");
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                Player currentOwner = Bukkit.getPlayer(ownerId);
+                FakePlayer current = owned.get(ownerId);
+                if (currentOwner != null && current != null && current.isValid()
+                        && option(currentOwner, "shield", false)) current.setShieldRaised(true);
+            }, delay);
+        }
+    }
+
+    private int difficultyTicks(Player owner, String key) {
+        String value = plugin.getConfig().getString("bots.options." + owner.getUniqueId() + "." + key, "impossible");
+        return switch (value.toLowerCase(java.util.Locale.ROOT)) {
+            case "easy" -> 40;
+            case "normal" -> 20;
+            case "hard" -> 10;
+            default -> 2;
+        };
     }
 
     @EventHandler
