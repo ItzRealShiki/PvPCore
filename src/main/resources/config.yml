@@ -21,12 +21,11 @@ worlds:
   badlands:
     name: "pvp_badlands_arena_v2"
     radius: 5000
-menus:
-  title-pvp: "&8ᴛʀᴀɪɴɪɴɢ ʙᴏᴛ"
-  title-rtp: "&8ʀᴀɴᴅᴏᴍ ᴛᴇʟᴇᴘᴏʀᴛ"
-  title-admin: "&8ᴘᴠᴘᴄᴏʀᴇ ᴀᴅᴍɪɴ"
-
   regeneration:
     enabled: true
     interval-seconds: 300
     countdown-seconds: 5
+menus:
+  title-pvp: "&8ᴛʀᴀɪɴɪɴɢ ʙᴏᴛ"
+  title-rtp: "&8ʀᴀɴᴅᴏᴍ ᴛᴇʟᴇᴘᴏʀᴛ"
+  title-admin: "&8ᴘᴠᴘᴄᴏʀᴇ ᴀᴅᴍɪɴ"
