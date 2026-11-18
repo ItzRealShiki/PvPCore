@@ -14,7 +14,7 @@ mvn clean package
 Output: `target/PvPCore-1.0.0.jar`
 
 ## Commands
-- `/bot` (alias: `/pvp`) — Opens the bot training menu.
+- `/bot` (alias: `/pvp`) — Opens the training NPC menu.
 - `/rtp` — Opens the GUI to choose Plains, Desert, Snow, or Badlands.
 - `/admin` — Opens the administration GUI.
 - `/gm` or `/gamemode` — Opens the selector GUI; accepts a mode and optional player.
@@ -24,6 +24,12 @@ Output: `target/PvPCore-1.0.0.jar`
 - `/gmsp [player]` — Sets Spectator mode.
 
 All in-game messages, menu titles, item names, and lore use the same Unicode small-caps styling as LifestealCore. User-facing plugin text is English.
+
+## Training NPC
+The `/bot` menu lets you configure and spawn a stationary training NPC:
+- **Inf. Totem** — enabled by default; the NPC triggers a totem effect instead of dying and never consumes a totem.
+- **Shield** — optional; blocks frontal player attacks and becomes ready again after 0.1 seconds.
+- NPCs do not move or chase players. Use the remove option in the menu or the admin menu to remove them.
 
 ## RTP worlds
 Each world is created the first time it is selected and then saved by the server:
@@ -41,6 +47,3 @@ Only these three permission nodes are defined:
 - `Owner.Core` — Full access; bypasses lower-level permission checks.
 
 Assign permissions through LuckPerms or another permission manager. No extra permission nodes are required.
-
-## Notes
-Training opponents in this foundation version are ordinary server-side mobs. Advanced training behavior is not yet implemented.
