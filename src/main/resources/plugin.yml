@@ -1,0 +1,30 @@
+name: PvPCore
+version: '${project.version}'
+main: de.leon.pvpcore.PvPCore
+api-version: '26.2'
+author: Leon
+description: Standalone PvP training and server core with GUI administration.
+commands:
+  pvp:
+    description: Opens the PvP training menu.
+    usage: /pvp
+  rtp:
+    description: Opens the random teleport world selector.
+    usage: /rtp
+  admin:
+    description: Opens the PvPCore administration dashboard.
+    usage: /admin
+  gm:
+    description: Opens the gamemode menu or changes a gamemode.
+    usage: /gm [survival|creative|adventure|spectator] [player]
+    aliases: [gamemode, gms, gmc, gma, gmsp]
+permissions:
+  Member.Core:
+    description: Access to PvP training and RTP features.
+    default: true
+  Admin.Core:
+    description: Access to administration and moderation features.
+    default: op
+  Owner.Core:
+    description: Full access to every PvPCore feature.
+    default: op
