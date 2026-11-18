@@ -12,15 +12,22 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.*;
 import java.util.stream.Stream;
+import org.bukkit.configuration.file.YamlConfiguration;
+import java.io.File;
 
 public final class WorldManager {
     private final PvPCore plugin;
     private static final int RTP_CACHE_TARGET = 12;
     private final Map<String, Deque<Location>> rtpLocationCache = new HashMap<>();
     private final Set<String> rtpCacheWarming = new HashSet<>();
+    private final File rtpCacheFile;
+    private final Deque<PregenChunk> pregenQueue = new ArrayDeque<>();
+    private boolean pregenBusy;
+    private record PregenChunk(String worldKey, int x, int z) {}
 
     public WorldManager(PvPCore plugin) {
         this.plugin = plugin;
+        this.rtpCacheFile = new File(plugin.getDataFolder(), "rtp-cache.yml");
         for (String key : WORLD_KEYS) rtpLocationCache.put(key, new ArrayDeque<>());
     }
 
@@ -124,7 +131,7 @@ public final class WorldManager {
 
             // Natural trees are 60% less common than the previous generator.
             Random flora = new Random(seed + chunkX * 73428767L + chunkZ * 912931L);
-            if (flora.nextInt(100) < 40 && !terrainKey.equals("desert")) {
+            if (flora.nextInt(5000) < (terrainKey.equals("plains") ? 10 : 2000) && !terrainKey.equals("desert")) {
                 int tx=flora.nextInt(8)+4, tz=flora.nextInt(8)+4;
                 int wx=chunkX*16+tx, wz=chunkZ*16+tz, sy=height(wx,wz,seed);
                 Material log=terrainKey.equals("snow")?Material.SPRUCE_LOG:
