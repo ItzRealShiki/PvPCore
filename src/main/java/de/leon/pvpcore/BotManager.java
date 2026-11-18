@@ -206,7 +206,8 @@ public final class BotManager implements Listener {
     }
 
     private int difficultyTicks(Player owner, String key) {
-        String value = plugin.getConfig().getString("bots.options." + owner.getUniqueId() + "." + key, "impossible");
+        String defaultDifficulty = key.equals("shield-difficulty") ? "normal" : "impossible";
+        String value = plugin.getConfig().getString("bots.options." + owner.getUniqueId() + "." + key, defaultDifficulty);
         return switch (value.toLowerCase(java.util.Locale.ROOT)) {
             case "easy" -> 40;
             case "normal" -> 20;
