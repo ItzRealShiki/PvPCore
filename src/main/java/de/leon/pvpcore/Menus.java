@@ -79,7 +79,7 @@ public final class Menus implements Listener {
     }
 
     private String difficulty(Player p, String key) {
-        String fallback = key.equals("shield-difficulty") ? "normal" : "impossible";
+        String fallback = "impossible";
         return plugin.getConfig().getString("bots.options." + p.getUniqueId() + "." + key, fallback).toUpperCase(java.util.Locale.ROOT);
     }
 
