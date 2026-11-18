@@ -14,8 +14,6 @@ import java.util.UUID;
 
 public final class Menus implements Listener {
     private final PvPCore plugin;
-    private final Map<UUID, Boolean> totemOptions = new HashMap<>();
-    private final Map<UUID, Boolean> knockbackOptions = new HashMap<>();
 
     private static final class MenuHolder implements InventoryHolder {
         private final String key;
@@ -43,25 +41,13 @@ public final class Menus implements Listener {
     }
 
     public void openPvp(Player p) {
-        boolean infiniteTotem = totemOptions.getOrDefault(p.getUniqueId(), true);
-        boolean knockback = knockbackOptions.getOrDefault(p.getUniqueId(), true);
-
         Inventory inv = create("pvp", plugin.getConfig().getString("menus.title-pvp", "&8ᴛʀᴀɪɴɪɴɢ ʙᴏᴛ"), 27);
-        inv.setItem(11, item(Material.TOTEM_OF_UNDYING,
-                infiniteTotem ? "&aInf. Totem: ON" : "&cInf. Totem: OFF",
-                "&7The NPC never consumes a totem.",
-                "&7Enabled by default.",
-                "&eClick to toggle"));
-        inv.setItem(13, item(Material.FEATHER,
-                knockback ? "&aKnockback: ON" : "&cKnockback: OFF",
-                "&7Allows the Training Bot to be pushed back.",
-                "&7Enabled by default.",
-                "&eClick to toggle"));
-        inv.setItem(22, item(Material.ZOMBIE_HEAD, "&6Spawn NPC",
-                "&7Spawn your own player-themed Training Bot.",
-                "&7The NPC despawns beyond 200 blocks."));
-        inv.setItem(26, item(Material.BARRIER, "&cRemove my NPCs",
-                "&7Remove all of your active NPCs."));
+        inv.setItem(13, item(Material.PLAYER_HEAD, "&aSpawn Player NPC",
+                "&7Creates a full player-model mannequin",
+                "&7using your current Minecraft skin.",
+                "&7Automatically disappears beyond 200 blocks."));
+        inv.setItem(15, item(Material.BARRIER, "&cRemove my NPC",
+                "&7Remove your active player mannequin."));
         p.openInventory(inv);
     }
 
@@ -106,26 +92,14 @@ public final class Menus implements Listener {
         int slot = e.getSlot();
         switch (holder.key) {
             case "pvp" -> {
-                UUID id = p.getUniqueId();
                 switch (slot) {
-                    case 11 -> {
-                        totemOptions.put(id, !totemOptions.getOrDefault(id, true));
-                        openPvp(p);
-                    }
                     case 13 -> {
-                        knockbackOptions.put(id, !knockbackOptions.getOrDefault(id, true));
-                        openPvp(p);
-                    }
-                    case 22 -> {
-                        plugin.bots().spawn(p, totemOptions.getOrDefault(id, true),
-                                knockbackOptions.getOrDefault(id, true));
-                        totemOptions.remove(id);
-                        knockbackOptions.remove(id);
+                        plugin.bots().spawn(p);
                         p.closeInventory();
                     }
-                    case 26 -> {
+                    case 15 -> {
                         plugin.bots().removeOwned(p);
-                        plugin.message(p, "&aYour NPCs were removed.");
+                        plugin.message(p, "&aYour NPC was removed.");
                         p.closeInventory();
                     }
                     default -> { }
