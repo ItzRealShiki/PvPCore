@@ -14,7 +14,7 @@ mvn clean package
 Output: `target/PvPCore-1.0.0.jar`
 
 ## Commands
-- `/bot` (alias: `/pvp`) — Opens the training NPC menu.
+- `/bot` — Opens the training NPC menu.
 - `/rtp` — Opens the GUI to choose Plains, Desert, Snow, or Badlands.
 - `/admin` — Opens the administration GUI.
 - `/gm` or `/gamemode` — Opens the selector GUI; accepts a mode and optional player.
@@ -23,12 +23,12 @@ Output: `target/PvPCore-1.0.0.jar`
 - `/gma [player]` — Sets Adventure mode.
 - `/gmsp [player]` — Sets Spectator mode.
 
-All in-game messages, menu titles, item names, and lore use the same Unicode small-caps styling as LifestealCore. User-facing plugin text is English.
+All in-game messages, menu titles, item names, and lore use Unicode small-caps styling. User-facing plugin text is English. `/pvp` is not registered as an alias.
 
 ## Training NPC
-The `/bot` menu lets you configure and spawn a stationary training NPC:
+The `/bot` menu lets you configure and spawn a stationary training NPC. Left-click the Shield Reaction or Totem Refill setting to lower its difficulty; right-click to raise it. The selected level is shown in the item's lore:
 - **Inf. Totem** — enabled by default; the NPC triggers a totem effect instead of dying and never consumes a totem.
-- **Shield** — optional; blocks frontal player attacks and becomes ready again after 0.1 seconds.
+- **Shield** — optional; remains raised and returns to its ready state after the selected reaction delay.
 - NPCs do not move or chase players. Use the remove option in the menu or the admin menu to remove them.
 
 ## RTP worlds
