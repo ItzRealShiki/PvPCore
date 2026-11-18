@@ -19,13 +19,14 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
-          cache: maven
-      - name: Build with Maven
-        run: mvn --batch-mode --no-transfer-progress clean package
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Build with Gradle
+        run: gradle --no-daemon clean build
       - name: Upload plugin JAR
         uses: actions/upload-artifact@v4
         with:
           name: PvPCore
-          path: target/PvPCore-*.jar
+          path: build/libs/PvPCore-*.jar
           if-no-files-found: error
           retention-days: 14
