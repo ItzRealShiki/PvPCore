@@ -8,8 +8,6 @@ import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.*;
-import org.bukkit.event.entity.EntityDamageByEntityEvent;
-import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.EntityEquipment;
@@ -19,21 +17,25 @@ import org.bukkit.util.Vector;
 import java.util.*;
 
 public final class BotManager implements Listener {
-    private static final long SHIELD_COOLDOWN_TICKS = 20L;
-    private record BotSettings(UUID ownerId, boolean shield, boolean infiniteTotem, boolean knockback) {}
+    private static final double OWNER_RADIUS_SQUARED = 200.0 * 200.0;
+    private record BotSettings(UUID ownerId, boolean infiniteTotem, boolean knockback) {}
 
     private final PvPCore plugin;
     private final Map<UUID, Set<NPC>> owned = new HashMap<>();
     private final Map<UUID, BotSettings> settings = new HashMap<>();
-    private final Map<UUID, Long> shieldReadyAt = new HashMap<>();
 
-    public BotManager(PvPCore plugin) { this.plugin = plugin; }
+    public BotManager(PvPCore plugin) {
+        this.plugin = plugin;
+        // Check once per second. Bots are removed when their owner logs out,
+        // changes world, or gets more than 200 blocks away.
+        Bukkit.getScheduler().runTaskTimer(plugin, this::removeOutOfRangeBots, 20L, 20L);
+    }
 
-    public void spawn(Player owner, boolean shield, boolean infiniteTotem, boolean knockback) {
+    public void spawn(Player owner, boolean infiniteTotem, boolean knockback) {
         removeOwned(owner);
 
         if (!CitizensAPI.hasImplementation()) {
-            plugin.message(owner, "&cCitizens is required to spawn a player-model Training Bot.");
+            plugin.message(owner, "&cThe player-model NPC service is unavailable.");
             return;
         }
 
@@ -43,7 +45,6 @@ public final class BotManager implements Listener {
 
         NPC npc = CitizensAPI.getNPCRegistry().createNPC(org.bukkit.entity.EntityType.PLAYER, "Training Bot");
         npc.setProtected(false);
-        // Copy the owner's actual skin texture, not just their username or a player-head item.
         npc.getOrAddTrait(SkinTrait.class).setSkinPersistent(owner);
         if (!npc.spawn(at)) {
             npc.destroy();
@@ -54,7 +55,7 @@ public final class BotManager implements Listener {
         Entity entity = npc.getEntity();
         if (!(entity instanceof Player bot)) {
             npc.destroy();
-            plugin.message(owner, "&cCitizens did not create a player entity.");
+            plugin.message(owner, "&cCould not create the player-model bot.");
             return;
         }
 
@@ -71,9 +72,7 @@ public final class BotManager implements Listener {
             equipment.setLeggings(enchantedNetherite(Material.NETHERITE_LEGGINGS));
             equipment.setBoots(enchantedNetherite(Material.NETHERITE_BOOTS));
             equipment.setItemInMainHand(new ItemStack(Material.TOTEM_OF_UNDYING));
-            equipment.setItemInOffHand(shield
-                    ? new ItemStack(Material.SHIELD)
-                    : new ItemStack(Material.TOTEM_OF_UNDYING));
+            equipment.setItemInOffHand(new ItemStack(Material.TOTEM_OF_UNDYING));
             equipment.setHelmetDropChance(0.0f);
             equipment.setChestplateDropChance(0.0f);
             equipment.setLeggingsDropChance(0.0f);
@@ -82,12 +81,9 @@ public final class BotManager implements Listener {
             equipment.setItemInOffHandDropChance(0.0f);
         }
 
-        UUID id = bot.getUniqueId();
         owned.computeIfAbsent(owner.getUniqueId(), key -> new HashSet<>()).add(npc);
-        settings.put(id, new BotSettings(owner.getUniqueId(), shield, infiniteTotem, knockback));
-        plugin.message(owner, "&aPlayer-model Training Bot spawned. &7Shield: &f" + (shield ? "ON" : "OFF")
-                + "&7, Inf. Totem: &f" + (infiniteTotem ? "ON" : "OFF")
-                + "&7, Knockback: &f" + (knockback ? "ON" : "OFF"));
+        settings.put(bot.getUniqueId(), new BotSettings(owner.getUniqueId(), infiniteTotem, knockback));
+        plugin.message(owner, "&aTraining Bot spawned. &7It disappears when you leave, change world, or move more than 200 blocks away.");
     }
 
     private ItemStack enchantedNetherite(Material material) {
@@ -98,32 +94,34 @@ public final class BotManager implements Listener {
         return item;
     }
 
-    @EventHandler
-    public void onBotDamage(EntityDamageEvent event) {
-        UUID id = event.getEntity().getUniqueId();
-        BotSettings cfg = settings.get(id);
-        if (cfg == null || !(event.getEntity() instanceof Player bot)) return;
+    private void removeOutOfRangeBots() {
+        for (Map.Entry<UUID, Set<NPC>> entry : new HashMap<>(owned).entrySet()) {
+            Player owner = Bukkit.getPlayer(entry.getKey());
+            if (owner == null || !owner.isOnline()) {
+                removeOwned(entry.getKey());
+                continue;
+            }
 
-        if (cfg.shield() && event instanceof EntityDamageByEntityEvent hit
-                && hit.getDamager() instanceof Player attacker) {
-            Vector toward = attacker.getLocation().toVector().subtract(bot.getLocation().toVector());
-            toward.setY(0);
-            Vector facing = bot.getLocation().getDirection().setY(0);
-            if (toward.lengthSquared() > 0 && facing.lengthSquared() > 0
-                    && facing.normalize().dot(toward.normalize()) >= 0.15) {
-                long now = bot.getWorld().getGameTime();
-                long ready = shieldReadyAt.getOrDefault(id, 0L);
-                if (now >= ready) {
-                    event.setCancelled(true);
-                    shieldReadyAt.put(id, now + SHIELD_COOLDOWN_TICKS);
-                    bot.swingOffHand();
-                    bot.getWorld().playSound(bot.getLocation(), Sound.ITEM_SHIELD_BLOCK, 1, 1);
-                    bot.getWorld().spawnParticle(Particle.CRIT, bot.getLocation().add(0, 1, 0),
-                            8, .35, .45, .35, .05);
-                    return;
+            for (NPC npc : new HashSet<>(entry.getValue())) {
+                Entity entity = npc.getEntity();
+                if (entity == null || !entity.isValid()) {
+                    removeBot(entry.getKey(), npc);
+                    continue;
+                }
+                Location botLocation = entity.getLocation();
+                if (!botLocation.getWorld().equals(owner.getWorld())
+                        || botLocation.distanceSquared(owner.getLocation()) > OWNER_RADIUS_SQUARED) {
+                    removeBot(entry.getKey(), npc);
                 }
             }
         }
+    }
+
+    @EventHandler
+    public void onBotDamage(org.bukkit.event.entity.EntityDamageEvent event) {
+        UUID id = event.getEntity().getUniqueId();
+        BotSettings cfg = settings.get(id);
+        if (cfg == null || !(event.getEntity() instanceof Player bot)) return;
 
         if (!cfg.knockback()) {
             Bukkit.getScheduler().runTask(plugin, () -> {
@@ -144,37 +142,46 @@ public final class BotManager implements Listener {
     public void onDeath(EntityDeathEvent event) {
         UUID id = event.getEntity().getUniqueId();
         settings.remove(id);
-        shieldReadyAt.remove(id);
-        for (Set<NPC> npcs : owned.values()) {
-            npcs.removeIf(npc -> npc.getEntity() == null || npc.getEntity().getUniqueId().equals(id));
+        for (Map.Entry<UUID, Set<NPC>> entry : new HashMap<>(owned).entrySet()) {
+            for (NPC npc : new HashSet<>(entry.getValue())) {
+                Entity entity = npc.getEntity();
+                if (entity == null || entity.getUniqueId().equals(id)) removeBot(entry.getKey(), npc);
+            }
         }
-        owned.values().removeIf(Set::isEmpty);
     }
 
     public void removeOwned(Player owner) {
-        Set<NPC> npcs = owned.remove(owner.getUniqueId());
+        removeOwned(owner.getUniqueId());
+    }
+
+    private void removeOwned(UUID ownerId) {
+        Set<NPC> npcs = owned.remove(ownerId);
         if (npcs == null) return;
-        for (NPC npc : npcs) removeBot(npc);
+        for (NPC npc : npcs) removeBot(ownerId, npc);
     }
 
     public void removeAll() {
-        for (Set<NPC> npcs : owned.values()) {
-            for (NPC npc : npcs) removeBot(npc);
+        for (Map.Entry<UUID, Set<NPC>> entry : new HashMap<>(owned).entrySet()) {
+            removeOwned(entry.getKey());
         }
         owned.clear();
+        settings.clear();
     }
 
-    private void removeBot(NPC npc) {
+    private void removeBot(UUID ownerId, NPC npc) {
         Entity entity = npc.getEntity();
-        if (entity != null) {
-            settings.remove(entity.getUniqueId());
-            shieldReadyAt.remove(entity.getUniqueId());
+        if (entity != null) settings.remove(entity.getUniqueId());
+        Set<NPC> npcs = owned.get(ownerId);
+        if (npcs != null) {
+            npcs.remove(npc);
+            if (npcs.isEmpty()) owned.remove(ownerId);
         }
         npc.destroy();
     }
 
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
-        if (plugin.getConfig().getBoolean("bots.remove-on-quit", true)) removeOwned(event.getPlayer());
+        // Always remove immediately on logout; the config cannot override this rule.
+        removeOwned(event.getPlayer());
     }
 }
