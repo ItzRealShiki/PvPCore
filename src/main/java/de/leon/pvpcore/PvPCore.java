@@ -56,7 +56,7 @@ public final class PvPCore extends JavaPlugin implements Listener {
 
         boolean lungeAvailable = Registry.ENCHANTMENT.get(NamespacedKey.minecraft("lunge")) != null;
 
-        getLogger().info("Server platform: " + serverName + (purpur ? " (Purpur / Paper-compatible)" : ""));
+        getLogger().info("Server platform: " + serverName);
         getLogger().info("Server version: " + serverVersion + " | Minecraft: " + minecraftVersion);
         getLogger().info("Paper server detected: " + paper);
         getLogger().info("Training bot NMS version supported: " + supportedNmsVersion);
