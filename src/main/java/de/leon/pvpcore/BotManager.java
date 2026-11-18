@@ -40,7 +40,7 @@ public final class BotManager implements Listener {
         this.plugin = plugin;
         available = NmsGuard.supported();
         if (!available) {
-            plugin.getLogger().warning("Training bots are disabled: this NMS implementation currently supports Minecraft 26.2 on Paper-compatible servers (including Purpur).");
+            plugin.getLogger().warning("Training bots are disabled: this NMS implementation currently supports Minecraft 26.2 on Paper servers.");
         }
         Bukkit.getScheduler().runTaskTimer(plugin, this::tickBots, 1L, 1L);
     }
@@ -68,7 +68,7 @@ public final class BotManager implements Listener {
             plugin.message(owner, "&aYour survival player bot has been created.");
         } catch (LinkageError error) {
             disableFeature(error);
-            plugin.message(owner, "&cThe bot could not start because this Paper/Purpur build has incompatible internal signatures.");
+            plugin.message(owner, "&cThe bot could not start because this Paper build has incompatible internal signatures.");
         } catch (IllegalStateException error) {
             plugin.getLogger().log(Level.WARNING, "Could not spawn training bot.", error);
             plugin.message(owner, "&cThe bot could not be spawned. Check the server log.");
@@ -258,7 +258,7 @@ public final class BotManager implements Listener {
         warned = true;
         available = false;
         plugin.getLogger().log(Level.WARNING,
-                "Fake-player NMS signatures do not match this Paper-compatible server build. Only /bot is disabled.", error);
+                "Fake-player NMS signatures do not match this Paper server build. Only /bot is disabled.", error);
         removeAll();
     }
 }
