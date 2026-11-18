@@ -8,9 +8,6 @@ import org.bukkit.inventory.*;
 import org.bukkit.inventory.meta.ItemMeta;
 
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
 
 public final class Menus implements Listener {
     private final PvPCore plugin;
@@ -42,18 +39,17 @@ public final class Menus implements Listener {
 
     public void openPvp(Player p) {
         Inventory inv = create("pvp", plugin.getConfig().getString("menus.title-pvp", "&8ᴛʀᴀɪɴɪɴɢ ʙᴏᴛ"), 54);
-        boolean shield = botOption(p, "shield", false);
         boolean totem = botOption(p, "infinite-totem", true);
         boolean knockback = botOption(p, "knockback", true);
-        inv.setItem(10, item(shield ? Material.SHIELD : Material.GRAY_DYE, (shield ? "&a" : "&c") + "Shield (20 Ticks)", "&7Unbreakable main-hand shield.", "&7An axe disables it for 20 ticks.", "&7Status: " + (shield ? "&aEnabled" : "&cDisabled")));
-        inv.setItem(13, item(totem ? Material.TOTEM_OF_UNDYING : Material.GRAY_DYE, (totem ? "&a" : "&c") + "Infinite Totem", "&7Keeps a totem in the offhand.", "&7Prevents lethal damage while enabled.", "&7Status: " + (totem ? "&aEnabled" : "&cDisabled")));
-        inv.setItem(16, item(knockback ? Material.IRON_CHESTPLATE : Material.GRAY_DYE, (knockback ? "&a" : "&c") + "Knockback", "&7Allows normal server knockback.", "&7Status: " + (knockback ? "&aEnabled" : "&cDisabled")));
+        inv.setItem(10, item(Material.IRON_CHESTPLATE, "&aSurvival Player", "&7Real server-side player entity.", "&7Vanilla gravity, collisions and movement."));
+        inv.setItem(13, item(totem ? Material.TOTEM_OF_UNDYING : Material.GRAY_DYE, (totem ? "&a" : "&c") + "Infinite Totem", "&7Uses vanilla totem resurrection.", "&7Automatically replaces a used totem.", "&7Status: " + (totem ? "&aEnabled" : "&cDisabled")));
+        inv.setItem(16, item(knockback ? Material.IRON_CHESTPLATE : Material.GRAY_DYE, (knockback ? "&a" : "&c") + "Knockback", "&7Allows normal player knockback.", "&7Status: " + (knockback ? "&aEnabled" : "&cDisabled")));
         inv.setItem(28, blastItem(p, "helmet", Material.NETHERITE_HELMET, "Helmet"));
         inv.setItem(30, blastItem(p, "chestplate", Material.NETHERITE_CHESTPLATE, "Chestplate"));
         inv.setItem(32, blastItem(p, "leggings", Material.NETHERITE_LEGGINGS, "Leggings"));
         inv.setItem(34, blastItem(p, "boots", Material.NETHERITE_BOOTS, "Boots"));
         inv.setItem(45, item(Material.BARRIER, "&cRemove Bot", "&7Remove your active bot."));
-        inv.setItem(49, item(Material.PLAYER_HEAD, "&aCreate Bot", "&7Creates your player model with enchanted", "&7unbreakable netherite armor.", "&7Your previous bot is replaced automatically."));
+        inv.setItem(49, item(Material.PLAYER_HEAD, "&aCreate Bot", "&7Creates your survival player bot with", "&7unbreakable netherite armor.", "&7Your previous bot is replaced automatically."));
         p.openInventory(inv);
     }
 
@@ -73,6 +69,7 @@ public final class Menus implements Listener {
         plugin.bots().refreshOwned(p);
         openPvp(p);
     }
+
     public void openRtp(Player p) {
         Inventory inv = create("rtp", plugin.getConfig().getString("menus.title-rtp", "&8ʀᴀɴᴅᴏᴍ ᴛᴇʟᴇᴘᴏʀᴛ"), 27);
         inv.setItem(10, item(Material.GRASS_BLOCK, "&aPlains", "&7Natural Minecraft terrain", "&eClick to teleport"));
@@ -96,10 +93,10 @@ public final class Menus implements Listener {
 
     public void openGamemode(Player p) {
         Inventory inv = create("gm", "&8ɢᴀᴍᴇᴍᴏᴅᴇ", 27);
-        inv.setItem(10, item(Material.GRASS_BLOCK, "&aSurvival", "&7Set your gamemode."));
-        inv.setItem(12, item(Material.DIAMOND_BLOCK, "&bCreative", "&7Set your gamemode."));
-        inv.setItem(14, item(Material.IRON_SWORD, "&6Adventure", "&7Set your gamemode."));
-        inv.setItem(16, item(Material.ENDER_EYE, "&dSpectator", "&7Set your gamemode."));
+        inv.setItem(10, item(Material.GRASS_BLOCK, "&aSurvival", "&7Set your game mode."));
+        inv.setItem(12, item(Material.DIAMOND_BLOCK, "&bCreative", "&7Set your game mode."));
+        inv.setItem(14, item(Material.IRON_SWORD, "&6Adventure", "&7Set your game mode."));
+        inv.setItem(16, item(Material.ENDER_EYE, "&dSpectator", "&7Set your game mode."));
         p.openInventory(inv);
     }
 
@@ -115,7 +112,6 @@ public final class Menus implements Listener {
         switch (holder.key) {
             case "pvp" -> {
                 switch (slot) {
-                    case 10 -> toggleBotOption(p, "shield", false);
                     case 13 -> toggleBotOption(p, "infinite-totem", true);
                     case 16 -> toggleBotOption(p, "knockback", true);
                     case 28 -> toggleBotOption(p, "blast-helmet", false);
