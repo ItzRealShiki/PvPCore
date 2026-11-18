@@ -5,17 +5,19 @@ import org.bukkit.ChatColor;
 import org.bukkit.command.*;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class PvPCore extends JavaPlugin implements Listener {
     private Menus menus;
     private BotManager bots;
     private WorldManager worlds;
     private ItemEditCommand itemEdit;
+    private final Set<UUID> rtpLoading = ConcurrentHashMap.newKeySet();
 
     @Override public void onEnable() {
         saveDefaultConfig();
@@ -39,56 +41,19 @@ public final class PvPCore extends JavaPlugin implements Listener {
         getLogger().info("PvPCore enabled.");
     }
 
-    public boolean startRtpCooldown(Player player) {
-        String path = "rtp.cooldowns." + player.getUniqueId();
-        long now = System.currentTimeMillis();
-        long expiresAt = getConfig().getLong(path, 0L);
-        if (expiresAt > now) {
-            message(player, "&cYou can use /rtp again in &f" + formatDuration(expiresAt - now) + "&c.");
+    public boolean beginRtp(Player player) {
+        if (!rtpLoading.add(player.getUniqueId())) {
+            message(player, "&cYour previous RTP is still loading. Please wait.");
             return false;
         }
-        long duration = Math.max(0L, getConfig().getLong("rtp.cooldown-seconds", 300L)) * 1000L;
-        if (duration <= 0L) return true;
-        expiresAt = now + duration;
-        getConfig().set(path, expiresAt);
-        saveConfig();
-        scheduleRtpReadyMessage(player.getUniqueId(), expiresAt);
-        message(player, "&eRTP cooldown started. You can use /rtp again in &f" + formatDuration(duration) + "&e.");
+        message(player, "&eYour random teleport is loading. Please wait...");
         return true;
     }
 
-    private void scheduleRtpReadyMessage(java.util.UUID uuid, long expiresAt) {
-        long delay = Math.max(1L, (expiresAt - System.currentTimeMillis() + 49L) / 50L);
-        Bukkit.getScheduler().runTaskLater(this, () -> {
-            String path = "rtp.cooldowns." + uuid;
-            long currentExpiry = getConfig().getLong(path, 0L);
-            if (currentExpiry != expiresAt || currentExpiry > System.currentTimeMillis()) return;
-            getConfig().set(path, null);
-            saveConfig();
-            Player player = Bukkit.getPlayer(uuid);
-            if (player != null && player.isOnline()) message(player, "&aYour RTP cooldown has expired. You can use /rtp again!");
-        }, delay);
-    }
-
-    @EventHandler
-    public void onPlayerJoin(PlayerJoinEvent event) {
-        String path = "rtp.cooldowns." + event.getPlayer().getUniqueId();
-        long expiresAt = getConfig().getLong(path, 0L);
-        if (expiresAt <= 0L) return;
-        if (expiresAt <= System.currentTimeMillis()) {
-            getConfig().set(path, null);
-            saveConfig();
-            message(event.getPlayer(), "&aYour RTP cooldown has expired. You can use /rtp again!");
-        } else {
-            scheduleRtpReadyMessage(event.getPlayer().getUniqueId(), expiresAt);
+    public void finishRtp(Player player) {
+        if (rtpLoading.remove(player.getUniqueId()) && player.isOnline()) {
+            message(player, "&aRTP is ready. You can use /rtp again!");
         }
-    }
-
-    private String formatDuration(long millis) {
-        long seconds = Math.max(1L, (millis + 999L) / 1000L);
-        long minutes = seconds / 60L;
-        long remainder = seconds % 60L;
-        return minutes > 0 ? minutes + "m " + remainder + "s" : remainder + "s";
     }
 
     private void register(String name, CommandExecutor executor) {
