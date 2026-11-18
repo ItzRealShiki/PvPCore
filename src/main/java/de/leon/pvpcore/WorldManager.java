@@ -6,7 +6,11 @@ import org.bukkit.block.Biome;
 import org.bukkit.entity.Player;
 import org.bukkit.generator.ChunkGenerator;
 
-import java.util.Random;
+import java.util.*;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.*;
+import java.util.stream.Stream;
 import java.util.concurrent.ThreadLocalRandom;
 
 public final class WorldManager {
@@ -143,4 +147,132 @@ public final class WorldManager {
         }
         plugin.message(player,"&cNo safe spawn point was found. Please try again."); return false;
     }
+
+    private static final List<String> WORLD_KEYS = List.of("plains", "desert", "snow", "badlands");
+    private record ReturnTarget(Player player, String worldKey) {}
+
+    public boolean isWorldKey(String key) {
+        return WORLD_KEYS.contains(key.toLowerCase(Locale.ROOT));
+    }
+
+    public void randomTeleport(Player player) {
+        List<String> keys = new ArrayList<>(WORLD_KEYS);
+        Collections.shuffle(keys);
+        for (String key : keys) {
+            if (teleport(player, key)) return;
+        }
+        plugin.message(player, "&cNo arena world is currently available.");
+    }
+
+    public void startRegenerationCycle() {
+        scheduleNextRegeneration();
+    }
+
+    private void scheduleNextRegeneration() {
+        if (!plugin.getConfig().getBoolean("worlds.regeneration.enabled", true)) return;
+        long intervalTicks = Math.max(60L, plugin.getConfig().getLong("worlds.regeneration.interval-seconds", 300L)) * 20L;
+        long countdownTicks = Math.max(1L, plugin.getConfig().getLong("worlds.regeneration.countdown-seconds", 5L)) * 20L;
+        long wait = Math.max(1L, intervalTicks - countdownTicks);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> showRegenerationCountdown(
+                (int) Math.max(1L, countdownTicks / 20L)), wait);
+    }
+
+    private void showRegenerationCountdown(int seconds) {
+        if (seconds <= 0) {
+            regenerateSharedWorlds();
+            scheduleNextRegeneration();
+            return;
+        }
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            online.sendTitle(plugin.color("&c&l" + seconds), plugin.color("&eArena regeneration"), 0, 20, 0);
+        }
+        Bukkit.broadcastMessage(plugin.color("&8[&aPvPCore&8] &eShared arenas regenerate in &c" + seconds + "&e..."));
+        Bukkit.getScheduler().runTaskLater(plugin, () -> showRegenerationCountdown(seconds - 1), 20L);
+    }
+
+    private void regenerateSharedWorlds() {
+        World holding = Bukkit.getWorlds().stream()
+                .filter(world -> !isManagedWorldName(world.getName()))
+                .findFirst().orElse(null);
+        if (holding == null) {
+            holding = new WorldCreator("pvpcore_regeneration_holding").environment(World.Environment.NORMAL)
+                    .type(WorldType.NORMAL).createWorld();
+        }
+        if (holding == null) {
+            plugin.getLogger().severe("Could not find or create a temporary world; arena regeneration was cancelled.");
+            return;
+        }
+
+        List<ReturnTarget> returnTargets = new ArrayList<>();
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            String key = keyForWorldName(player.getWorld().getName());
+            if (key != null) {
+                returnTargets.add(new ReturnTarget(player, key));
+                player.teleport(holding.getSpawnLocation());
+            }
+        }
+
+        for (String key : WORLD_KEYS) {
+            String name = plugin.getConfig().getString("worlds." + key + ".name", "pvp_" + key + "_arena");
+            World oldWorld = Bukkit.getWorld(name);
+            if (oldWorld != null) {
+                oldWorld.save();
+                if (!Bukkit.unloadWorld(oldWorld, false)) {
+                    plugin.getLogger().severe("Could not unload " + name + "; skipping its regeneration.");
+                    continue;
+                }
+            }
+
+            Path folder = Bukkit.getWorldContainer().toPath().resolve(name);
+            try {
+                deleteWorldFolder(folder);
+            } catch (IOException exception) {
+                plugin.getLogger().severe("Could not delete old arena " + name + ": " + exception.getMessage());
+                continue;
+            }
+
+            World fresh = new WorldCreator(name).environment(World.Environment.NORMAL)
+                    .type(WorldType.NORMAL).generator(new PvPGenerator(key)).generateStructures(false).createWorld();
+            if (fresh == null) plugin.getLogger().severe("Could not create regenerated arena " + name);
+        }
+
+        for (ReturnTarget target : returnTargets) {
+            Player player = target.player();
+            if (player.isOnline()) {
+                World regenerated = Bukkit.getWorld(plugin.getConfig().getString(
+                        "worlds." + target.worldKey() + ".name", "pvp_" + target.worldKey() + "_arena"));
+                if (regenerated != null) teleport(player, target.worldKey());
+                else player.teleport(holding.getSpawnLocation());
+            }
+        }
+        Bukkit.broadcastMessage(plugin.color("&8[&aPvPCore&8] &aAll shared arena worlds have been regenerated!"));
+    }
+
+    private boolean isManagedWorldName(String name) {
+        return keyForWorldName(name) != null;
+    }
+
+    private String keyForWorldName(String name) {
+        for (String key : WORLD_KEYS) {
+            String configured = plugin.getConfig().getString("worlds." + key + ".name", "pvp_" + key + "_arena");
+            if (configured.equalsIgnoreCase(name)) return key;
+        }
+        return null;
+    }
+
+    private void deleteWorldFolder(Path folder) throws IOException {
+        if (!Files.exists(folder)) return;
+        try (Stream<Path> paths = Files.walk(folder)) {
+            paths.sorted(Comparator.reverseOrder()).forEach(path -> {
+                try {
+                    Files.deleteIfExists(path);
+                } catch (IOException exception) {
+                    throw new UncheckedIOException(exception);
+                }
+            });
+        } catch (UncheckedIOException exception) {
+            throw exception.getCause();
+        }
+    }
+
 }
