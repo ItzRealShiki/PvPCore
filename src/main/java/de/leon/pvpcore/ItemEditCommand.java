@@ -6,7 +6,6 @@ import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.event.*;
 import org.bukkit.event.block.Action;
-import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.*;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -30,7 +29,7 @@ public final class ItemEditCommand implements TabExecutor, Listener {
         if(!(sender instanceof Player p)){plugin.playerOnly(sender);return true;}
         if(!allowed(p)){msg(p,"&cYou do not have permission.");return true;}
         ItemStack item=p.getInventory().getItemInMainHand();
-        if(args.length==0){open(p);return true;}
+        if(args.length==0){msg(p,"&eUsage: /it <enchant|name|lore|hide|action>. Use tab completion for options.");return true;}
         if(item.getType().isAir()){msg(p,"&cHold an item in your main hand.");return true;}
         ItemMeta meta=item.getItemMeta(); if(meta==null)return true;
         switch(args[0].toLowerCase(Locale.ROOT)){
@@ -77,31 +76,6 @@ public final class ItemEditCommand implements TabExecutor, Listener {
         }
         return true;
     }
-    private void open(Player p){
-        Inventory inv=Bukkit.createInventory(null,27,plugin.color("&8ɪᴛᴇᴍ ᴇᴅɪᴛᴏʀ"));
-        inv.setItem(10,button(Material.ENCHANTED_BOOK,"&bEnchantments","/it enchant <enchantment> <level>"));
-        inv.setItem(12,button(Material.NAME_TAG,"&eItem Name","/it name <name>"));
-        inv.setItem(14,button(Material.WRITABLE_BOOK,"&aItem Lore","/it lore <add|set> <text>"));
-        inv.setItem(16,button(Material.BARRIER,"&cHide Flags","/it hide <enchants|attributes|all>"));
-        inv.setItem(22,button(Material.COMPASS,"&dItem Actions","/it action <right|left> <command|effect> <value>"));
-        p.openInventory(inv);
-    }
-    private ItemStack button(Material m,String name,String lore){
-        ItemStack it=new ItemStack(m);ItemMeta meta=it.getItemMeta();meta.setDisplayName(plugin.color(name));meta.setLore(List.of(plugin.color("&7"+lore)));it.setItemMeta(meta);return it;
-    }
-    @EventHandler public void click(InventoryClickEvent e){
-        if(!(e.getWhoClicked() instanceof Player p)||!e.getView().getTitle().equals(plugin.color("&8ɪᴛᴇᴍ ᴇᴅɪᴛᴏʀ")))return;
-        e.setCancelled(true);if(e.getRawSlot()<0||e.getRawSlot()>=e.getView().getTopInventory().getSize())return;
-        String help=switch(e.getRawSlot()){
-            case 10->"/it enchant <enchantment> <level>";
-            case 12->"/it name <name>";
-            case 14->"/it lore <add|set> <text>";
-            case 16->"/it hide <enchants|attributes|all>";
-            case 22->"/it action <right|left> <command|effect> <value>";
-            default->null;
-        };
-        if(help!=null){p.closeInventory();msg(p,"&e"+help);}
-    }
     @EventHandler public void interact(PlayerInteractEvent e){
         if(e.getHand()!=EquipmentSlot.HAND)return;
         ItemStack item=e.getItem();if(item==null||!item.hasItemMeta())return;
@@ -111,10 +85,25 @@ public final class ItemEditCommand implements TabExecutor, Listener {
         if(command!=null)e.getPlayer().performCommand(command.startsWith("/")?command.substring(1):command);
     }
     @Override public List<String> onTabComplete(CommandSender sender,Command command,String alias,String[] args){
-        if(!sender.hasPermission("Admin.Core"))return List.of();
-        if(args.length==1)return List.of("enchant","name","lore","hide","action").stream().filter(s->s.startsWith(args[0].toLowerCase(Locale.ROOT))).toList();
-        if(args.length==2)return switch(args[0].toLowerCase(Locale.ROOT)){case "hide"->List.of("enchants","attributes","all");case "lore"->List.of("add","set");case "action"->List.of("right","left");default->List.of();};
-        if(args.length==3&&args[0].equalsIgnoreCase("action"))return List.of("command","effect");
+        if(!plugin.hasCore(sender,"Admin.Core"))return List.of();
+        if(args.length==1)return complete(List.of("enchant","name","lore","hide","action"),args[0]);
+        if(args.length==2)return switch(args[0].toLowerCase(Locale.ROOT)){
+            case "enchant" -> {
+                List<String> names=new ArrayList<>();
+                for(Enchantment enchantment:Registry.ENCHANTMENT)names.add(enchantment.getKey().getKey());
+                yield complete(names,args[1]);
+            }
+            case "lore" -> complete(List.of("add","set"),args[1]);
+            case "hide" -> complete(List.of("enchants","attributes","all"),args[1]);
+            case "action" -> complete(List.of("right","left"),args[1]);
+            default -> List.of();
+        };
+        if(args.length==3&&args[0].equalsIgnoreCase("enchant"))return complete(List.of("1","2","3","4","5","10","255"),args[2]);
+        if(args.length==3&&args[0].equalsIgnoreCase("action"))return complete(List.of("command","effect"),args[2]);
         return List.of();
+    }
+    private List<String> complete(List<String> choices,String input){
+        String prefix=input.toLowerCase(Locale.ROOT);
+        return choices.stream().filter(s->s.toLowerCase(Locale.ROOT).startsWith(prefix)).sorted().toList();
     }
 }
