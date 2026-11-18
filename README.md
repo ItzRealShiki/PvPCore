@@ -14,27 +14,33 @@ mvn clean package
 Output: `target/PvPCore-1.0.0.jar`
 
 ## Commands
-- `/pvp` — GUI for the PvP training modes.
-- `/rtp` — GUI to choose a separate flat world: Plains, Desert, Snow, or Badlands.
-- `/admin` — GUI for bot administration, gamemodes and config reload.
-- `/gm` or `/gamemode` — GUI selector; accepts mode and optional player arguments.
+- `/bot` (alias: `/pvp`) — Opens the bot training menu.
+- `/rtp` — Opens the GUI to choose Plains, Desert, Snow, or Badlands.
+- `/admin` — Opens the administration GUI.
+- `/gm` or `/gamemode` — Opens the selector GUI; accepts a mode and optional player.
+- `/gms [player]` — Sets Survival mode.
+- `/gmc [player]` — Sets Creative mode.
+- `/gma [player]` — Sets Adventure mode.
+- `/gmsp [player]` — Sets Spectator mode.
+
+All in-game messages, menu titles, item names, and lore use the same Unicode small-caps styling as LifestealCore. User-facing plugin text is English.
 
 ## RTP worlds
 Each world is created the first time it is selected and then saved by the server:
-- `pvp_plains` — flat grass world.
-- `pvp_desert` — flat sand world.
-- `pvp_snow` — flat snow world.
-- `pvp_badlands` — flat terracotta world.
+- `pvp_plains` — Flat grass world.
+- `pvp_desert` — Flat sand world.
+- `pvp_snow` — Flat snow world.
+- `pvp_badlands` — Flat terracotta world.
 
 The random teleport radius for each world is configurable in `config.yml` under `worlds.<key>.radius`. World names can also be changed there before first creation.
 
 ## Permissions
 Only these three permission nodes are defined:
-- `Member.Core` — use PvP training and RTP.
-- `Admin.Core` — admin dashboard and gamemode management.
-- `Owner.Core` — full access (also bypasses the lower-level checks).
+- `Member.Core` — Use bot training and RTP.
+- `Admin.Core` — Administration and gamemode management.
+- `Owner.Core` — Full access; bypasses lower-level permission checks.
 
-Assign them through LuckPerms or your permission manager. No extra permission nodes are required.
+Assign permissions through LuckPerms or another permission manager. No extra permission nodes are required.
 
 ## Notes
 Training opponents in this foundation version are ordinary server-side mobs. Advanced training behavior is not yet implemented.
