@@ -106,9 +106,9 @@ public final class WorldManager {
                 }
             }
 
-            // Natural trees are 60% less common than the previous generator.
+            // Natural trees have a 5% spawn chance per generated non-desert chunk.
             Random flora = new Random(seed + chunkX * 73428767L + chunkZ * 912931L);
-            if (flora.nextInt(100) < 40 && !terrainKey.equals("desert")) {
+            if (flora.nextInt(100) < 5 && !terrainKey.equals("desert")) {
                 int tx=flora.nextInt(8)+4, tz=flora.nextInt(8)+4;
                 int wx=chunkX*16+tx, wz=chunkZ*16+tz, sy=height(wx,wz,seed);
                 Material log=terrainKey.equals("snow")?Material.SPRUCE_LOG:
@@ -175,19 +175,45 @@ public final class WorldManager {
         return world;
     }
 
+    public void setSpawn(Player player) {
+        Location location = player.getLocation();
+        plugin.getConfig().set("spawn.world", location.getWorld().getName());
+        plugin.getConfig().set("spawn.x", location.getX());
+        plugin.getConfig().set("spawn.y", location.getY());
+        plugin.getConfig().set("spawn.z", location.getZ());
+        plugin.getConfig().set("spawn.yaw", location.getYaw());
+        plugin.getConfig().set("spawn.pitch", location.getPitch());
+        plugin.saveConfig();
+        plugin.message(player, "&aServer spawn location has been set.");
+    }
+
     public void teleportToSpawn(Player player) {
-        World spawnWorld = Bukkit.getWorlds().stream()
-                .filter(world -> !isManagedWorldName(world.getName())).findFirst().orElse(null);
-        if (spawnWorld == null) {
-            spawnWorld = Bukkit.getWorld("pvpcore_regeneration_holding");
-            if (spawnWorld == null) spawnWorld = new WorldCreator("pvpcore_regeneration_holding")
-                    .environment(World.Environment.NORMAL).type(WorldType.NORMAL).createWorld();
+        String configuredWorld = plugin.getConfig().getString("spawn.world");
+        World spawnWorld = configuredWorld == null ? null : Bukkit.getWorld(configuredWorld);
+        Location destination = null;
+        if (spawnWorld != null) {
+            destination = new Location(spawnWorld,
+                    plugin.getConfig().getDouble("spawn.x"),
+                    plugin.getConfig().getDouble("spawn.y"),
+                    plugin.getConfig().getDouble("spawn.z"),
+                    (float) plugin.getConfig().getDouble("spawn.yaw"),
+                    (float) plugin.getConfig().getDouble("spawn.pitch"));
         }
-        if (spawnWorld == null) {
+        if (destination == null) {
+            spawnWorld = Bukkit.getWorlds().stream()
+                    .filter(world -> !isManagedWorldName(world.getName())).findFirst().orElse(null);
+            if (spawnWorld == null) {
+                spawnWorld = Bukkit.getWorld("pvpcore_regeneration_holding");
+                if (spawnWorld == null) spawnWorld = new WorldCreator("pvpcore_regeneration_holding")
+                        .environment(World.Environment.NORMAL).type(WorldType.NORMAL).createWorld();
+            }
+            if (spawnWorld != null) destination = spawnWorld.getSpawnLocation();
+        }
+        if (destination == null) {
             plugin.message(player, "&cThe server spawn world is unavailable.");
             return;
         }
-        player.teleport(spawnWorld.getSpawnLocation());
+        player.teleport(destination);
         plugin.message(player, "&aTeleported to spawn.");
     }
 
