@@ -17,6 +17,7 @@ public final class PvPCore extends JavaPlugin {
     @Override public void onEnable() {
         saveDefaultConfig();
         worlds = new WorldManager(this);
+        worlds.startRegenerationCycle();
         menus = new Menus(this);
         bots = new BotManager(this);
         register("bot", new PvpCommand(this));
