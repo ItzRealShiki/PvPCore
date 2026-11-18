@@ -412,6 +412,15 @@ public final class WorldManager {
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     if (error == null && Boolean.TRUE.equals(success) && player.isOnline()) {
                         plugin.message(player, "&aTeleported to &f" + key.toUpperCase(Locale.ROOT) + "&a.");
+                        // Warm the surrounding area in the background after the player arrives.
+                        int centerX = destination.getBlockX() >> 4;
+                        int centerZ = destination.getBlockZ() >> 4;
+                        for (int dx = -1; dx <= 1; dx++) {
+                            for (int dz = -1; dz <= 1; dz++) {
+                                if (dx == 0 && dz == 0) continue;
+                                world.getChunkAtAsync(centerX + dx, centerZ + dz, true);
+                            }
+                        }
                     } else if (player.isOnline()) {
                         findSafeRtpLocation(player, world, key,
                                 Math.max(100, plugin.getConfig().getInt("worlds." + key + ".radius", 5000)), 0);
