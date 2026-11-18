@@ -122,11 +122,16 @@ public final class Menus implements Listener {
                         totemOptions.put(id, !totemOptions.getOrDefault(id, true));
                         openPvp(p);
                     }
+                    case 13 -> {
+                        knockbackOptions.put(id, !knockbackOptions.getOrDefault(id, true));
+                        openPvp(p);
+                    }
                     case 22 -> {
                         plugin.bots().spawn(p, shieldOptions.getOrDefault(id, false),
-                                totemOptions.getOrDefault(id, true));
+                                totemOptions.getOrDefault(id, true), knockbackOptions.getOrDefault(id, true));
                         shieldOptions.remove(id);
                         totemOptions.remove(id);
+                        knockbackOptions.remove(id);
                         p.closeInventory();
                     }
                     case 26 -> {
