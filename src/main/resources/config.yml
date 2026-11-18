@@ -24,7 +24,7 @@ worlds:
     name: "pvp_badlands_arena_v2"
     radius: 5000
   regeneration:
-    enabled: true
+    enabled: false
     interval-seconds: 300
     countdown-seconds: 5
 menus:
