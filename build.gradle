@@ -19,30 +19,31 @@ java {
     toolchain.languageVersion = JavaLanguageVersion.of(25)
 }
 
-tasks {
-    compileJava {
-        options.encoding = 'UTF-8'
-        options.release.set(25)
-    }
+tasks.named('compileJava') {
+    options.encoding = 'UTF-8'
+    options.release.set(25)
+}
 
-    processResources {
-        filteringCharset = 'UTF-8'
-        filesMatching('plugin.yml') {
-            expand(version: project.version)
-        }
+tasks.named('processResources') {
+    filteringCharset = 'UTF-8'
+    filesMatching('plugin.yml') {
+        expand(version: project.version)
     }
+}
 
-    register('verifyNoServerClassesInJar') {
-        dependsOn tasks.named('jar')
-        doLast {
-            def forbidden = ['net/minecraft/', 'org/bukkit/craftbukkit/', 'com/mojang/']
-            def jarFile = tasks.named('jar').get().archiveFile.get().asFile
-            zipTree(jarFile).visit { details ->
-                if (!details.isDirectory() && forbidden.any { details.relativePath.pathString.startsWith(it) }) {
-                    throw new GradleException("Server class packaged into plugin jar: ${details.relativePath}")
-                }
+tasks.register('verifyNoServerClassesInJar') {
+    dependsOn tasks.named('jar')
+    doLast {
+        def forbidden = ['net/minecraft/', 'org/bukkit/craftbukkit/', 'com/mojang/']
+        def jarFile = tasks.named('jar').get().archiveFile.get().asFile
+        zipTree(jarFile).visit { details ->
+            if (!details.isDirectory() && forbidden.any { details.relativePath.pathString.startsWith(it) }) {
+                throw new GradleException("Server class packaged into plugin jar: ${details.relativePath}")
             }
         }
     }
-    build { dependsOn 'verifyNoServerClassesInJar' }
+}
+
+tasks.named('build') {
+    dependsOn tasks.named('verifyNoServerClassesInJar')
 }
