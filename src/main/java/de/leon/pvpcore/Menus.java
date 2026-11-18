@@ -67,13 +67,15 @@ public final class Menus implements Listener {
     }
 
     private String difficulty(Player p, String key) {
-        return plugin.getConfig().getString("bots.options." + p.getUniqueId() + "." + key, "impossible").toUpperCase(java.util.Locale.ROOT);
+        String fallback = key.equals("shield-difficulty") ? "normal" : "impossible";
+        return plugin.getConfig().getString("bots.options." + p.getUniqueId() + "." + key, fallback).toUpperCase(java.util.Locale.ROOT);
     }
 
     private void cycleDifficulty(Player p, String key) {
         String path = "bots.options." + p.getUniqueId() + "." + key;
         String[] levels = {"easy", "normal", "hard", "impossible"};
-        String current = plugin.getConfig().getString(path, "impossible").toLowerCase(java.util.Locale.ROOT);
+        String fallback = key.equals("shield-difficulty") ? "normal" : "impossible";
+        String current = plugin.getConfig().getString(path, fallback).toLowerCase(java.util.Locale.ROOT);
         int next = 0;
         for (int i = 0; i < levels.length; i++) if (levels[i].equals(current)) next = (i + 1) % levels.length;
         plugin.getConfig().set(path, levels[next]);
