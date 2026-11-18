@@ -2,6 +2,7 @@ package de.leon.pvpcore;
 
 import org.bukkit.*;
 import org.bukkit.block.Block;
+import org.bukkit.block.Biome;
 import org.bukkit.entity.Player;
 
 import java.util.concurrent.ThreadLocalRandom;
@@ -33,13 +34,20 @@ public final class WorldManager {
 
         int radius = Math.max(100, plugin.getConfig().getInt(base + "radius", 5000));
         ThreadLocalRandom random = ThreadLocalRandom.current();
-        for (int attempt = 0; attempt < 60; attempt++) {
+        Biome wantedBiome = switch (key.toLowerCase()) {
+            case "desert" -> Biome.DESERT;
+            case "snow" -> Biome.SNOWY_PLAINS;
+            case "badlands" -> Biome.BADLANDS;
+            default -> Biome.PLAINS;
+        };
+        for (int attempt = 0; attempt < 200; attempt++) {
             int x = random.nextInt(-radius, radius + 1);
             int z = random.nextInt(-radius, radius + 1);
             Block floor = world.getHighestBlockAt(x, z);
             Block feet = floor.getRelative(0, 1, 0);
             Block head = floor.getRelative(0, 2, 0);
             if (!floor.getType().isSolid() || !feet.isPassable() || !head.isPassable()) continue;
+            if (world.getBiome(x, floor.getY(), z) != wantedBiome) continue;
             if (floor.isLiquid() || feet.isLiquid() || head.isLiquid()) continue;
 
             Location destination = new Location(world, x + 0.5, floor.getY() + 1.0, z + 0.5);
