@@ -42,6 +42,8 @@ public final class Menus implements Listener {
 
     public void openPvp(Player p) {
         Inventory inv = create("pvp", plugin.getConfig().getString("menus.title-pvp", "&8ᴛʀᴀɪɴɪɴɢ ʙᴏᴛ"), 27);
+        inv.setItem(11, item(Material.COMPARATOR, "&bBot Options",
+                "&7Configure the mannequin's saved display options."));
         inv.setItem(13, item(Material.PLAYER_HEAD, "&aSpawn Player NPC",
                 "&7Creates a full player-model mannequin",
                 "&7using your current Minecraft skin.",
@@ -49,6 +51,39 @@ public final class Menus implements Listener {
         inv.setItem(15, item(Material.BARRIER, "&cRemove my NPC",
                 "&7Remove your active player mannequin."));
         p.openInventory(inv);
+    }
+
+    private boolean botOption(Player p, String option, boolean defaultValue) {
+        return plugin.getConfig().getBoolean("bots.options." + p.getUniqueId() + "." + option, defaultValue);
+    }
+
+    public void openBotOptions(Player p) {
+        Inventory inv = create("bot-options", "&8ʙᴏᴛ ᴏᴘᴛɪᴏɴꜱ", 27);
+        boolean totem = botOption(p, "infinite-totem", true);
+        boolean shield = botOption(p, "shield", false);
+        boolean knockback = botOption(p, "knockback", true);
+        inv.setItem(10, item(totem ? Material.TOTEM_OF_UNDYING : Material.GRAY_DYE,
+                (totem ? "&a" : "&c") + "Infinite Totem",
+                "&7Saved option only; no combat behavior.",
+                "&7Status: " + (totem ? "&aEnabled" : "&cDisabled")));
+        inv.setItem(13, item(shield ? Material.SHIELD : Material.GRAY_DYE,
+                (shield ? "&a" : "&c") + "Shield (20 Ticks)",
+                "&7Saved option only; no combat behavior.",
+                "&7Status: " + (shield ? "&aEnabled" : "&cDisabled")));
+        inv.setItem(16, item(knockback ? Material.IRON_CHESTPLATE : Material.GRAY_DYE,
+                (knockback ? "&a" : "&c") + "Knockback",
+                "&7Saved option only; no combat behavior.",
+                "&7Status: " + (knockback ? "&aEnabled" : "&cDisabled")));
+        inv.setItem(22, item(Material.ARROW, "&eBack", "&7Return to bot menu."));
+        p.openInventory(inv);
+    }
+
+    private void toggleBotOption(Player p, String option, boolean defaultValue) {
+        String path = "bots.options." + p.getUniqueId() + "." + option;
+        boolean next = !plugin.getConfig().getBoolean(path, defaultValue);
+        plugin.getConfig().set(path, next);
+        plugin.saveConfig();
+        openBotOptions(p);
     }
 
     public void openRtp(Player p) {
@@ -93,6 +128,7 @@ public final class Menus implements Listener {
         switch (holder.key) {
             case "pvp" -> {
                 switch (slot) {
+                    case 11 -> openBotOptions(p);
                     case 13 -> {
                         plugin.bots().spawn(p);
                         p.closeInventory();
@@ -102,6 +138,15 @@ public final class Menus implements Listener {
                         plugin.message(p, "&aYour NPC was removed.");
                         p.closeInventory();
                     }
+                    default -> { }
+                }
+            }
+            case "bot-options" -> {
+                switch (slot) {
+                    case 10 -> toggleBotOption(p, "infinite-totem", true);
+                    case 13 -> toggleBotOption(p, "shield", false);
+                    case 16 -> toggleBotOption(p, "knockback", true);
+                    case 22 -> openPvp(p);
                     default -> { }
                 }
             }
