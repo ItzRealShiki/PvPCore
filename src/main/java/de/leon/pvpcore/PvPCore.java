@@ -18,7 +18,7 @@ public final class PvPCore extends JavaPlugin {
         worlds = new WorldManager(this);
         menus = new Menus(this);
         bots = new BotManager(this);
-        register("pvp", new PvpCommand(this));
+        register("bot", new PvpCommand(this));
         register("rtp", new RtpCommand(this));
         register("admin", new AdminCommand(this));
         register("gm", new GamemodeCommand(this));
@@ -34,7 +34,9 @@ public final class PvPCore extends JavaPlugin {
     public Menus menus() { return menus; }
     public BotManager bots() { return bots; }
     public WorldManager worlds() { return worlds; }
-    public String color(String text) { return ChatColor.translateAlternateColorCodes('&', text); }
+    public String color(String text) {
+        return SmallCaps.of(ChatColor.translateAlternateColorCodes('&', text));
+    }
     public void message(CommandSender sender, String text) {
         sender.sendMessage(color(getConfig().getString("style.prefix", "&8[&aPvPCore&8] ") + text));
     }
