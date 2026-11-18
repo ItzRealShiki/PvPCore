@@ -14,7 +14,6 @@ import java.util.UUID;
 
 public final class Menus implements Listener {
     private final PvPCore plugin;
-    private final Map<UUID, Boolean> shieldOptions = new HashMap<>();
     private final Map<UUID, Boolean> totemOptions = new HashMap<>();
     private final Map<UUID, Boolean> knockbackOptions = new HashMap<>();
 
@@ -44,17 +43,11 @@ public final class Menus implements Listener {
     }
 
     public void openPvp(Player p) {
-        boolean shield = shieldOptions.getOrDefault(p.getUniqueId(), false);
         boolean infiniteTotem = totemOptions.getOrDefault(p.getUniqueId(), true);
         boolean knockback = knockbackOptions.getOrDefault(p.getUniqueId(), true);
 
         Inventory inv = create("pvp", plugin.getConfig().getString("menus.title-pvp", "&8ᴛʀᴀɪɴɪɴɢ ʙᴏᴛ"), 27);
-        inv.setItem(11, item(Material.SHIELD,
-                shield ? "&aShield: ON" : "&cShield: OFF",
-                "&7Blocks frontal attacks.",
-                "&7Shield cooldown: 20 ticks (1 second).",
-                "&eClick to toggle"));
-        inv.setItem(15, item(Material.TOTEM_OF_UNDYING,
+        inv.setItem(11, item(Material.TOTEM_OF_UNDYING,
                 infiniteTotem ? "&aInf. Totem: ON" : "&cInf. Totem: OFF",
                 "&7The NPC never consumes a totem.",
                 "&7Enabled by default.",
@@ -65,8 +58,8 @@ public final class Menus implements Listener {
                 "&7Enabled by default.",
                 "&eClick to toggle"));
         inv.setItem(22, item(Material.ZOMBIE_HEAD, "&6Spawn NPC",
-                "&7Spawn your own player-themed Training Bot",
-                "&7with the selected options."));
+                "&7Spawn your own player-themed Training Bot.",
+                "&7The NPC despawns beyond 200 blocks."));
         inv.setItem(26, item(Material.BARRIER, "&cRemove my NPCs",
                 "&7Remove all of your active NPCs."));
         p.openInventory(inv);
@@ -116,10 +109,6 @@ public final class Menus implements Listener {
                 UUID id = p.getUniqueId();
                 switch (slot) {
                     case 11 -> {
-                        shieldOptions.put(id, !shieldOptions.getOrDefault(id, false));
-                        openPvp(p);
-                    }
-                    case 15 -> {
                         totemOptions.put(id, !totemOptions.getOrDefault(id, true));
                         openPvp(p);
                     }
@@ -128,9 +117,8 @@ public final class Menus implements Listener {
                         openPvp(p);
                     }
                     case 22 -> {
-                        plugin.bots().spawn(p, shieldOptions.getOrDefault(id, false),
-                                totemOptions.getOrDefault(id, true), knockbackOptions.getOrDefault(id, true));
-                        shieldOptions.remove(id);
+                        plugin.bots().spawn(p, totemOptions.getOrDefault(id, true),
+                                knockbackOptions.getOrDefault(id, true));
                         totemOptions.remove(id);
                         knockbackOptions.remove(id);
                         p.closeInventory();
