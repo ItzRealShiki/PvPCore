@@ -27,10 +27,9 @@ public final class BotManager implements Listener {
     public BotManager(PvPCore plugin) { this.plugin=plugin; }
 
     public void spawn(Player owner, boolean shield, boolean infiniteTotem, boolean knockback) {
-        int max=Math.max(1,plugin.getConfig().getInt("bots.max-per-player",2));
+        // Each player may have exactly one active Training Bot. Replace the old one first.
+        removeOwned(owner);
         Set<UUID> ids=owned.computeIfAbsent(owner.getUniqueId(),k->new HashSet<>());
-        ids.removeIf(id->Bukkit.getEntity(id)==null);
-        if(ids.size()>=max){plugin.message(owner,"&cYou have reached your training-bot limit.");return;}
         Location at=owner.getLocation().clone().add(owner.getLocation().getDirection().multiply(2.5));
         at.setY(owner.getLocation().getY()); at.setDirection(owner.getLocation().toVector().subtract(at.toVector()));
         Zombie bot=owner.getWorld().spawn(at,Zombie.class,z->{
