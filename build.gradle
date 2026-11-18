@@ -1,0 +1,48 @@
+plugins {
+    id 'java'
+    id 'io.papermc.paperweight.userdev' version '2.0.0-beta.24'
+}
+
+group = 'de.leon'
+version = '1.0.0'
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://repo.papermc.io/repository/maven-public/' }
+}
+
+dependencies {
+    paperweight.paperDevBundle('26.2.build.132-stable')
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(25)
+}
+
+tasks {
+    compileJava {
+        options.encoding = 'UTF-8'
+        options.release.set(25)
+    }
+
+    processResources {
+        filteringCharset = 'UTF-8'
+        filesMatching('plugin.yml') {
+            expand(version: project.version)
+        }
+    }
+
+    register('verifyNoServerClassesInJar') {
+        dependsOn tasks.named('jar')
+        doLast {
+            def forbidden = ['net/minecraft/', 'org/bukkit/craftbukkit/', 'com/mojang/']
+            def jarFile = tasks.named('jar').get().archiveFile.get().asFile
+            zipTree(jarFile).visit { details ->
+                if (!details.isDirectory() && forbidden.any { details.relativePath.pathString.startsWith(it) }) {
+                    throw new GradleException("Server class packaged into plugin jar: ${details.relativePath}")
+                }
+            }
+        }
+    }
+    build { dependsOn 'verifyNoServerClassesInJar' }
+}
