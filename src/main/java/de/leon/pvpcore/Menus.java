@@ -16,6 +16,7 @@ public final class Menus implements Listener {
     private final PvPCore plugin;
     private final Map<UUID, Boolean> shieldOptions = new HashMap<>();
     private final Map<UUID, Boolean> totemOptions = new HashMap<>();
+    private final Map<UUID, Boolean> knockbackOptions = new HashMap<>();
 
     private static final class MenuHolder implements InventoryHolder {
         private final String key;
@@ -45,6 +46,7 @@ public final class Menus implements Listener {
     public void openPvp(Player p) {
         boolean shield = shieldOptions.getOrDefault(p.getUniqueId(), false);
         boolean infiniteTotem = totemOptions.getOrDefault(p.getUniqueId(), true);
+        boolean knockback = knockbackOptions.getOrDefault(p.getUniqueId(), true);
 
         Inventory inv = create("pvp", plugin.getConfig().getString("menus.title-pvp", "&8ᴛʀᴀɪɴɪɴɢ ʙᴏᴛ"), 27);
         inv.setItem(11, item(Material.SHIELD,
@@ -55,6 +57,11 @@ public final class Menus implements Listener {
         inv.setItem(15, item(Material.TOTEM_OF_UNDYING,
                 infiniteTotem ? "&aInf. Totem: ON" : "&cInf. Totem: OFF",
                 "&7The NPC never consumes a totem.",
+                "&7Enabled by default.",
+                "&eClick to toggle"));
+        inv.setItem(13, item(Material.FEATHER,
+                knockback ? "&aKnockback: ON" : "&cKnockback: OFF",
+                "&7Allows the Training Bot to be pushed back.",
                 "&7Enabled by default.",
                 "&eClick to toggle"));
         inv.setItem(22, item(Material.ZOMBIE_HEAD, "&6Spawn NPC",
