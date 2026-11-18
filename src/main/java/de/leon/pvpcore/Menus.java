@@ -67,10 +67,10 @@ public final class Menus implements Listener {
 
     public void openRtp(Player p) {
         Inventory inv = create("rtp", plugin.getConfig().getString("menus.title-rtp", "&8ʀᴀɴᴅᴏᴍ ᴛᴇʟᴇᴘᴏʀᴛ"), 27);
-        inv.setItem(10, item(Material.GRASS_BLOCK, "&aPlains", "&7Flat grass world", "&eClick to teleport"));
-        inv.setItem(12, item(Material.SAND, "&6Desert", "&7Flat sand world", "&eClick to teleport"));
-        inv.setItem(14, item(Material.SNOW_BLOCK, "&bSnow", "&7Flat snow world", "&eClick to teleport"));
-        inv.setItem(16, item(Material.TERRACOTTA, "&cBadlands", "&7Flat terracotta world", "&eClick to teleport"));
+        inv.setItem(10, item(Material.GRASS_BLOCK, "&aPlains", "&7Natural Minecraft terrain", "&eClick to teleport"));
+        inv.setItem(12, item(Material.SAND, "&6Desert", "&7Natural desert terrain", "&eClick to teleport"));
+        inv.setItem(14, item(Material.SNOW_BLOCK, "&bSnow", "&7Natural snowy terrain", "&eClick to teleport"));
+        inv.setItem(16, item(Material.TERRACOTTA, "&cBadlands", "&7Natural badlands terrain", "&eClick to teleport"));
         inv.setItem(22, item(Material.BARRIER, "&cClose", "&7Close this menu."));
         p.openInventory(inv);
     }
