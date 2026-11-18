@@ -8,7 +8,6 @@ commands:
   bot:
     description: Opens the training bot menu.
     usage: /bot
-    aliases: []
   rtp:
     description: Opens the random teleport world selector.
     usage: /rtp
