@@ -18,14 +18,17 @@ public final class WorldManager {
 
     private static final class PvPGenerator extends ChunkGenerator {
         private final Biome biome;
+        private final String terrainKey;
 
         private PvPGenerator(String key) {
-            this.biome = switch (key.toLowerCase()) {
-                case "desert" -> Biome.DESERT;
-                case "snow" -> Biome.SNOWY_PLAINS;
-                case "badlands" -> Biome.BADLANDS;
-                default -> Biome.PLAINS;
+            this.terrainKey = key.toLowerCase();
+            String biomeKey = switch (terrainKey) {
+                case "desert" -> "desert";
+                case "snow" -> "snowy_plains";
+                case "badlands" -> "badlands";
+                default -> "plains";
             };
+            this.biome = Registry.BIOME.get(NamespacedKey.minecraft(biomeKey));
         }
 
         @Override
@@ -45,19 +48,20 @@ public final class WorldManager {
                             + Math.sin((worldX + worldZ) * 0.018) * 1.2;
                     int surfaceY = Math.max(minY + 8, Math.min(maxY - 8, 64 + (int) Math.round(broad)));
 
-                    biomeGrid.setBiome(x, z, biome);
+                    if (biome != null) {
+                        biomeGrid.setBiome(x, z, biome);
+                    }
                     data.setBlock(x, minY, z, Material.BEDROCK);
 
-                    Material top = switch (biome) {
-                        case DESERT -> Material.SAND;
-                        case SNOWY_PLAINS -> Material.SNOW_BLOCK;
-                        case BADLANDS -> Material.RED_SAND;
+                    Material top = switch (terrainKey) {
+                        case "desert" -> Material.SAND;
+                        case "snow" -> Material.SNOW_BLOCK;
+                        case "badlands" -> Material.RED_SAND;
                         default -> Material.GRASS_BLOCK;
                     };
-                    Material filler = switch (biome) {
-                        case DESERT -> Material.SANDSTONE;
-                        case SNOWY_PLAINS, PLAINS -> Material.DIRT;
-                        case BADLANDS -> Material.TERRACOTTA;
+                    Material filler = switch (terrainKey) {
+                        case "desert" -> Material.SANDSTONE;
+                        case "badlands" -> Material.TERRACOTTA;
                         default -> Material.DIRT;
                     };
 
