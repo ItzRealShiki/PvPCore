@@ -2,10 +2,11 @@ package de.leon.pvpcore;
 
 import java.util.Locale;
 
-/** Converts user-facing plugin text to the same Unicode small-caps style as LifestealCore. */
+/** Converts user-facing text to LifestealCore-style Unicode small caps while preserving color codes. */
 public final class SmallCaps {
     private static final String FROM = "abcdefghijklmnopqrstuvwxyz";
-    private static final String TO = "ᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘǫʀꜱᴛᴜᴠᴡxʏᴢ";
+    private static final String TO   = "ᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘǫʀꜱᴛᴜᴠᴡxʏᴢ";
+    private static final String COLORS = "0123456789abcdefklmnor";
 
     private SmallCaps() { }
 
@@ -15,6 +16,11 @@ public final class SmallCaps {
         StringBuilder out = new StringBuilder(lower.length());
         for (int i = 0; i < lower.length(); i++) {
             char c = lower.charAt(i);
+            if ((c == '&' || c == '§') && i + 1 < lower.length()
+                    && COLORS.indexOf(Character.toLowerCase(lower.charAt(i + 1))) >= 0) {
+                out.append(c).append(lower.charAt(++i));
+                continue;
+            }
             int index = FROM.indexOf(c);
             out.append(index >= 0 ? TO.charAt(index) : c);
         }
