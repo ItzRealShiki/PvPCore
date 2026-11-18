@@ -46,8 +46,8 @@ public final class Menus implements Listener {
         inv.setItem(13, item(totem ? Material.TOTEM_OF_UNDYING : Material.GRAY_DYE, (totem ? "&a" : "&c") + "Infinite Totem", "&7Uses vanilla totem resurrection.", "&7Automatically replaces a used totem.", "&7Status: " + (totem ? "&aEnabled" : "&cDisabled")));
         inv.setItem(16, item(knockback ? Material.IRON_CHESTPLATE : Material.GRAY_DYE, (knockback ? "&a" : "&c") + "Knockback", "&7Allows normal player knockback.", "&7Status: " + (knockback ? "&aEnabled" : "&cDisabled")));
         inv.setItem(22, item(Material.SHIELD, (shield ? "&a" : "&c") + "Shield", "&7Makes the bot hold its shield up.", "&7Status: " + (shield ? "&aEnabled" : "&cDisabled"), "&eClick to toggle"));
-        inv.setItem(23, item(Material.CLOCK, "&bShield Reaction: " + difficulty(p, "shield-difficulty"), "&7Easy: 40 ticks (2s)", "&7Normal: 20 ticks (1s)", "&7Hard: 10 ticks (0.5s)", "&7Impossible: 2 ticks (0.1s)", "&eClick to cycle"));
-        inv.setItem(24, item(Material.TOTEM_OF_UNDYING, "&bTotem Refill: " + difficulty(p, "totem-difficulty"), "&7Easy: 40 ticks (2s)", "&7Normal: 20 ticks (1s)", "&7Hard: 10 ticks (0.5s)", "&7Impossible: 2 ticks (0.1s)", "&eClick to cycle"));
+        inv.setItem(23, difficultyItem(p, "shield-difficulty", Material.SHIELD, "Shield Reaction"));
+        inv.setItem(24, difficultyItem(p, "totem-difficulty", Material.TOTEM_OF_UNDYING, "Totem Refill"));
         inv.setItem(28, blastItem(p, "helmet", Material.NETHERITE_HELMET, "Helmet"));
         inv.setItem(30, blastItem(p, "chestplate", Material.NETHERITE_CHESTPLATE, "Chestplate"));
         inv.setItem(32, blastItem(p, "leggings", Material.NETHERITE_LEGGINGS, "Leggings"));
@@ -66,18 +66,32 @@ public final class Menus implements Listener {
         return item(material, (enabled ? "&a" : "&c") + label + " - Blast Protection", "&7Unbreakable netherite armor.", "&7Blast Protection IV: " + (enabled ? "&aEnabled" : "&cDisabled"), "&eClick to toggle");
     }
 
+    private ItemStack difficultyItem(Player p, String key, Material material, String label) {
+        String selected = difficulty(p, key);
+        return item(material, "&b" + label + ": " + selected,
+                "&7Easy: 40 ticks (2s)",
+                "&7Normal: 20 ticks (1s)",
+                "&7Hard: 10 ticks (0.5s)",
+                "&7Impossible: 2 ticks (0.1s)",
+                "&aSelected: " + selected,
+                "&eLeft-click: decrease difficulty",
+                "&eRight-click: increase difficulty");
+    }
+
     private String difficulty(Player p, String key) {
         String fallback = key.equals("shield-difficulty") ? "normal" : "impossible";
         return plugin.getConfig().getString("bots.options." + p.getUniqueId() + "." + key, fallback).toUpperCase(java.util.Locale.ROOT);
     }
 
-    private void cycleDifficulty(Player p, String key) {
+    private void cycleDifficulty(Player p, String key, boolean increase) {
         String path = "bots.options." + p.getUniqueId() + "." + key;
         String[] levels = {"easy", "normal", "hard", "impossible"};
         String fallback = key.equals("shield-difficulty") ? "normal" : "impossible";
         String current = plugin.getConfig().getString(path, fallback).toLowerCase(java.util.Locale.ROOT);
-        int next = 0;
-        for (int i = 0; i < levels.length; i++) if (levels[i].equals(current)) next = (i + 1) % levels.length;
+        int currentIndex = 0;
+        for (int i = 0; i < levels.length; i++) if (levels[i].equals(current)) currentIndex = i;
+        int direction = increase ? 1 : -1;
+        int next = Math.floorMod(currentIndex + direction, levels.length);
         plugin.getConfig().set(path, levels[next]);
         plugin.saveConfig();
         openPvp(p);
@@ -140,8 +154,14 @@ public final class Menus implements Listener {
                     case 13 -> toggleBotOption(p, "infinite-totem", true);
                     case 16 -> toggleBotOption(p, "knockback", true);
                     case 22 -> toggleBotOption(p, "shield", false);
-                    case 23 -> cycleDifficulty(p, "shield-difficulty");
-                    case 24 -> cycleDifficulty(p, "totem-difficulty");
+                    case 23 -> {
+                        if (e.getClick() == ClickType.LEFT || e.getClick() == ClickType.RIGHT)
+                            cycleDifficulty(p, "shield-difficulty", e.getClick() == ClickType.RIGHT);
+                    }
+                    case 24 -> {
+                        if (e.getClick() == ClickType.LEFT || e.getClick() == ClickType.RIGHT)
+                            cycleDifficulty(p, "totem-difficulty", e.getClick() == ClickType.RIGHT);
+                    }
                     case 37 -> toggleBotOption(p, "armor-unbreakable", true);
                     case 39 -> {
                         String path = "bots.options." + p.getUniqueId() + ".protection-level";
