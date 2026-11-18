@@ -11,16 +11,16 @@ bots:
   name-format: "&eTRAINING NPC"
 worlds:
   plains:
-    name: "pvp_plains"
+    name: "pvp_plains_natural"
     radius: 5000
   desert:
-    name: "pvp_desert"
+    name: "pvp_desert_natural"
     radius: 5000
   snow:
-    name: "pvp_snow"
+    name: "pvp_snow_natural"
     radius: 5000
   badlands:
-    name: "pvp_badlands"
+    name: "pvp_badlands_natural"
     radius: 5000
 menus:
   title-pvp: "&8ᴛʀᴀɪɴɪɴɢ ʙᴏᴛ"
