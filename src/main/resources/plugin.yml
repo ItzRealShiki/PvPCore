@@ -6,26 +6,30 @@ author: Leon
 description: ꜱᴛᴀɴᴅᴀʟᴏɴᴇ ᴘᴠᴘ ᴛʀᴀɪɴɪɴɢ ᴀɴᴅ ꜱᴇʀᴠᴇʀ ᴄᴏʀᴇ ᴡɪᴛʜ ɢᴜɪ ᴀᴅᴍɪɴɪꜱᴛʀᴀᴛɪᴏɴ.
 commands:
   bot:
-    description: ᴏᴘᴇɴꜱ ᴛʜᴇ ᴘᴠᴘ ᴛʀᴀɪɴɪɴɢ ᴍᴇɴᴜ.
+    description: Opens the training bot menu.
     usage: /bot
     aliases: [pvp]
   rtp:
-    description: ᴏᴘᴇɴꜱ ᴛʜᴇ ʀᴀɴᴅᴏᴍ ᴛᴇʟᴇᴘᴏʀᴛ ᴡᴏʀʟᴅ ꜱᴇʟᴇᴄᴛᴏʀ.
+    description: Opens the random teleport world selector.
     usage: /rtp
   admin:
-    description: ᴏᴘᴇɴꜱ ᴛʜᴇ ᴘᴠᴘᴄᴏʀᴇ ᴀᴅᴍɪɴɪꜱᴛʀᴀᴛɪᴏɴ ᴅᴀꜱʜʙᴏᴀʀᴅ.
+    description: Opens the administration dashboard.
     usage: /admin
   gm:
-    description: ᴏᴘᴇɴꜱ ᴛʜᴇ ɢᴀᴍᴇᴍᴏᴅᴇ ᴍᴇɴᴜ ᴏʀ ᴄʜᴀɴɢᴇꜱ ᴀ ɢᴀᴍᴇᴍᴏᴅᴇ.
+    description: Changes your game mode.
     usage: /gm [survival|creative|adventure|spectator] [player]
     aliases: [gamemode, gms, gmc, gma, gmsp]
+  it:
+    description: Opens the item editor.
+    usage: /it [enchant|name|lore|hide|action]
+    aliases: [itemedit]
 permissions:
   Member.Core:
-    description: ᴀᴄᴄᴇꜱꜱ ᴛᴏ ᴘᴠᴘ ᴛʀᴀɪɴɪɴɢ ᴀɴᴅ ʀᴛᴘ ꜰᴇᴀᴛᴜʀᴇꜱ.
+    description: Access to PvPCore training and RTP features.
     default: true
   Admin.Core:
-    description: ᴀᴄᴄᴇꜱꜱ ᴛᴏ ᴀᴅᴍɪɴɪꜱᴛʀᴀᴛɪᴏɴ ᴀɴᴅ ᴍᴏᴅᴇʀᴀᴛɪᴏɴ ꜰᴇᴀᴛᴜʀᴇꜱ.
+    description: Access to administration and item editing.
     default: op
   Owner.Core:
-    description: ꜰᴜʟʟ ᴀᴄᴄᴇꜱꜱ ᴛᴏ ᴇᴠᴇʀʏ ᴘᴠᴘᴄᴏʀᴇ ꜰᴇᴀᴛᴜʀᴇ.
+    description: Full access to every PvPCore feature.
     default: op
