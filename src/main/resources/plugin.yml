@@ -23,8 +23,8 @@ commands:
     usage: /gm [survival|creative|adventure|spectator] [player]
     aliases: [gamemode, gms, gmc, gma, gmsp]
   it:
-    description: Opens the item editor.
-    usage: /it [enchant|name|lore|hide|action]
+    description: Edits the held item using command arguments.
+    usage: /it <enchant|name|lore|hide|action>
     aliases: [itemedit]
 permissions:
   Member.Core:
