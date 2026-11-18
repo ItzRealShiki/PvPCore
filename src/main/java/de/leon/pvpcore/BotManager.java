@@ -138,10 +138,9 @@ public final class BotManager implements Listener {
         if (!option(owner, "shield", false)) return;
         long now = System.currentTimeMillis();
         if (shieldCooldowns.getOrDefault(mannequin.getUniqueId(), 0L) > now) return;
-        if (!(event.getDamager() instanceof Player attacker)) return;
 
-        Material weapon = attacker.getInventory().getItemInMainHand().getType();
-        if (weapon.name().endsWith("_AXE")) {
+        if (event.getDamager() instanceof Player attacker
+                && attacker.getInventory().getItemInMainHand().getType().name().endsWith("_AXE")) {
             shieldCooldowns.put(mannequin.getUniqueId(), now + 1000L);
             mannequin.getEquipment().setItemInOffHand(new ItemStack(Material.AIR));
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
