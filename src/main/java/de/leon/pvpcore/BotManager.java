@@ -49,6 +49,7 @@ public final class BotManager implements Listener {
             zombie.setRemoveWhenFarAway(false);
             zombie.setPersistent(true);
             zombie.setAI(false);
+            zombie.setGravity(false);
             zombie.setVelocity(new Vector(0, 0, 0));
             zombie.getAttribute(Attribute.MAX_HEALTH).setBaseValue(40.0);
             zombie.setHealth(40.0);
