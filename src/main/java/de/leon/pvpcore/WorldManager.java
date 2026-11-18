@@ -15,7 +15,32 @@ public final class WorldManager {
     private final PvPCore plugin;
     public WorldManager(PvPCore plugin) { this.plugin = plugin; }
 
+    private void migrateArenaSettings() {
+        if (plugin.getConfig().getBoolean("worlds.fixed-format-migrated", false)) return;
+        String[][] arenas = {
+                {"plains", "pvp_plains_arena_v2", "pvp_plains_arena_v3", "731942105"},
+                {"desert", "pvp_desert_arena_v2", "pvp_desert_arena_v3", "284710639"},
+                {"snow", "pvp_snow_arena_v2", "pvp_snow_arena_v3", "918273645"},
+                {"badlands", "pvp_badlands_arena_v2", "pvp_badlands_arena_v3", "563829174"}
+        };
+        for (String[] arena : arenas) {
+            String path = "worlds." + arena[0] + ".name";
+            String configuredName = plugin.getConfig().getString(path, arena[1]);
+            if (configuredName.equalsIgnoreCase(arena[1])) {
+                plugin.getConfig().set(path, arena[2]);
+            }
+            String seedPath = "worlds." + arena[0] + ".seed";
+            if (!plugin.getConfig().contains(seedPath)) {
+                plugin.getConfig().set(seedPath, Long.parseLong(arena[3]));
+            }
+        }
+        plugin.getConfig().set("worlds.regeneration.enabled", false);
+        plugin.getConfig().set("worlds.fixed-format-migrated", true);
+        plugin.saveConfig();
+    }
+
     public void initializeWorldsOnce() {
+        migrateArenaSettings();
         if (plugin.getConfig().getBoolean("worlds.initialized", false)) return;
         for (String key : WORLD_KEYS) {
             World world = loadOrCreateWorld(key);
