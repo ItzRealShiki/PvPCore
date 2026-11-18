@@ -11,6 +11,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.phys.Vec3;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -68,6 +69,15 @@ public final class FakePlayer {
 
     public boolean isValid() {
         return !handle.isRemoved() && handle.isAlive();
+    }
+
+    /** Keep a shield actively raised while it is equipped in the main hand. */
+    public void setShieldRaised(boolean enabled) {
+        if (enabled) {
+            if (!handle.isUsingItem()) handle.startUsingItem(InteractionHand.MAIN_HAND);
+        } else if (handle.isUsingItem()) {
+            handle.stopUsingItem();
+        }
     }
 
     /** Run vanilla player ticking so gravity, collisions and server-side movement work. */
