@@ -8,9 +8,14 @@ import org.bukkit.inventory.*;
 import org.bukkit.inventory.meta.ItemMeta;
 
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 
 public final class Menus implements Listener {
     private final PvPCore plugin;
+    private final Map<UUID, Boolean> shieldOptions = new HashMap<>();
+    private final Map<UUID, Boolean> totemOptions = new HashMap<>();
 
     private static final class MenuHolder implements InventoryHolder {
         private final String key;
@@ -29,21 +34,37 @@ public final class Menus implements Listener {
         stack.setItemMeta(meta);
         return stack;
     }
+
     private Inventory create(String key, String title, int size) {
         MenuHolder holder = new MenuHolder(key);
         Inventory inv = Bukkit.createInventory(holder, size, plugin.color(title));
         holder.inventory = inv;
         return inv;
     }
+
     public void openPvp(Player p) {
-        Inventory inv = create("pvp", plugin.getConfig().getString("menus.title-pvp", "&8ᴘᴠᴘ ᴛʀᴀɪɴɪɴɢ"), 27);
-        inv.setItem(10, item(Material.END_CRYSTAL, "&cCrystal PvP", "&7Spawn a basic training opponent."));
-        inv.setItem(12, item(Material.MACE, "&6Mace PvP", "&7Practice against a training opponent."));
-        inv.setItem(14, item(Material.DIAMOND_SWORD, "&bSword PvP", "&7Practice sword combat."));
-        inv.setItem(16, item(Material.NETHERITE_AXE, "&eAxe PvP", "&7Practice axe combat."));
-        inv.setItem(22, item(Material.BARRIER, "&cRemove my bots", "&7Remove your active training opponents."));
+        boolean shield = shieldOptions.getOrDefault(p.getUniqueId(), false);
+        boolean infiniteTotem = totemOptions.getOrDefault(p.getUniqueId(), true);
+
+        Inventory inv = create("pvp", plugin.getConfig().getString("menus.title-pvp", "&8ᴛʀᴀɪɴɪɴɢ ʙᴏᴛ"), 27);
+        inv.setItem(11, item(Material.SHIELD,
+                shield ? "&aShield: ON" : "&cShield: OFF",
+                "&7Blocks frontal attacks.",
+                "&7Ready again after 0.1 seconds.",
+                "&eClick to toggle"));
+        inv.setItem(15, item(Material.TOTEM_OF_UNDYING,
+                infiniteTotem ? "&aInf. Totem: ON" : "&cInf. Totem: OFF",
+                "&7The NPC never consumes a totem.",
+                "&7Enabled by default.",
+                "&eClick to toggle"));
+        inv.setItem(22, item(Material.ZOMBIE_HEAD, "&6Spawn NPC",
+                "&7Spawn a stationary training NPC",
+                "&7with the selected options."));
+        inv.setItem(26, item(Material.BARRIER, "&cRemove my NPCs",
+                "&7Remove all of your active NPCs."));
         p.openInventory(inv);
     }
+
     public void openRtp(Player p) {
         Inventory inv = create("rtp", plugin.getConfig().getString("menus.title-rtp", "&8ʀᴀɴᴅᴏᴍ ᴛᴇʟᴇᴘᴏʀᴛ"), 27);
         inv.setItem(10, item(Material.GRASS_BLOCK, "&aPlains", "&7Flat grass world", "&eClick to teleport"));
@@ -53,15 +74,17 @@ public final class Menus implements Listener {
         inv.setItem(22, item(Material.BARRIER, "&cClose", "&7Close this menu."));
         p.openInventory(inv);
     }
+
     public void openAdmin(Player p) {
         Inventory inv = create("admin", plugin.getConfig().getString("menus.title-admin", "&8ᴘᴠᴘᴄᴏʀᴇ ᴀᴅᴍɪɴ"), 27);
         inv.setItem(10, item(Material.PLAYER_HEAD, "&aPlayer Management", "&7Open player tools."));
-        inv.setItem(12, item(Material.ZOMBIE_HEAD, "&eBot Management", "&7Remove all training bots."));
+        inv.setItem(12, item(Material.ZOMBIE_HEAD, "&eBot Management", "&7Remove all training NPCs."));
         inv.setItem(14, item(Material.COMMAND_BLOCK, "&6Gamemode Management", "&7Open gamemode selector."));
         inv.setItem(16, item(Material.COMPARATOR, "&bPlugin Settings", "&7Reload PvPCore configuration."));
         inv.setItem(22, item(Material.BARRIER, "&cClose", "&7Close this menu."));
         p.openInventory(inv);
     }
+
     public void openGamemode(Player p) {
         Inventory inv = create("gm", "&8ɢᴀᴍᴇᴍᴏᴅᴇ", 27);
         inv.setItem(10, item(Material.GRASS_BLOCK, "&aSurvival", "&7Set your gamemode."));
@@ -71,7 +94,8 @@ public final class Menus implements Listener {
         p.openInventory(inv);
     }
 
-    @EventHandler public void onClick(InventoryClickEvent e) {
+    @EventHandler
+    public void onClick(InventoryClickEvent e) {
         if (!(e.getWhoClicked() instanceof Player p)) return;
         Inventory top = e.getView().getTopInventory();
         if (!(top.getHolder() instanceof MenuHolder holder)) return;
@@ -81,15 +105,30 @@ public final class Menus implements Listener {
         int slot = e.getSlot();
         switch (holder.key) {
             case "pvp" -> {
+                UUID id = p.getUniqueId();
                 switch (slot) {
-                    case 10 -> plugin.bots().spawn(p, "CRYSTAL");
-                    case 12 -> plugin.bots().spawn(p, "MACE");
-                    case 14 -> plugin.bots().spawn(p, "SWORD");
-                    case 16 -> plugin.bots().spawn(p, "AXE");
-                    case 22 -> { plugin.bots().removeOwned(p); plugin.message(p, "&aYour training bots were removed."); }
-                    default -> { return; }
+                    case 11 -> {
+                        shieldOptions.put(id, !shieldOptions.getOrDefault(id, false));
+                        openPvp(p);
+                    }
+                    case 15 -> {
+                        totemOptions.put(id, !totemOptions.getOrDefault(id, true));
+                        openPvp(p);
+                    }
+                    case 22 -> {
+                        plugin.bots().spawn(p, shieldOptions.getOrDefault(id, false),
+                                totemOptions.getOrDefault(id, true));
+                        shieldOptions.remove(id);
+                        totemOptions.remove(id);
+                        p.closeInventory();
+                    }
+                    case 26 -> {
+                        plugin.bots().removeOwned(p);
+                        plugin.message(p, "&aYour NPCs were removed.");
+                        p.closeInventory();
+                    }
+                    default -> { }
                 }
-                p.closeInventory();
             }
             case "rtp" -> {
                 switch (slot) {
@@ -105,7 +144,7 @@ public final class Menus implements Listener {
                 if (!plugin.hasCore(p, "Admin.Core")) return;
                 switch (slot) {
                     case 10 -> plugin.message(p, "&6Player tools are planned for the next module.");
-                    case 12 -> { plugin.bots().removeAll(); plugin.message(p, "&aAll training bots removed."); }
+                    case 12 -> { plugin.bots().removeAll(); plugin.message(p, "&aAll training NPCs removed."); }
                     case 14 -> { openGamemode(p); return; }
                     case 16 -> { plugin.reloadConfig(); plugin.message(p, "&aConfiguration reloaded."); }
                     case 22 -> { p.closeInventory(); return; }
