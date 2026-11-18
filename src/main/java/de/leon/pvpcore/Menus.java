@@ -64,15 +64,15 @@ public final class Menus implements Listener {
         boolean knockback = botOption(p, "knockback", true);
         inv.setItem(10, item(totem ? Material.TOTEM_OF_UNDYING : Material.GRAY_DYE,
                 (totem ? "&a" : "&c") + "Infinite Totem",
-                "&7Saved option only; no combat behavior.",
+                "&7The NPC cannot die while enabled.",
                 "&7Status: " + (totem ? "&aEnabled" : "&cDisabled")));
         inv.setItem(13, item(shield ? Material.SHIELD : Material.GRAY_DYE,
                 (shield ? "&a" : "&c") + "Shield (20 Ticks)",
-                "&7Saved option only; no combat behavior.",
+                "&7An axe disables the shield for 20 ticks.",
                 "&7Status: " + (shield ? "&aEnabled" : "&cDisabled")));
         inv.setItem(16, item(knockback ? Material.IRON_CHESTPLATE : Material.GRAY_DYE,
                 (knockback ? "&a" : "&c") + "Knockback",
-                "&7Saved option only; no combat behavior.",
+                "&7Allows the NPC to receive knockback.",
                 "&7Status: " + (knockback ? "&aEnabled" : "&cDisabled")));
         inv.setItem(22, item(Material.ARROW, "&eBack", "&7Return to bot menu."));
         p.openInventory(inv);
@@ -83,6 +83,7 @@ public final class Menus implements Listener {
         boolean next = !plugin.getConfig().getBoolean(path, defaultValue);
         plugin.getConfig().set(path, next);
         plugin.saveConfig();
+        plugin.bots().refreshOwned(p);
         openBotOptions(p);
     }
 
