@@ -11,7 +11,7 @@ import java.util.Objects;
 public final class PvPCore extends JavaPlugin {
     private Menus menus;
     private BotManager bots;
-    private WorldManager worlds;
+    private WorldManager worlds;\n    private ItemEditCommand itemEdit;
 
     @Override public void onEnable() {
         saveDefaultConfig();
@@ -21,9 +21,9 @@ public final class PvPCore extends JavaPlugin {
         register("bot", new PvpCommand(this));
         register("rtp", new RtpCommand(this));
         register("admin", new AdminCommand(this));
-        register("gm", new GamemodeCommand(this));
+        register("gm", new GamemodeCommand(this));\n        itemEdit = new ItemEditCommand(this);\n        register("it", itemEdit);
         Bukkit.getPluginManager().registerEvents(menus, this);
-        Bukkit.getPluginManager().registerEvents(bots, this);
+        Bukkit.getPluginManager().registerEvents(bots, this);\n        Bukkit.getPluginManager().registerEvents(itemEdit, this);
         getLogger().info("PvPCore enabled.");
     }
 
