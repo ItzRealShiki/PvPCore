@@ -78,13 +78,20 @@ public final class WorldManager {
             };
 
             int[][] surfaceHeights = new int[16][16];
+
+            // Fill the deep layers in bulk. The old per-column loop wrote tens of
+            // thousands of individual blocks for every generated chunk.
+            for (int x=0; x<16; x++) for (int z=0; z<16; z++) {
+                data.setBlock(x, minY, z, Material.BEDROCK);
+                if (biome != null) biomeGrid.setBiome(x, z, biome);
+            }
+            if (minY < 0) data.setRegion(0, minY + 1, 0, 16, 1, 16, Material.DEEPSLATE);
+            data.setRegion(0, Math.max(1, minY + 1), 0, 16, 59, 16, Material.STONE);
+
             for (int x=0; x<16; x++) for (int z=0; z<16; z++) {
                 int wx=chunkX*16+x, wz=chunkZ*16+z;
                 int surface=height(wx,wz,seed);
                 surfaceHeights[x][z] = surface;
-                if (biome != null) biomeGrid.setBiome(x,z,biome);
-                data.setBlock(x,minY,z,Material.BEDROCK);
-                for (int y=minY+1; y<surface-4; y++) data.setBlock(x,y,z,y <= 0 ? Material.DEEPSLATE : Material.STONE);
                 for (int y=surface-4; y<surface; y++) data.setBlock(x,y,z,filler);
                 data.setBlock(x,surface,z,top);
                 if (terrainKey.equals("snow")) data.setBlock(x,surface+1,z,Material.SNOW);
