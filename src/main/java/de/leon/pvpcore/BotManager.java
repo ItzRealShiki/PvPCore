@@ -13,6 +13,7 @@ import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.EntityEquipment;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.util.Vector;
 
@@ -74,7 +75,10 @@ public final class BotManager implements Listener {
             equipment.setItemInOffHand(shield
                     ? new ItemStack(Material.SHIELD)
                     : new ItemStack(Material.TOTEM_OF_UNDYING));
-            equipment.setArmorContentsDropChance(0.0f);
+            equipment.setHelmetDropChance(0.0f);
+            equipment.setChestplateDropChance(0.0f);
+            equipment.setLeggingsDropChance(0.0f);
+            equipment.setBootsDropChance(0.0f);
             equipment.setItemInMainHandDropChance(0.0f);
             equipment.setItemInOffHandDropChance(0.0f);
         }
@@ -113,7 +117,10 @@ public final class BotManager implements Listener {
                 if (now >= ready) {
                     event.setCancelled(true);
                     shieldReadyAt.put(id, now + SHIELD_COOLDOWN_TICKS);
-                    bot.swingOffHand();
+                    bot.startUsingItem(EquipmentSlot.OFF_HAND);
+                    Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                        if (bot.isValid() && bot.hasActiveItem()) bot.clearActiveItem();
+                    }, 12L);
                     bot.getWorld().playSound(bot.getLocation(), Sound.ITEM_SHIELD_BLOCK, 1, 1);
                     bot.getWorld().spawnParticle(Particle.CRIT, bot.getLocation().add(0, 1, 0),
                             8, .35, .45, .35, .05);
