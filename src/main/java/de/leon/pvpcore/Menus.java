@@ -41,52 +41,38 @@ public final class Menus implements Listener {
     }
 
     public void openPvp(Player p) {
-        Inventory inv = create("pvp", plugin.getConfig().getString("menus.title-pvp", "&8ᴛʀᴀɪɴɪɴɢ ʙᴏᴛ"), 27);
-        inv.setItem(11, item(Material.COMPARATOR, "&bBot Options",
-                "&7Configure the mannequin's saved display options."));
-        inv.setItem(13, item(Material.PLAYER_HEAD, "&aSpawn Player NPC",
-                "&7Creates a full player-model mannequin",
-                "&7using your current Minecraft skin.",
-                "&7Automatically disappears beyond 200 blocks."));
-        inv.setItem(15, item(Material.BARRIER, "&cRemove my NPC",
-                "&7Remove your active player mannequin."));
+        Inventory inv = create("pvp", plugin.getConfig().getString("menus.title-pvp", "&8ᴛʀᴀɪɴɪɴɢ ʙᴏᴛ"), 54);
+        boolean shield = botOption(p, "shield", false);
+        boolean totem = botOption(p, "infinite-totem", true);
+        boolean knockback = botOption(p, "knockback", true);
+        inv.setItem(10, item(shield ? Material.SHIELD : Material.GRAY_DYE, (shield ? "&a" : "&c") + "Shield (20 Ticks)", "&7Unbreakable main-hand shield.", "&7An axe disables it for 20 ticks.", "&7Status: " + (shield ? "&aEnabled" : "&cDisabled")));
+        inv.setItem(13, item(totem ? Material.TOTEM_OF_UNDYING : Material.GRAY_DYE, (totem ? "&a" : "&c") + "Infinite Totem", "&7Keeps a totem in the offhand.", "&7Prevents lethal damage while enabled.", "&7Status: " + (totem ? "&aEnabled" : "&cDisabled")));
+        inv.setItem(16, item(knockback ? Material.IRON_CHESTPLATE : Material.GRAY_DYE, (knockback ? "&a" : "&c") + "Knockback", "&7Allows normal server knockback.", "&7Status: " + (knockback ? "&aEnabled" : "&cDisabled")));
+        inv.setItem(28, blastItem(p, "helmet", Material.NETHERITE_HELMET, "Helmet"));
+        inv.setItem(30, blastItem(p, "chestplate", Material.NETHERITE_CHESTPLATE, "Chestplate"));
+        inv.setItem(32, blastItem(p, "leggings", Material.NETHERITE_LEGGINGS, "Leggings"));
+        inv.setItem(34, blastItem(p, "boots", Material.NETHERITE_BOOTS, "Boots"));
+        inv.setItem(45, item(Material.BARRIER, "&cRemove Bot", "&7Remove your active bot."));
+        inv.setItem(49, item(Material.PLAYER_HEAD, "&aCreate Bot", "&7Creates your player model with enchanted", "&7unbreakable netherite armor.", "&7Your previous bot is replaced automatically."));
         p.openInventory(inv);
+    }
+
+    private ItemStack blastItem(Player p, String piece, Material material, String label) {
+        boolean enabled = botOption(p, "blast-" + piece, false);
+        return item(material, (enabled ? "&a" : "&c") + label + " - Blast Protection", "&7Unbreakable netherite armor.", "&7Blast Protection IV: " + (enabled ? "&aEnabled" : "&cDisabled"), "&eClick to toggle");
     }
 
     private boolean botOption(Player p, String option, boolean defaultValue) {
         return plugin.getConfig().getBoolean("bots.options." + p.getUniqueId() + "." + option, defaultValue);
     }
 
-    public void openBotOptions(Player p) {
-        Inventory inv = create("bot-options", "&8ʙᴏᴛ ᴏᴘᴛɪᴏɴꜱ", 27);
-        boolean totem = botOption(p, "infinite-totem", true);
-        boolean shield = botOption(p, "shield", false);
-        boolean knockback = botOption(p, "knockback", true);
-        inv.setItem(10, item(totem ? Material.TOTEM_OF_UNDYING : Material.GRAY_DYE,
-                (totem ? "&a" : "&c") + "Infinite Totem",
-                "&7The NPC cannot die while enabled.",
-                "&7Status: " + (totem ? "&aEnabled" : "&cDisabled")));
-        inv.setItem(13, item(shield ? Material.SHIELD : Material.GRAY_DYE,
-                (shield ? "&a" : "&c") + "Shield (20 Ticks)",
-                "&7An axe disables the shield for 20 ticks.",
-                "&7Status: " + (shield ? "&aEnabled" : "&cDisabled")));
-        inv.setItem(16, item(knockback ? Material.IRON_CHESTPLATE : Material.GRAY_DYE,
-                (knockback ? "&a" : "&c") + "Knockback",
-                "&7Allows the NPC to receive knockback.",
-                "&7Status: " + (knockback ? "&aEnabled" : "&cDisabled")));
-        inv.setItem(22, item(Material.ARROW, "&eBack", "&7Return to bot menu."));
-        p.openInventory(inv);
-    }
-
     private void toggleBotOption(Player p, String option, boolean defaultValue) {
         String path = "bots.options." + p.getUniqueId() + "." + option;
-        boolean next = !plugin.getConfig().getBoolean(path, defaultValue);
-        plugin.getConfig().set(path, next);
+        plugin.getConfig().set(path, !plugin.getConfig().getBoolean(path, defaultValue));
         plugin.saveConfig();
         plugin.bots().refreshOwned(p);
-        openBotOptions(p);
+        openPvp(p);
     }
-
     public void openRtp(Player p) {
         Inventory inv = create("rtp", plugin.getConfig().getString("menus.title-rtp", "&8ʀᴀɴᴅᴏᴍ ᴛᴇʟᴇᴘᴏʀᴛ"), 27);
         inv.setItem(10, item(Material.GRASS_BLOCK, "&aPlains", "&7Natural Minecraft terrain", "&eClick to teleport"));
@@ -129,25 +115,15 @@ public final class Menus implements Listener {
         switch (holder.key) {
             case "pvp" -> {
                 switch (slot) {
-                    case 11 -> openBotOptions(p);
-                    case 13 -> {
-                        plugin.bots().spawn(p);
-                        p.closeInventory();
-                    }
-                    case 15 -> {
-                        plugin.bots().removeOwned(p);
-                        plugin.message(p, "&aYour NPC was removed.");
-                        p.closeInventory();
-                    }
-                    default -> { }
-                }
-            }
-            case "bot-options" -> {
-                switch (slot) {
-                    case 10 -> toggleBotOption(p, "infinite-totem", true);
-                    case 13 -> toggleBotOption(p, "shield", false);
+                    case 10 -> toggleBotOption(p, "shield", false);
+                    case 13 -> toggleBotOption(p, "infinite-totem", true);
                     case 16 -> toggleBotOption(p, "knockback", true);
-                    case 22 -> openPvp(p);
+                    case 28 -> toggleBotOption(p, "blast-helmet", false);
+                    case 30 -> toggleBotOption(p, "blast-chestplate", false);
+                    case 32 -> toggleBotOption(p, "blast-leggings", false);
+                    case 34 -> toggleBotOption(p, "blast-boots", false);
+                    case 45 -> { plugin.bots().removeOwned(p); plugin.message(p, "&aYour bot was removed."); p.closeInventory(); }
+                    case 49 -> { plugin.bots().spawn(p); p.closeInventory(); }
                     default -> { }
                 }
             }
