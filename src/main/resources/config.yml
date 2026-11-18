@@ -7,7 +7,8 @@ style:
 bots:
   max-per-player: 2
   remove-on-quit: true
-  name-format: "&c{name} &7[&eTRAINING&7]"
+  shield-cooldown-ms: 100
+  name-format: "&eTRAINING NPC"
 worlds:
   plains:
     name: "pvp_plains"
@@ -22,6 +23,6 @@ worlds:
     name: "pvp_badlands"
     radius: 5000
 menus:
-  title-pvp: "&8ᴘᴠᴘ ᴛʀᴀɪɴɪɴɢ"
+  title-pvp: "&8ᴛʀᴀɪɴɪɴɢ ʙᴏᴛ"
   title-rtp: "&8ʀᴀɴᴅᴏᴍ ᴛᴇʟᴇᴘᴏʀᴛ"
   title-admin: "&8ᴘᴠᴘᴄᴏʀᴇ ᴀᴅᴍɪɴ"
