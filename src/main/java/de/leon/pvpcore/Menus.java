@@ -45,11 +45,17 @@ public final class Menus implements Listener {
         inv.setItem(10, item(Material.IRON_CHESTPLATE, "&aSurvival Player", "&7Real server-side player entity.", "&7Vanilla gravity, collisions and movement."));
         inv.setItem(13, item(totem ? Material.TOTEM_OF_UNDYING : Material.GRAY_DYE, (totem ? "&a" : "&c") + "Infinite Totem", "&7Uses vanilla totem resurrection.", "&7Automatically replaces a used totem.", "&7Status: " + (totem ? "&aEnabled" : "&cDisabled")));
         inv.setItem(16, item(knockback ? Material.IRON_CHESTPLATE : Material.GRAY_DYE, (knockback ? "&a" : "&c") + "Knockback", "&7Allows normal player knockback.", "&7Status: " + (knockback ? "&aEnabled" : "&cDisabled")));
-        inv.setItem(22, item(shield ? Material.SHIELD : Material.GRAY_DYE, (shield ? "&a" : "&c") + "Shield", "&7Makes the bot hold its shield up.", "&7The shield is in the main hand;", "&7the totem stays in the offhand.", "&7Status: " + (shield ? "&aEnabled" : "&cDisabled"), "&eClick to toggle"));
+        inv.setItem(22, item(shield ? Material.SHIELD : Material.GRAY_DYE, (shield ? "&a" : "&c") + "Shield", "&7Makes the bot hold its shield up.", "&7Status: " + (shield ? "&aEnabled" : "&cDisabled"), "&eClick to toggle"));
+        inv.setItem(23, item(Material.CLOCK, "&bShield Reaction: " + difficulty(p, "shield-difficulty"), "&7Easy: 40 ticks (2s)", "&7Normal: 20 ticks (1s)", "&7Hard: 10 ticks (0.5s)", "&7Impossible: 2 ticks (0.1s)", "&eClick to cycle"));
+        inv.setItem(24, item(Material.TOTEM_OF_UNDYING, "&bTotem Refill: " + difficulty(p, "totem-difficulty"), "&7Easy: 40 ticks (2s)", "&7Normal: 20 ticks (1s)", "&7Hard: 10 ticks (0.5s)", "&7Impossible: 2 ticks (0.1s)", "&eClick to cycle"));
         inv.setItem(28, blastItem(p, "helmet", Material.NETHERITE_HELMET, "Helmet"));
         inv.setItem(30, blastItem(p, "chestplate", Material.NETHERITE_CHESTPLATE, "Chestplate"));
         inv.setItem(32, blastItem(p, "leggings", Material.NETHERITE_LEGGINGS, "Leggings"));
         inv.setItem(34, blastItem(p, "boots", Material.NETHERITE_BOOTS, "Boots"));
+        inv.setItem(37, item(botOption(p, "armor-unbreakable", true) ? Material.ANVIL : Material.DAMAGED_ANVIL,
+                "&eUnbreakable Armor", "&7Status: " + (botOption(p, "armor-unbreakable", true) ? "&aEnabled" : "&cDisabled"), "&eClick to toggle"));
+        inv.setItem(39, item(Material.ENCHANTED_BOOK, "&dProtection Level: " + plugin.getConfig().getInt("bots.options." + p.getUniqueId() + ".protection-level", 4),
+                "&7Click to cycle Protection 0–IV."));
         inv.setItem(45, item(Material.BARRIER, "&cRemove Bot", "&7Remove your active bot."));
         inv.setItem(49, item(Material.PLAYER_HEAD, "&aCreate Bot", "&7Creates your survival player bot with", "&7unbreakable netherite armor.", "&7Your previous bot is replaced automatically."));
         p.openInventory(inv);
@@ -58,6 +64,21 @@ public final class Menus implements Listener {
     private ItemStack blastItem(Player p, String piece, Material material, String label) {
         boolean enabled = botOption(p, "blast-" + piece, false);
         return item(material, (enabled ? "&a" : "&c") + label + " - Blast Protection", "&7Unbreakable netherite armor.", "&7Blast Protection IV: " + (enabled ? "&aEnabled" : "&cDisabled"), "&eClick to toggle");
+    }
+
+    private String difficulty(Player p, String key) {
+        return plugin.getConfig().getString("bots.options." + p.getUniqueId() + "." + key, "impossible").toUpperCase(java.util.Locale.ROOT);
+    }
+
+    private void cycleDifficulty(Player p, String key) {
+        String path = "bots.options." + p.getUniqueId() + "." + key;
+        String[] levels = {"easy", "normal", "hard", "impossible"};
+        String current = plugin.getConfig().getString(path, "impossible").toLowerCase(java.util.Locale.ROOT);
+        int next = 0;
+        for (int i = 0; i < levels.length; i++) if (levels[i].equals(current)) next = (i + 1) % levels.length;
+        plugin.getConfig().set(path, levels[next]);
+        plugin.saveConfig();
+        openPvp(p);
     }
 
     private boolean botOption(Player p, String option, boolean defaultValue) {
@@ -117,6 +138,17 @@ public final class Menus implements Listener {
                     case 13 -> toggleBotOption(p, "infinite-totem", true);
                     case 16 -> toggleBotOption(p, "knockback", true);
                     case 22 -> toggleBotOption(p, "shield", false);
+                    case 23 -> cycleDifficulty(p, "shield-difficulty");
+                    case 24 -> cycleDifficulty(p, "totem-difficulty");
+                    case 37 -> toggleBotOption(p, "armor-unbreakable", true);
+                    case 39 -> {
+                        String path = "bots.options." + p.getUniqueId() + ".protection-level";
+                        int level = plugin.getConfig().getInt(path, 4);
+                        plugin.getConfig().set(path, (level + 1) % 5);
+                        plugin.saveConfig();
+                        plugin.bots().refreshOwned(p);
+                        openPvp(p);
+                    }
                     case 28 -> toggleBotOption(p, "blast-helmet", false);
                     case 30 -> toggleBotOption(p, "blast-chestplate", false);
                     case 32 -> toggleBotOption(p, "blast-leggings", false);
