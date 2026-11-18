@@ -9,7 +9,7 @@ bots:
   remove-on-quit: true
   name-format: "&eTRAINING NPC"
 rtp:
-  cooldown-seconds: 300
+  cooldown-seconds: 0
 worlds:
   plains:
     name: "pvp_plains_arena_v4"
@@ -28,8 +28,8 @@ worlds:
     radius: 5000
     seed: 563829174
   regeneration:
-    enabled: false
-    interval-seconds: 300
+    enabled: true
+    interval-seconds: 900
     countdown-seconds: 5
 menus:
   title-pvp: "&8ᴛʀᴀɪɴɪɴɢ ʙᴏᴛ"
