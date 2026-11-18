@@ -17,6 +17,7 @@ public final class RtpCommand implements CommandExecutor {
             plugin.message(player, "&cYou do not have permission.");
             return true;
         }
+        if (!plugin.startRtpCooldown(player)) return true;
         plugin.menus().openRtp(player);
         return true;
     }
