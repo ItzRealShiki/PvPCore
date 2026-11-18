@@ -8,6 +8,8 @@ bots:
   max-per-player: 2
   remove-on-quit: true
   name-format: "&eTRAINING NPC"
+rtp:
+  cooldown-seconds: 300
 worlds:
   plains:
     name: "pvp_plains_arena_v2"
