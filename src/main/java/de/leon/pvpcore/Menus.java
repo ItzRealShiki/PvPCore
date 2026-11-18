@@ -50,7 +50,7 @@ public final class Menus implements Listener {
         inv.setItem(11, item(Material.SHIELD,
                 shield ? "&aShield: ON" : "&cShield: OFF",
                 "&7Blocks frontal attacks.",
-                "&7Ready again after 0.1 seconds.",
+                "&7Shield cooldown: 20 ticks (1 second).",
                 "&eClick to toggle"));
         inv.setItem(15, item(Material.TOTEM_OF_UNDYING,
                 infiniteTotem ? "&aInf. Totem: ON" : "&cInf. Totem: OFF",
@@ -58,7 +58,7 @@ public final class Menus implements Listener {
                 "&7Enabled by default.",
                 "&eClick to toggle"));
         inv.setItem(22, item(Material.ZOMBIE_HEAD, "&6Spawn NPC",
-                "&7Spawn a stationary training NPC",
+                "&7Spawn your own player-themed Training Bot",
                 "&7with the selected options."));
         inv.setItem(26, item(Material.BARRIER, "&cRemove my NPCs",
                 "&7Remove all of your active NPCs."));
