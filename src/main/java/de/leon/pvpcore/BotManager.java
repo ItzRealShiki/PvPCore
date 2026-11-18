@@ -1,67 +1,83 @@
 package de.leon.pvpcore;
 
-import io.papermc.paper.datacomponent.item.ResolvableProfile;
+import de.leon.pvpcore.bot.NmsGuard;
+import de.leon.pvpcore.bot.nms.FakePlayer;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Entity;
-import org.bukkit.entity.EntityType;
-import org.bukkit.entity.Mannequin;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
-import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.entity.EntityResurrectEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.inventory.EntityEquipment;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.util.Vector;
 
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.logging.Level;
 
 public final class BotManager implements Listener {
     private static final double OWNER_RADIUS_SQUARED = 200.0 * 200.0;
+
     private final PvPCore plugin;
-    private final Map<UUID, Mannequin> owned = new HashMap<>();
-    private final Map<UUID, Integer> shieldTasks = new HashMap<>();
+    private final Map<UUID, FakePlayer> owned = new HashMap<>();
+    private boolean available;
+    private boolean warned;
 
     public BotManager(PvPCore plugin) {
         this.plugin = plugin;
-        Bukkit.getScheduler().runTaskTimer(plugin, this::removeOutOfRangeBots, 20L, 20L);
+        available = NmsGuard.supported();
+        if (!available) {
+            plugin.getLogger().warning("Training bots are disabled: this implementation currently supports Paper 26.2 only.");
+        }
+        Bukkit.getScheduler().runTaskTimer(plugin, this::tickBots, 1L, 1L);
     }
 
     public void spawn(Player owner) {
-        // A player can own exactly one bot. Replace the old one before creating the new one.
+        if (!available) {
+            plugin.message(owner, "&cThe player bot is unavailable on this Paper version.");
+            return;
+        }
+
         removeOwned(owner);
         Location at = owner.getLocation().clone()
                 .add(owner.getLocation().getDirection().normalize().multiply(2.5));
         at.setY(owner.getLocation().getY());
         at.setDirection(owner.getLocation().toVector().subtract(at.toVector()));
 
-        Entity spawned = owner.getWorld().spawnEntity(at, EntityType.MANNEQUIN);
-        if (!(spawned instanceof Mannequin mannequin)) {
-            spawned.remove();
-            plugin.message(owner, "&cCould not create the player mannequin.");
-            return;
+        try {
+            String botName = owner.getName() + "_Bot";
+            if (botName.length() > 16) botName = botName.substring(0, 16);
+
+            FakePlayer fake = FakePlayer.spawn(at, botName, owner);
+            fake.clearSpawnInvulnerability();
+            Player bot = fake.bukkit();
+            bot.setCustomName(plugin.color("&e" + owner.getName()));
+            bot.setCustomNameVisible(true);
+            bot.setInvulnerable(false);
+            bot.setGravity(true);
+            owned.put(owner.getUniqueId(), fake);
+            equip(owner, fake);
+            plugin.message(owner, "&aYour survival player bot has been created.");
+        } catch (LinkageError error) {
+            disableFeature(error);
+            plugin.message(owner, "&cThe bot could not start because this Paper build has incompatible internal signatures.");
+        } catch (IllegalStateException error) {
+            plugin.getLogger().log(Level.WARNING, "Could not spawn training bot.", error);
+            plugin.message(owner, "&cThe bot could not be spawned. Check the server log.");
         }
-
-        mannequin.setCustomName(plugin.color("&e" + owner.getName()));
-        mannequin.setCustomNameVisible(true);
-        mannequin.setInvulnerable(false);
-        mannequin.setGravity(false);
-        mannequin.setImmovable(!option(owner, "knockback", true));
-        mannequin.setPersistent(false);
-        mannequin.setProfile(ResolvableProfile.resolvableProfile(Bukkit.createProfile(owner.getUniqueId())));
-        equip(owner, mannequin);
-
-        owned.put(owner.getUniqueId(), mannequin);
-        plugin.message(owner, "&aYour bot has been created. Creating another one replaces this bot.");
     }
 
     private boolean option(Player owner, String key, boolean defaultValue) {
@@ -72,7 +88,6 @@ public final class BotManager implements Listener {
         ItemStack item = new ItemStack(material);
         ItemMeta meta = item.getItemMeta();
         meta.setUnbreakable(true);
-        // Keep a visible enchantment glint; Blast Protection is independently configurable per armor piece.
         meta.addEnchant(Enchantment.UNBREAKING, 1, true);
         if (option(owner, "blast-" + piece, false)) {
             meta.addEnchant(Enchantment.BLAST_PROTECTION, 4, true);
@@ -81,124 +96,131 @@ public final class BotManager implements Listener {
         return item;
     }
 
-    private ItemStack shield() {
-        ItemStack item = new ItemStack(Material.SHIELD);
-        ItemMeta meta = item.getItemMeta();
-        meta.setUnbreakable(true);
-        item.setItemMeta(meta);
-        return item;
-    }
-
-    private void equip(Player owner, Mannequin mannequin) {
-        EntityEquipment equipment = mannequin.getEquipment();
-        equipment.setHelmet(armor(owner, Material.NETHERITE_HELMET, "helmet"));
-        equipment.setChestplate(armor(owner, Material.NETHERITE_CHESTPLATE, "chestplate"));
-        equipment.setLeggings(armor(owner, Material.NETHERITE_LEGGINGS, "leggings"));
-        equipment.setBoots(armor(owner, Material.NETHERITE_BOOTS, "boots"));
-        equipment.setHelmetDropChance(0.0f);
-        equipment.setChestplateDropChance(0.0f);
-        equipment.setLeggingsDropChance(0.0f);
-        equipment.setBootsDropChance(0.0f);
-        equipment.setItemInMainHand(option(owner, "shield", false) ? shield() : new ItemStack(Material.AIR));
-        equipment.setItemInOffHand(option(owner, "infinite-totem", true)
+    private void equip(Player owner, FakePlayer fake) {
+        PlayerInventory inventory = fake.bukkit().getInventory();
+        inventory.setHelmet(armor(owner, Material.NETHERITE_HELMET, "helmet"));
+        inventory.setChestplate(armor(owner, Material.NETHERITE_CHESTPLATE, "chestplate"));
+        inventory.setLeggings(armor(owner, Material.NETHERITE_LEGGINGS, "leggings"));
+        inventory.setBoots(armor(owner, Material.NETHERITE_BOOTS, "boots"));
+        inventory.setItemInOffHand(option(owner, "infinite-totem", true)
                 ? new ItemStack(Material.TOTEM_OF_UNDYING) : new ItemStack(Material.AIR));
-        mannequin.setImmovable(!option(owner, "knockback", true));
     }
 
     public void refreshOwned(Player owner) {
-        Mannequin mannequin = owned.get(owner.getUniqueId());
-        if (mannequin != null && mannequin.isValid()) equip(owner, mannequin);
+        FakePlayer fake = owned.get(owner.getUniqueId());
+        if (fake != null && fake.isValid()) equip(owner, fake);
     }
 
-    private UUID ownerOf(Mannequin mannequin) {
-        for (Map.Entry<UUID, Mannequin> entry : owned.entrySet()) {
-            if (entry.getValue().equals(mannequin)) return entry.getKey();
+    private UUID ownerOf(Entity entity) {
+        for (Map.Entry<UUID, FakePlayer> entry : owned.entrySet()) {
+            if (entry.getValue().isValid() && entry.getValue().bukkit().equals(entity)) return entry.getKey();
         }
         return null;
     }
 
-    @EventHandler
-    public void onBotDamage(EntityDamageEvent event) {
-        if (!(event.getEntity() instanceof Mannequin mannequin)) return;
-        UUID ownerId = ownerOf(mannequin);
-        if (ownerId == null) return;
-        Player owner = Bukkit.getPlayer(ownerId);
-        if (owner == null || !option(owner, "infinite-totem", true)) return;
+    private void tickBots() {
+        if (!available) return;
+        try {
+            for (Map.Entry<UUID, FakePlayer> entry : new HashMap<>(owned).entrySet()) {
+                UUID ownerId = entry.getKey();
+                FakePlayer fake = entry.getValue();
+                Player owner = Bukkit.getPlayer(ownerId);
 
-        // The mannequin has no AI. Its offhand totem protects it from lethal damage.
-        if (event.getFinalDamage() >= mannequin.getHealth()) {
-            event.setCancelled(true);
-            mannequin.getEquipment().setItemInOffHand(new ItemStack(Material.TOTEM_OF_UNDYING));
+                if (owner == null || !owner.isOnline() || !fake.isValid()) {
+                    removeOwned(ownerId);
+                    continue;
+                }
+
+                Location location = fake.bukkit().getLocation();
+                if (location.getWorld() != owner.getWorld()
+                        || location.distanceSquared(owner.getLocation()) > OWNER_RADIUS_SQUARED) {
+                    removeOwned(ownerId);
+                    continue;
+                }
+
+                Player bot = fake.bukkit();
+                if (option(owner, "infinite-totem", true)
+                        && bot.getInventory().getItemInOffHand().getType().isAir()) {
+                    bot.getInventory().setItemInOffHand(new ItemStack(Material.TOTEM_OF_UNDYING));
+                }
+                fake.tick();
+            }
+        } catch (LinkageError error) {
+            disableFeature(error);
         }
     }
 
     @EventHandler
-    public void onBotHit(EntityDamageByEntityEvent event) {
-        if (!(event.getEntity() instanceof Mannequin mannequin)) return;
-        UUID ownerId = ownerOf(mannequin);
+    public void onResurrect(EntityResurrectEvent event) {
+        UUID ownerId = ownerOf(event.getEntity());
         if (ownerId == null) return;
-        Player owner = Bukkit.getPlayer(ownerId);
-        if (owner == null || !option(owner, "shield", false)) return;
-        if (!(event.getDamager() instanceof Player attacker)) return;
-
-        if (!attacker.getInventory().getItemInMainHand().getType().name().endsWith("_AXE")) return;
-
-        Integer oldTask = shieldTasks.remove(mannequin.getUniqueId());
-        if (oldTask != null) Bukkit.getScheduler().cancelTask(oldTask);
-        mannequin.getEquipment().setItemInMainHand(new ItemStack(Material.AIR));
-
-        int task = Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            if (!mannequin.isValid()) return;
-            UUID currentOwnerId = ownerOf(mannequin);
-            Player currentOwner = currentOwnerId == null ? null : Bukkit.getPlayer(currentOwnerId);
-            if (currentOwner != null && option(currentOwner, "shield", false)) {
-                mannequin.getEquipment().setItemInMainHand(shield());
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            FakePlayer fake = owned.get(ownerId);
+            Player owner = Bukkit.getPlayer(ownerId);
+            if (fake == null || owner == null || !fake.isValid()
+                    || !option(owner, "infinite-totem", true)) return;
+            Player bot = fake.bukkit();
+            if (bot.getInventory().getItemInOffHand().getType().isAir()) {
+                bot.getInventory().setItemInOffHand(new ItemStack(Material.TOTEM_OF_UNDYING));
             }
-            shieldTasks.remove(mannequin.getUniqueId());
-        }, 20L).getTaskId();
-        shieldTasks.put(mannequin.getUniqueId(), task);
+        });
     }
 
-    private void removeOutOfRangeBots() {
-        for (Map.Entry<UUID, Mannequin> entry : new HashMap<>(owned).entrySet()) {
-            Player owner = Bukkit.getPlayer(entry.getKey());
-            Mannequin mannequin = entry.getValue();
-            if (owner == null || !owner.isOnline() || !mannequin.isValid()) {
-                removeOwned(entry.getKey());
-                continue;
-            }
-            Location location = mannequin.getLocation();
-            if (location.getWorld() != owner.getWorld()
-                    || location.distanceSquared(owner.getLocation()) > OWNER_RADIUS_SQUARED) {
-                removeOwned(entry.getKey());
-            }
+    @EventHandler
+    public void onDamage(EntityDamageByEntityEvent event) {
+        UUID ownerId = ownerOf(event.getEntity());
+        if (ownerId == null) return;
+        Player owner = Bukkit.getPlayer(ownerId);
+        if (owner == null || option(owner, "knockback", true)) return;
+        FakePlayer fake = owned.get(ownerId);
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (fake != null && fake.isValid()) fake.bukkit().setVelocity(new Vector(0, 0, 0));
+        });
+    }
+
+    @EventHandler
+    public void onDeath(EntityDeathEvent event) {
+        UUID ownerId = ownerOf(event.getEntity());
+        if (ownerId != null) removeOwned(ownerId);
+    }
+
+    @EventHandler
+    public void onJoin(PlayerJoinEvent event) {
+        if (!available) return;
+        try {
+            for (FakePlayer fake : owned.values()) if (fake.isValid()) fake.showTo(event.getPlayer());
+        } catch (LinkageError error) {
+            disableFeature(error);
         }
     }
 
-    @EventHandler
-    public void onQuit(PlayerQuitEvent event) {
-        removeOwned(event.getPlayer());
-    }
+    @EventHandler public void onQuit(PlayerQuitEvent event) { removeOwned(event.getPlayer()); }
+    @EventHandler public void onWorldChange(PlayerChangedWorldEvent event) { removeOwned(event.getPlayer()); }
 
-    @EventHandler
-    public void onWorldChange(PlayerChangedWorldEvent event) {
-        removeOwned(event.getPlayer());
-    }
-
-    public void removeOwned(Player owner) {
-        removeOwned(owner.getUniqueId());
-    }
+    public void removeOwned(Player owner) { removeOwned(owner.getUniqueId()); }
 
     private void removeOwned(UUID ownerId) {
-        Mannequin mannequin = owned.remove(ownerId);
-        if (mannequin == null) return;
-        Integer task = shieldTasks.remove(mannequin.getUniqueId());
-        if (task != null) Bukkit.getScheduler().cancelTask(task);
-        if (mannequin.isValid()) mannequin.remove();
+        FakePlayer fake = owned.remove(ownerId);
+        if (fake != null) {
+            try {
+                fake.remove();
+            } catch (LinkageError error) {
+                disableFeature(error);
+            }
+        }
     }
 
     public void removeAll() {
         for (UUID ownerId : new HashSet<>(owned.keySet())) removeOwned(ownerId);
         owned.clear();
+    }
+
+    private void disableFeature(LinkageError error) {
+        if (warned) return;
+        warned = true;
+        available = false;
+        plugin.getLogger().log(Level.WARNING,
+                "Fake-player NMS signatures do not match this Paper build. Only /bot is disabled.", error);
+        removeAll();
     }
 }
