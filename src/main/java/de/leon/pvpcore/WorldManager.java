@@ -6,6 +6,10 @@ import org.bukkit.entity.Player;
 
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.*;
+import java.util.stream.Stream;
 
 public final class WorldManager {
     private final PvPCore plugin;
@@ -238,14 +242,6 @@ public final class WorldManager {
                 }
             }
 
-            Path folder = Bukkit.getWorldContainer().toPath().resolve(name);
-            try {
-                deleteWorldFolder(folder);
-            } catch (IOException exception) {
-                plugin.getLogger().severe("Could not delete old arena " + name + ": " + exception.getMessage());
-                continue;
-            }
-
             World fresh = new WorldCreator(name).environment(World.Environment.NORMAL)
                     .type(WorldType.NORMAL).seed(worldSeed(key)).generateStructures(true).createWorld();
             if (fresh == null) {
@@ -291,6 +287,22 @@ public final class WorldManager {
             if (configured.equalsIgnoreCase(name)) return key;
         }
         return null;
+    }
+
+
+    private void deleteWorldFolder(Path folder) throws IOException {
+        if (!Files.exists(folder)) return;
+        try (Stream<Path> paths = Files.walk(folder)) {
+            paths.sorted(Comparator.reverseOrder()).forEach(path -> {
+                try {
+                    Files.deleteIfExists(path);
+                } catch (IOException exception) {
+                    throw new UncheckedIOException(exception);
+                }
+            });
+        } catch (UncheckedIOException exception) {
+            throw exception.getCause();
+        }
     }
 
 
