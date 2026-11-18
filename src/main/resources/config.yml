@@ -7,20 +7,19 @@ style:
 bots:
   max-per-player: 2
   remove-on-quit: true
-  shield-cooldown-ms: 100
   name-format: "&eTRAINING NPC"
 worlds:
   plains:
-    name: "pvp_plains_arena"
+    name: "pvp_plains_arena_v2"
     radius: 5000
   desert:
-    name: "pvp_desert_arena"
+    name: "pvp_desert_arena_v2"
     radius: 5000
   snow:
-    name: "pvp_snow_arena"
+    name: "pvp_snow_arena_v2"
     radius: 5000
   badlands:
-    name: "pvp_badlands_arena"
+    name: "pvp_badlands_arena_v2"
     radius: 5000
 menus:
   title-pvp: "&8ᴛʀᴀɪɴɪɴɢ ʙᴏᴛ"
