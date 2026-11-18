@@ -18,7 +18,7 @@ import java.util.*;
 
 public final class BotManager implements Listener {
     private static final long SHIELD_COOLDOWN_TICKS = 20L;
-    private record BotSettings(boolean shield, boolean infiniteTotem) {}
+    private record BotSettings(boolean shield, boolean infiniteTotem, boolean knockback) {}
     private final PvPCore plugin;
     private final Map<UUID, Set<UUID>> owned = new HashMap<>();
     private final Map<UUID, BotSettings> settings = new HashMap<>();
@@ -26,7 +26,7 @@ public final class BotManager implements Listener {
 
     public BotManager(PvPCore plugin) { this.plugin=plugin; }
 
-    public void spawn(Player owner, boolean shield, boolean infiniteTotem) {
+    public void spawn(Player owner, boolean shield, boolean infiniteTotem, boolean knockback) {
         int max=Math.max(1,plugin.getConfig().getInt("bots.max-per-player",2));
         Set<UUID> ids=owned.computeIfAbsent(owner.getUniqueId(),k->new HashSet<>());
         ids.removeIf(id->Bukkit.getEntity(id)==null);
@@ -39,7 +39,7 @@ public final class BotManager implements Listener {
             z.setAI(false); z.setGravity(false); z.setVelocity(new Vector());
             z.getAttribute(Attribute.MAX_HEALTH).setBaseValue(40); z.setHealth(40);
             z.getAttribute(Attribute.MOVEMENT_SPEED).setBaseValue(0);
-            if(z.getAttribute(Attribute.KNOCKBACK_RESISTANCE)!=null)z.getAttribute(Attribute.KNOCKBACK_RESISTANCE).setBaseValue(1);
+            if(z.getAttribute(Attribute.KNOCKBACK_RESISTANCE)!=null)z.getAttribute(Attribute.KNOCKBACK_RESISTANCE).setBaseValue(knockback?0:1);
             EntityEquipment eq=z.getEquipment();
             if(eq!=null){
                 eq.setHelmet(owner.getInventory().getHelmet()==null?new ItemStack(Material.IRON_HELMET):owner.getInventory().getHelmet().clone());
@@ -53,14 +53,14 @@ public final class BotManager implements Listener {
                 eq.setItemInOffHand(shield?new ItemStack(Material.SHIELD):null);
             }
         });
-        UUID id=bot.getUniqueId(); ids.add(id); settings.put(id,new BotSettings(shield,infiniteTotem));
-        plugin.message(owner,"&aTraining Bot spawned. &7Shield: &f"+(shield?"ON":"OFF")+"&7, Inf. Totem: &f"+(infiniteTotem?"ON":"OFF"));
+        UUID id=bot.getUniqueId(); ids.add(id); settings.put(id,new BotSettings(shield,infiniteTotem,knockback));
+        plugin.message(owner,"&aTraining Bot spawned. &7Shield: &f"+(shield?"ON":"OFF")+"&7, Inf. Totem: &f"+(infiniteTotem?"ON":"OFF")+"&7, Knockback: &f"+(knockback?"ON":"OFF"));
     }
 
     @EventHandler public void onBotDamage(EntityDamageEvent event){
         if(!(event.getEntity() instanceof Zombie bot))return;
         BotSettings cfg=settings.get(bot.getUniqueId()); if(cfg==null)return;
-        bot.setVelocity(new Vector());
+        if(!cfg.knockback()) bot.setVelocity(new Vector());
         if(cfg.infiniteTotem()&&event.getFinalDamage()>=bot.getHealth()){
             event.setCancelled(true); bot.setHealth(1);
             bot.getWorld().playSound(bot.getLocation(),Sound.ITEM_TOTEM_USE,1,1);
