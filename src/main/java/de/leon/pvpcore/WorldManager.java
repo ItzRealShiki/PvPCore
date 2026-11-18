@@ -75,7 +75,9 @@ public final class WorldManager {
                 int surface=height(wx,wz,seed);
                 if (biome != null) biomeGrid.setBiome(x,z,biome);
                 data.setBlock(x,minY,z,Material.BEDROCK);
-                for (int y=minY+1; y<surface-4; y++) data.setBlock(x,y,z,Material.STONE);
+                for (int y=minY+1; y<surface-4; y++) {
+                    data.setBlock(x, y, z, y <= 0 ? Material.DEEPSLATE : Material.STONE);
+                }
                 for (int y=surface-4; y<surface; y++) data.setBlock(x,y,z,filler);
                 data.setBlock(x,surface,z,top);
                 if (terrainKey.equals("snow")) data.setBlock(x,surface+1,z,Material.SNOW);
@@ -86,28 +88,79 @@ public final class WorldManager {
             Material[] types = {Material.COAL_ORE, Material.IRON_ORE, Material.COPPER_ORE,
                     Material.GOLD_ORE, Material.REDSTONE_ORE, Material.LAPIS_ORE,
                     Material.DIAMOND_ORE, Material.EMERALD_ORE};
+            Material[] deepslateTypes = {Material.DEEPSLATE_COAL_ORE, Material.DEEPSLATE_IRON_ORE,
+                    Material.DEEPSLATE_COPPER_ORE, Material.DEEPSLATE_GOLD_ORE,
+                    Material.DEEPSLATE_REDSTONE_ORE, Material.DEEPSLATE_LAPIS_ORE,
+                    Material.DEEPSLATE_DIAMOND_ORE, Material.DEEPSLATE_EMERALD_ORE};
             int[] counts = {14, 10, 9, 5, 5, 4, 3, 1};
             int[] sizes = {9, 8, 9, 7, 7, 6, 5, 3};
             int[] ceilings = {120, 64, 48, 32, 16, 24, 16, 24};
             for (int i=0;i<types.length;i++) for (int vein=0;vein<counts[i];vein++) {
                 int ox=ores.nextInt(16), oz=ores.nextInt(16);
-                int oy=minY+5+ores.nextInt(Math.max(1, ceilings[i]-minY-4));
-                for (int j=0;j<sizes[i];j++) {
-                    int px=ox+ores.nextInt(3)-1, py=oy+ores.nextInt(3)-1, pz=oz+ores.nextInt(3)-1;
-                    if (px<0||px>15||pz<0||pz>15||py<=minY||py>=height(chunkX*16+px,chunkZ*16+pz,seed)-4) continue;
-                    if (data.getType(px,py,pz)==Material.STONE) data.setBlock(px,py,pz,types[i]);
+                int oy=minY+5+ores.nextInt(Math.ma            // Natural, less frequent trees with persistent leaves that never decay.
+            Random flora = new Random(seed + chunkX * 73428767L + chunkZ * 912931L);
+            if (!terrainKey.equals("desert") && flora.nextInt(100) < 40) {
+                int tx = flora.nextInt(8) + 4, tz = flora.nextInt(8) + 4;
+                int wx = chunkX * 16 + tx, wz = chunkZ * 16 + tz;
+                int sy = height(wx, wz, seed);
+                Material log = terrainKey.equals("snow") ? Material.SPRUCE_LOG
+                        : terrainKey.equals("badlands") ? Material.ACACIA_LOG : Material.OAK_LOG;
+                Material leaves = terrainKey.equals("snow") ? Material.SPRUCE_LEAVES
+                        : terrainKey.equals("badlands") ? Material.ACACIA_LEAVES : Material.OAK_LEAVES;
+                int trunkHeight = 5 + flora.nextInt(2);
+                for (int y = 1; y <= trunkHeight; y++) {
+                    data.setBlock(tx, sy + y, tz, log);
+                }
+
+                // Overlapping foliage layers create a rounded, uneven canopy instead of a flat cube.
+                org.bukkit.block.data.BlockData persistentLeaves = Bukkit.createBlockData(leaves);
+                if (persistentLeaves instanceof org.bukkit.block.data.type.Leaves leafData) {
+                    leafData.setPersistent(true);
+                }
+                for (int layer = 0; layer < 4; layer++) {
+                    int canopyY = sy + trunkHeight - 2 + layer;
+                    int radius = (layer == 1 || layer == 2) ? 3 : 2;
+                    for (int dx = -radius; dx <= radius; dx++) {
+                        for (int dz = -radius; dz <= radius; dz++) {
+                            double distance = dx * dx + dz * dz;
+                            if (distance > radius * radius + 1) continue;
+                            if (flora.nextDouble() < 0.13 && distance > 1) continue;
+                            int lx = tx + dx, lz = tz + dz;
+                            if (lx < 0 || lx >= 16 || lz < 0 || lz >= 16) continue;
+                            if (data.getType(lx, canopyY, lz).isAir()) {
+                                data.setBlock(lx, canopyY, lz, persistentLeaves);
+                            }
+                        }
+                    }
+                }
+                // A few lower leaves make the canopy blend naturally into the trunk.
+                for (int dy = -1; dy <= 0; dy++) {
+                    for (int dx = -1; dx <= 1; dx++) {
+                        for (int dz = -1; dz <= 1; dz++) {
+                            if (Math.abs(dx) + Math.abs(dz) > 2) continue;
+                            int lx = tx + dx, lz = tz + dz, ly = sy + trunkHeight + dy;
+                            if (lx >= 0 && lx < 16 && lz >= 0 && lz < 16
+                                    && data.getType(lx, ly, lz).isAir()) {
+                                data.setBlock(lx, ly, lz, persistentLeaves);
+                            }
+                        }
+                    }
                 }
             }
 
-            // A rare, naturally placed single tree; no floating blocks or random stone pillars.
-            Random flora = new Random(seed + chunkX * 73428767L + chunkZ * 912931L);
-            if (flora.nextInt(18)==0 && !terrainKey.equals("desert")) {
-                int tx=flora.nextInt(12)+2, tz=flora.nextInt(12)+2;
-                int wx=chunkX*16+tx, wz=chunkZ*16+tz, sy=height(wx,wz,seed);
-                Material log=terrainKey.equals("snow")?Material.SPRUCE_LOG:
-                        terrainKey.equals("badlands")?Material.ACACIA_LOG:Material.OAK_LOG;
-                Material leaves=terrainKey.equals("snow")?Material.SPRUCE_LEAVES:
-                        terrainKey.equals("badlands")?Material.ACACIA_LEAVES:Material.OAK_LEAVES;
+            // Sparse dead bushes in the desert, placed only on sand.
+            if (terrainKey.equals("desert") && flora.nextInt(100) < 85) {
+                int bushes = 1 + flora.nextInt(3);
+                for (int bush = 0; bush < bushes; bush++) {
+                    int bx = flora.nextInt(16), bz = flora.nextInt(16);
+                    int surface = height(chunkX * 16 + bx, chunkZ * 16 + bz, seed);
+                    if (data.getType(bx, surface, bz) == Material.SAND
+                            && data.getType(bx, surface + 1, bz).isAir()) {
+                        data.setBlock(bx, surface + 1, bz, Material.DEAD_BUSH);
+                    }
+                }
+            }
+           terrainKey.equals("badlands")?Material.ACACIA_LEAVES:Material.OAK_LEAVES;
                 for(int y=1;y<=4;y++) data.setBlock(tx,sy+y,tz,log);
                 for(int dx=-2;dx<=2;dx++) for(int dz=-2;dz<=2;dz++) {
                     if(Math.abs(dx)+Math.abs(dz)>3) continue;
