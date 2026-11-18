@@ -135,6 +135,7 @@ public final class WorldManager {
         if(world==null) world=new WorldCreator(name).environment(World.Environment.NORMAL)
                 .type(WorldType.NORMAL).generator(new PvPGenerator(key)).generateStructures(false).createWorld();
         if(world==null){plugin.message(player,"&cThe world could not be loaded or created.");return false;}
+        world.setGameRule(GameRule.DO_MOB_SPAWNING, false);
         int radius=Math.max(100,plugin.getConfig().getInt(base+"radius",5000));
         ThreadLocalRandom random=ThreadLocalRandom.current();
         for(int attempt=0;attempt<200;attempt++){
@@ -233,7 +234,11 @@ public final class WorldManager {
 
             World fresh = new WorldCreator(name).environment(World.Environment.NORMAL)
                     .type(WorldType.NORMAL).generator(new PvPGenerator(key)).generateStructures(false).createWorld();
-            if (fresh == null) plugin.getLogger().severe("Could not create regenerated arena " + name);
+            if (fresh == null) {
+                plugin.getLogger().severe("Could not create regenerated arena " + name);
+            } else {
+                fresh.setGameRule(GameRule.DO_MOB_SPAWNING, false);
+            }
         }
 
         for (ReturnTarget target : returnTargets) {
