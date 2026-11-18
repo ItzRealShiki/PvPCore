@@ -222,9 +222,11 @@ public final class WorldManager {
             plugin.message(player, "&cUnknown arena world.");
             return false;
         }
+        if (!plugin.beginRtp(player)) return false;
         World world = loadOrCreateWorld(key);
         if (world == null) {
             plugin.message(player, "&cThe world could not be loaded or created.");
+            plugin.finishRtp(player);
             return false;
         }
         int radius = Math.max(100, plugin.getConfig().getInt("worlds." + key + ".radius", 5000));
@@ -233,9 +235,13 @@ public final class WorldManager {
     }
 
     private void findSafeRtpLocation(Player player, World world, String key, int radius, int attempt) {
-        if (!player.isOnline()) return;
+        if (!player.isOnline()) {
+            plugin.finishRtp(player);
+            return;
+        }
         if (attempt >= 24) {
             plugin.message(player, "&cNo safe spawn point was found. Please try again.");
+            plugin.finishRtp(player);
             return;
         }
 
@@ -265,8 +271,11 @@ public final class WorldManager {
                             Bukkit.getScheduler().runTask(plugin, () -> {
                                 if (success && player.isOnline()) {
                                     plugin.message(player, "&aTeleported to &f" + key.toUpperCase(Locale.ROOT) + "&a.");
+                                    plugin.finishRtp(player);
                                 } else if (player.isOnline()) {
                                     findSafeRtpLocation(player, world, key, radius, attempt + 1);
+                                } else {
+                                    plugin.finishRtp(player);
                                 }
                             }));
                 }));
@@ -280,12 +289,19 @@ public final class WorldManager {
     }
 
     public void randomTeleport(Player player) {
+        if (!plugin.beginRtp(player)) return;
         List<String> keys = new ArrayList<>(WORLD_KEYS);
         Collections.shuffle(keys);
         for (String key : keys) {
-            if (teleport(player, key)) return;
+            World world = loadOrCreateWorld(key);
+            if (world != null) {
+                int radius = Math.max(100, plugin.getConfig().getInt("worlds." + key + ".radius", 5000));
+                findSafeRtpLocation(player, world, key, radius, 0);
+                return;
+            }
         }
         plugin.message(player, "&cNo arena world is currently available.");
+        plugin.finishRtp(player);
     }
 
     public void startRegenerationCycle() {
