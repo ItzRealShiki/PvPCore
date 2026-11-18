@@ -45,7 +45,7 @@ public final class Menus implements Listener {
         inv.setItem(10, item(Material.IRON_CHESTPLATE, "&aSurvival Player", "&7Real server-side player entity.", "&7Vanilla gravity, collisions and movement."));
         inv.setItem(13, item(totem ? Material.TOTEM_OF_UNDYING : Material.GRAY_DYE, (totem ? "&a" : "&c") + "Infinite Totem", "&7Uses vanilla totem resurrection.", "&7Automatically replaces a used totem.", "&7Status: " + (totem ? "&aEnabled" : "&cDisabled")));
         inv.setItem(16, item(knockback ? Material.IRON_CHESTPLATE : Material.GRAY_DYE, (knockback ? "&a" : "&c") + "Knockback", "&7Allows normal player knockback.", "&7Status: " + (knockback ? "&aEnabled" : "&cDisabled")));
-        inv.setItem(22, item(shield ? Material.SHIELD : Material.GRAY_DYE, (shield ? "&a" : "&c") + "Shield", "&7Makes the bot hold its shield up.", "&7Status: " + (shield ? "&aEnabled" : "&cDisabled"), "&eClick to toggle"));
+        inv.setItem(22, item(Material.SHIELD, (shield ? "&a" : "&c") + "Shield", "&7Makes the bot hold its shield up.", "&7Status: " + (shield ? "&aEnabled" : "&cDisabled"), "&eClick to toggle"));
         inv.setItem(23, item(Material.CLOCK, "&bShield Reaction: " + difficulty(p, "shield-difficulty"), "&7Easy: 40 ticks (2s)", "&7Normal: 20 ticks (1s)", "&7Hard: 10 ticks (0.5s)", "&7Impossible: 2 ticks (0.1s)", "&eClick to cycle"));
         inv.setItem(24, item(Material.TOTEM_OF_UNDYING, "&bTotem Refill: " + difficulty(p, "totem-difficulty"), "&7Easy: 40 ticks (2s)", "&7Normal: 20 ticks (1s)", "&7Hard: 10 ticks (0.5s)", "&7Impossible: 2 ticks (0.1s)", "&eClick to cycle"));
         inv.setItem(28, blastItem(p, "helmet", Material.NETHERITE_HELMET, "Helmet"));
