@@ -1,5 +1,5 @@
 name: PvPCore
-version: '${project.version}'
+version: '${version}'
 main: de.leon.pvpcore.PvPCore
 api-version: '26.2'
 author: Leon
