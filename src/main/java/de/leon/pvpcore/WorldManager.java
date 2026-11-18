@@ -3,6 +3,7 @@ package de.leon.pvpcore;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
+import org.bukkit.generator.ChunkGenerator;
 
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
@@ -15,27 +16,179 @@ public final class WorldManager {
     private final PvPCore plugin;
     public WorldManager(PvPCore plugin) { this.plugin = plugin; }
 
+    private static final class PvPGenerator extends ChunkGenerator {
+        private final Biome biome;
+        private final String terrainKey;
+        private PvPGenerator(String key) {
+            terrainKey = key.toLowerCase();
+            String biomeKey = switch (terrainKey) {
+                case "desert" -> "desert";
+                case "snow" -> "snowy_plains";
+                case "badlands" -> "badlands";
+                default -> "plains";
+            };
+            biome = Registry.BIOME.get(NamespacedKey.minecraft(biomeKey));
+        }
+
+        private static double smooth(double t) { return t * t * (3.0 - 2.0 * t); }
+        private static double hash(int x, int z, long seed) {
+            long n = x * 341873128712L + z * 132897987541L + seed * 42317861L;
+            n = (n ^ (n >> 13)) * 1274126177L;
+            n ^= n >> 16;
+            return (n & 0x7fffffffL) / (double) 0x7fffffffL * 2.0 - 1.0;
+        }
+        private static double noise(double x, double z, int scale, long seed) {
+            int x0 = Math.floorDiv((int)Math.floor(x), scale);
+            int z0 = Math.floorDiv((int)Math.floor(z), scale);
+            double fx = smooth((x - x0 * scale) / scale);
+            double fz = smooth((z - z0 * scale) / scale);
+            double a = hash(x0, z0, seed), b = hash(x0 + 1, z0, seed);
+            double c = hash(x0, z0 + 1, seed), d = hash(x0 + 1, z0 + 1, seed);
+            return (a + (b-a)*fx) * (1-fz) + (c + (d-c)*fx) * fz;
+        }
+        private static int height(int x, int z, long seed) {
+            double n = noise(x,z,150,seed)*2.8 + noise(x,z,55,seed+7)*1.6
+                    + noise(x,z,22,seed+19)*0.65;
+            return 64 + (int)Math.round(n);
+        }
+
+        @Override
+        public ChunkData generateChunkData(World world, Random random, int chunkX, int chunkZ, BiomeGrid biomeGrid) {
+            ChunkData data = createChunkData(world);
+            int minY = world.getMinHeight();
+            long seed = world.getSeed();
+            Material top = switch (terrainKey) {
+                case "desert" -> Material.SAND;
+                case "snow" -> Material.GRASS_BLOCK;
+                case "badlands" -> Material.RED_SAND;
+                default -> Material.GRASS_BLOCK;
+            };
+            Material filler = switch (terrainKey) {
+                case "desert" -> Material.SANDSTONE;
+                case "badlands" -> Material.TERRACOTTA;
+                default -> Material.DIRT;
+            };
+
+            int[][] surfaceHeights = new int[16][16];
+            for (int x=0; x<16; x++) for (int z=0; z<16; z++) {
+                int wx=chunkX*16+x, wz=chunkZ*16+z;
+                int surface=height(wx,wz,seed);
+                surfaceHeights[x][z] = surface;
+                if (biome != null) biomeGrid.setBiome(x,z,biome);
+                data.setBlock(x,minY,z,Material.BEDROCK);
+                for (int y=minY+1; y<surface-4; y++) data.setBlock(x,y,z,y <= 0 ? Material.DEEPSLATE : Material.STONE);
+                for (int y=surface-4; y<surface; y++) data.setBlock(x,y,z,filler);
+                data.setBlock(x,surface,z,top);
+                if (terrainKey.equals("snow")) data.setBlock(x,surface+1,z,Material.SNOW);
+            }
+
+            // Ore veins are placed only inside existing stone, never in open air.
+            Random ores = new Random(seed ^ (chunkX * 341873128712L) ^ (chunkZ * 132897987541L));
+            Material[] types = {Material.COAL_ORE, Material.IRON_ORE, Material.COPPER_ORE,
+                    Material.GOLD_ORE, Material.REDSTONE_ORE, Material.LAPIS_ORE,
+                    Material.DIAMOND_ORE, Material.EMERALD_ORE};
+            Material[] deepslateTypes = {Material.DEEPSLATE_COAL_ORE, Material.DEEPSLATE_IRON_ORE,
+                    Material.DEEPSLATE_COPPER_ORE, Material.DEEPSLATE_GOLD_ORE,
+                    Material.DEEPSLATE_REDSTONE_ORE, Material.DEEPSLATE_LAPIS_ORE,
+                    Material.DEEPSLATE_DIAMOND_ORE, Material.DEEPSLATE_EMERALD_ORE};
+            int[] counts = {14, 10, 9, 5, 5, 4, 3, 1};
+            int[] sizes = {9, 8, 9, 7, 7, 6, 5, 3};
+            int[] ceilings = {120, 64, 48, 32, 16, 24, 16, 24};
+            for (int i=0;i<types.length;i++) for (int vein=0;vein<counts[i];vein++) {
+                int ox=ores.nextInt(16), oz=ores.nextInt(16);
+                int oy=minY+5+ores.nextInt(Math.max(1, ceilings[i]-minY-4));
+                for (int j=0;j<sizes[i];j++) {
+                    int px=ox+ores.nextInt(3)-1, py=oy+ores.nextInt(3)-1, pz=oz+ores.nextInt(3)-1;
+                    if (px<0||px>15||pz<0||pz>15||py<=minY||py>=surfaceHeights[px][pz]-4) continue;
+                    Material base = data.getType(px,py,pz);
+                    if (base == Material.STONE || base == Material.DEEPSLATE) {
+                        data.setBlock(px,py,pz,py <= 0 ? deepslateTypes[i] : types[i]);
+                    }
+                }
+            }
+
+            // Natural trees are 60% less common than the previous generator.
+            Random flora = new Random(seed + chunkX * 73428767L + chunkZ * 912931L);
+            if (flora.nextInt(100) < 40 && !terrainKey.equals("desert")) {
+                int tx=flora.nextInt(8)+4, tz=flora.nextInt(8)+4;
+                int wx=chunkX*16+tx, wz=chunkZ*16+tz, sy=height(wx,wz,seed);
+                Material log=terrainKey.equals("snow")?Material.SPRUCE_LOG:
+                        terrainKey.equals("badlands")?Material.ACACIA_LOG:Material.OAK_LOG;
+                Material leaves=terrainKey.equals("snow")?Material.SPRUCE_LEAVES:
+                        terrainKey.equals("badlands")?Material.ACACIA_LEAVES:Material.OAK_LEAVES;
+                int trunkHeight=5+flora.nextInt(2);
+                for(int y=1;y<=trunkHeight;y++) data.setBlock(tx,sy+y,tz,log);
+                org.bukkit.block.data.BlockData leafBlock=Bukkit.createBlockData(leaves);
+                if(leafBlock instanceof org.bukkit.block.data.type.Leaves leafData) leafData.setPersistent(true);
+                for(int layer=0;layer<4;layer++) {
+                    int canopyY=sy+trunkHeight-2+layer;
+                    int radius=(layer==1||layer==2)?3:2;
+                    for(int dx=-radius;dx<=radius;dx++) for(int dz=-radius;dz<=radius;dz++) {
+                        int distance=dx*dx+dz*dz;
+                        if(distance>radius*radius+1 || (distance>1 && flora.nextDouble()<0.13)) continue;
+                        int lx=tx+dx,lz=tz+dz;
+                        if(lx>=0&&lx<16&&lz>=0&&lz<16&&data.getType(lx,canopyY,lz).isAir())
+                            data.setBlock(lx,canopyY,lz,leafBlock);
+                    }
+                }
+            }
+            if(terrainKey.equals("desert") && flora.nextInt(100)<85) {
+                int count=1+flora.nextInt(3);
+                for(int i=0;i<count;i++) {
+                    int bx=flora.nextInt(16),bz=flora.nextInt(16);
+                    int surface=height(chunkX*16+bx,chunkZ*16+bz,seed);
+                    if(data.getType(bx,surface,bz)==Material.SAND && data.getType(bx,surface+1,bz).isAir())
+                        data.setBlock(bx,surface+1,bz,Material.DEAD_BUSH);
+                }
+            }
+            return data;
+        }
+        @Override public boolean shouldGenerateNoise(){return false;}
+        @Override public boolean shouldGenerateSurface(){return false;}
+        @Override public boolean shouldGenerateCaves(){return false;}
+        @Override public boolean shouldGenerateDecorations(){return false;}
+        @Override public boolean shouldGenerateMobs(){return false;}
+        @Override public boolean shouldGenerateStructures(){return false;}
+    }
+
+
     private void migrateArenaSettings() {
-        if (plugin.getConfig().getBoolean("worlds.fixed-format-migrated", false)) return;
-        String[][] arenas = {
-                {"plains", "pvp_plains_arena_v2", "pvp_plains_arena_v3", "731942105"},
-                {"desert", "pvp_desert_arena_v2", "pvp_desert_arena_v3", "284710639"},
-                {"snow", "pvp_snow_arena_v2", "pvp_snow_arena_v3", "918273645"},
-                {"badlands", "pvp_badlands_arena_v2", "pvp_badlands_arena_v3", "563829174"}
-        };
-        for (String[] arena : arenas) {
-            String path = "worlds." + arena[0] + ".name";
-            String configuredName = plugin.getConfig().getString(path, arena[1]);
-            if (configuredName.equalsIgnoreCase(arena[1])) {
-                plugin.getConfig().set(path, arena[2]);
+        if (!plugin.getConfig().getBoolean("worlds.fixed-format-migrated", false)) {
+            String[][] legacy = {
+                    {"plains", "pvp_plains_arena_v2", "pvp_plains_arena_v3", "731942105"},
+                    {"desert", "pvp_desert_arena_v2", "pvp_desert_arena_v3", "284710639"},
+                    {"snow", "pvp_snow_arena_v2", "pvp_snow_arena_v3", "918273645"},
+                    {"badlands", "pvp_badlands_arena_v2", "pvp_badlands_arena_v3", "563829174"}
+            };
+            for (String[] arena : legacy) {
+                String path = "worlds." + arena[0] + ".name";
+                String configuredName = plugin.getConfig().getString(path, arena[1]);
+                if (configuredName.equalsIgnoreCase(arena[1])) plugin.getConfig().set(path, arena[2]);
+                String seedPath = "worlds." + arena[0] + ".seed";
+                if (!plugin.getConfig().contains(seedPath)) plugin.getConfig().set(seedPath, Long.parseLong(arena[3]));
             }
-            String seedPath = "worlds." + arena[0] + ".seed";
-            if (!plugin.getConfig().contains(seedPath)) {
-                plugin.getConfig().set(seedPath, Long.parseLong(arena[3]));
+            plugin.getConfig().set("worlds.regeneration.enabled", false);
+            plugin.getConfig().set("worlds.fixed-format-migrated", true);
+        }
+
+        // Switch only the arena folder names so old vanilla-format worlds are never mistaken
+        // for worlds created with the restored PvPCore terrain generator.
+        if (!plugin.getConfig().getBoolean("worlds.custom-terrain-migrated", false)) {
+            String[][] arenas = {
+                    {"plains", "pvp_plains_arena_v3", "pvp_plains_arena_v4"},
+                    {"desert", "pvp_desert_arena_v3", "pvp_desert_arena_v4"},
+                    {"snow", "pvp_snow_arena_v3", "pvp_snow_arena_v4"},
+                    {"badlands", "pvp_badlands_arena_v3", "pvp_badlands_arena_v4"}
+            };
+            for (String[] arena : arenas) {
+                String path = "worlds." + arena[0] + ".name";
+                if (plugin.getConfig().getString(path, "").equalsIgnoreCase(arena[1])) {
+                    plugin.getConfig().set(path, arena[2]);
+                }
             }
+            plugin.getConfig().set("worlds.custom-terrain-migrated", true);
         }
         plugin.getConfig().set("worlds.regeneration.enabled", false);
-        plugin.getConfig().set("worlds.fixed-format-migrated", true);
         plugin.saveConfig();
     }
 
@@ -70,7 +223,7 @@ public final class WorldManager {
         World world = Bukkit.getWorld(name);
         if (world == null) {
             world = new WorldCreator(name).environment(World.Environment.NORMAL)
-                    .type(WorldType.NORMAL).seed(worldSeed(key)).generateStructures(true).createWorld();
+                    .type(WorldType.NORMAL).seed(worldSeed(key)).generator(new PvPGenerator(key)).generateStructures(false).createWorld();
         }
         if (world != null) world.setGameRule(GameRule.DO_MOB_SPAWNING, false);
         return world;
@@ -268,7 +421,7 @@ public final class WorldManager {
             }
 
             World fresh = new WorldCreator(name).environment(World.Environment.NORMAL)
-                    .type(WorldType.NORMAL).seed(worldSeed(key)).generateStructures(true).createWorld();
+                    .type(WorldType.NORMAL).seed(worldSeed(key)).generator(new PvPGenerator(key)).generateStructures(false).createWorld();
             if (fresh == null) {
                 plugin.getLogger().severe("Could not create regenerated arena " + name);
             } else {
