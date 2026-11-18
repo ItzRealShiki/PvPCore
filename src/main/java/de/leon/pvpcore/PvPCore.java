@@ -35,7 +35,7 @@ public final class PvPCore extends JavaPlugin {
     public BotManager bots() { return bots; }
     public WorldManager worlds() { return worlds; }
     public String color(String text) {
-        return SmallCaps.of(ChatColor.translateAlternateColorCodes('&', text));
+        return ChatColor.translateAlternateColorCodes('&', SmallCaps.of(text));
     }
     public void message(CommandSender sender, String text) {
         sender.sendMessage(color(getConfig().getString("style.prefix", "&8[&aPvPCore&8] ") + text));
