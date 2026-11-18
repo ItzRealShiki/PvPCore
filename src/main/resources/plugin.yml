@@ -12,6 +12,9 @@ commands:
   rtp:
     description: Opens the random teleport world selector.
     usage: /rtp
+  spawn:
+    description: Teleports you or an admin-selected player to spawn.
+    usage: /spawn [player]
   admin:
     description: Opens the administration dashboard.
     usage: /admin
