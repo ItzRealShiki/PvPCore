@@ -937,7 +937,8 @@ public final class PracticeManager implements Listener {
         int swing = swordSwingSequence.merge(id, 1, Integer::sum);
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (!player.isOnline()) return;
-            if (swordHitSwingSequence.getOrDefault(id, 0) != swing) resetSwordCombo(player);
+            if (swordSwingSequence.getOrDefault(id, 0) == swing
+                    && swordHitSwingSequence.getOrDefault(id, 0) != swing) resetSwordCombo(player);
         }, 1L);
         updateSwordAccuracy(player);
     }
