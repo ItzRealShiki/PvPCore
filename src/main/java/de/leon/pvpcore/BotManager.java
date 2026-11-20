@@ -171,7 +171,7 @@ public final class BotManager implements Listener {
                         && plugin.practice().mode(owner) == PracticeManager.Mode.STUN_SLAM;
                 fake.setKnockbackEnabled(!(practiceStunSlam || !option(owner, "knockback", true)));
                 boolean shieldEnabled = practiceStunSlam || option(owner, "shield", false);
-                boolean shieldDisabled = !practiceStunSlam && shieldDisabledUntil.getOrDefault(ownerId, 0L) > System.currentTimeMillis();
+                boolean shieldDisabled = shieldDisabledUntil.getOrDefault(ownerId, 0L) > System.currentTimeMillis();
                 fake.setShieldRaised(shieldEnabled && !shieldDisabled);
                 fake.tick();
             }
@@ -215,18 +215,21 @@ public final class BotManager implements Listener {
             });
         }
 
-        if (option(owner, "shield", false)
+        boolean shieldEnabled = (owner.getWorld().getName().equals("prac_rooms")
+                && plugin.practice().mode(owner) == PracticeManager.Mode.STUN_SLAM)
+                || option(owner, "shield", false);
+        if (shieldEnabled
                 && event instanceof EntityDamageByEntityEvent byEntity
+                && byEntity.getEntity().equals(fake.bukkit())
                 && byEntity.getDamager() instanceof Player attacker) {
-            boolean shieldWasRaised = shieldDisabledUntil.getOrDefault(ownerId, 0L) <= System.currentTimeMillis();
             Material weapon = attacker.getInventory().getItemInMainHand().getType();
 
             // An axe disables the shield for the 1-second cooldown.
-            if (shieldWasRaised && weapon.name().endsWith("_AXE")) {
-                shieldDisabledUntil.put(ownerId, System.currentTimeMillis() + 1000L);
+            if (weapon.name().endsWith("_AXE")) {
+                long disabledUntil = System.currentTimeMillis() + 1000L;
+                shieldDisabledUntil.put(ownerId, disabledUntil);
                 fake.setShieldRaised(false);
             }
-
         }
     }
 
