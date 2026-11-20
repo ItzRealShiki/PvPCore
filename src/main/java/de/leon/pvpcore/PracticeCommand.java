@@ -35,9 +35,17 @@ public final class PracticeCommand implements CommandExecutor, Listener {
     }
     private void main(Player p){
         Inventory i=create("&8✦ ᴘʀᴀᴄᴛɪᴄᴇ","main",27);
-        i.setItem(11,item(Material.MACE,"&6Stun Slam","&7Axe, mace and spear practice.","&eClick to enter"));
+        i.setItem(11,item(Material.MACE,"&6Stun Slam","&7Choose a difficulty before entering.","&eClick to select"));
         i.setItem(15,item(Material.DIAMOND_SWORD,"&bSword","&7Diamond sword vs diamond sword.","&eClick to enter"));
         i.setItem(22,item(Material.ANVIL,"&aKit Editor","&7Swap items and edit your loadout."));
+        p.openInventory(i);
+    }
+    private void difficulty(Player p){
+        Inventory i=create("&8✦ ꜱᴛᴜɴ ꜱʟᴀᴍ ᴅɪꜰꜰɪᴄᴜʟᴛʏ","difficulty",27);
+        i.setItem(10,item(Material.LIME_CONCRETE,"&aEasy","&77-block height","&eClick to play"));
+        i.setItem(13,item(Material.YELLOW_CONCRETE,"&eNormal","&720-block height","&eClick to play"));
+        i.setItem(16,item(Material.RED_CONCRETE,"&cHard","&730-block height","&eClick to play"));
+        i.setItem(22,item(Material.ARROW,"&cBack"));
         p.openInventory(i);
     }
     private void kit(Player p){
@@ -71,9 +79,16 @@ public final class PracticeCommand implements CommandExecutor, Listener {
         e.setCancelled(true);if(e.getClickedInventory()!=e.getView().getTopInventory())return;
         int s=e.getSlot();
         if(h.kind.equals("main")){
-            if(s==11){plugin.practice().setMode(p,PracticeManager.Mode.STUN_SLAM);p.closeInventory();plugin.practice().enter(p);}
+            if(s==11){difficulty(p);}
             else if(s==15){plugin.practice().setMode(p,PracticeManager.Mode.SWORD);p.closeInventory();plugin.practice().enter(p);}
             else if(s==22)kit(p);
+        }else if(h.kind.equals("difficulty")){
+            if(s==10 || s==13 || s==16){
+                int height = s==10 ? 7 : s==13 ? 20 : 30;
+                plugin.practice().setMode(p,PracticeManager.Mode.STUN_SLAM);
+                p.closeInventory();
+                plugin.practice().enter(p,height);
+            } else if(s==22) main(p);
         }else if(h.kind.equals("selector")){
             if(s==10){plugin.practice().setMode(p,PracticeManager.Mode.STUN_SLAM);edit(p);}
             else if(s==13){plugin.practice().setMode(p,PracticeManager.Mode.SWORD);edit(p);}
