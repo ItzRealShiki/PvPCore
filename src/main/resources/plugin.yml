@@ -27,9 +27,9 @@ commands:
   admin:
     description: Opens the administration dashboard.
     usage: /admin
-  fight:
+  duel:
     description: Challenges a player to a private-box 1v1.
-    usage: /fight <player|accept|deny>
+    usage: /duel <player|accept|deny>
   duels:
     description: Shows and manages duel invitations.
     usage: /duels
