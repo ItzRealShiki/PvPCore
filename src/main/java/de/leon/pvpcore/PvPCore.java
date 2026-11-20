@@ -14,6 +14,9 @@ import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class PvPCore extends JavaPlugin implements Listener {
     private Menus menus;
@@ -21,6 +24,7 @@ public final class PvPCore extends JavaPlugin implements Listener {
     private WorldManager worlds;
     private ItemEditCommand itemEdit;
     private PracticeManager practice;
+    private final Set<UUID> rtpLoading = ConcurrentHashMap.newKeySet();
 
     @Override public void onEnable() {
         saveDefaultConfig();
@@ -78,6 +82,13 @@ public final class PvPCore extends JavaPlugin implements Listener {
             getLogger().warning("The Lunge enchantment is not registered on this server version.");
         }
     }
+
+    // Retained only for the legacy world manager's internal compilation; /rtp is no longer registered.
+    public boolean beginRtp(Player player) {
+        if (!rtpLoading.add(player.getUniqueId())) return false;
+        return true;
+    }
+    public void finishRtp(Player player) { rtpLoading.remove(player.getUniqueId()); }
 
     private void register(String name, CommandExecutor executor) {
         PluginCommand command = Objects.requireNonNull(getCommand(name), "Missing command " + name);
