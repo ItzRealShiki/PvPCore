@@ -34,7 +34,7 @@ public final class BotManager implements Listener {
 
     private final PvPCore plugin;
     private final Map<UUID, FakePlayer> owned = new HashMap<>();
-    // Keep the shield disabled for 2 seconds after an axe hit.
+    // Keep the shield disabled for 1 second after an axe hit.
     private final Map<UUID, Long> shieldDisabledUntil = new HashMap<>();
     private boolean available;
     private boolean warned;
@@ -170,6 +170,11 @@ public final class BotManager implements Listener {
                 }
 
                 Player bot = fake.bukkit();
+                if (owner.getWorld().getName().equals("prac_rooms")) {
+                    // Practice bots must take damage on every registered hit.
+                    bot.setInvulnerable(false);
+                    bot.setNoDamageTicks(0);
+                }
                 if (option(owner, "infinite-totem", true)
                         && bot.getInventory().getItemInOffHand().getType().isAir()) {
                     bot.getInventory().setItemInOffHand(new ItemStack(Material.TOTEM_OF_UNDYING));
@@ -233,7 +238,7 @@ public final class BotManager implements Listener {
 
             // An axe disables the shield for 2 seconds, allowing follow-up hits.
             if (weapon.name().endsWith("_AXE")) {
-                long disabledUntil = System.currentTimeMillis() + 2000L;
+                long disabledUntil = System.currentTimeMillis() + 1000L;
                 shieldDisabledUntil.put(ownerId, disabledUntil);
                 fake.setShieldRaised(false);
             }
