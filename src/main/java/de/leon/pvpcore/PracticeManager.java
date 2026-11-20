@@ -509,7 +509,16 @@ public final class PracticeManager implements Listener {
     }
 
     private void clearPlatform(int cx, int cz) {
-        // Restore the selected arena theme while keeping the surrounding glass box intact.
+        // Remove the old 49x49 glass enclosure when upgrading existing rooms.
+        for (int x = -24; x <= 24; x++) {
+            for (int z = -24; z <= 24; z++) {
+                for (int y = 81; y < world.getMaxHeight(); y++) {
+                    Block block = world.getBlockAt(cx + x, y, cz + z);
+                    Material type = block.getType();
+                    if (type == Material.GLASS || type.name().endsWith("_STAINED_GLASS")) block.setType(Material.AIR, false);
+                }
+            }
+        }
         buildArenaPlatform(cx, cz);
     }
 
