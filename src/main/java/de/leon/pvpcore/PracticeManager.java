@@ -416,12 +416,72 @@ public final class PracticeManager implements Listener {
                 world.getBlockAt(cx + x, topY - 2, cz + z).setType(palette[2], false);
                 world.getBlockAt(cx + x, topY - 3, cz + z).setType(palette[3], false);
 
-                // Sparse theme details only along the outside edge, never across the
-                // central fighting area. Cherry petals are accents, not ground cover.
-                if (edge >= 18 && edge <= 22 && Math.floorMod(x * 31 + z * 17, 29) == 0) {
-                    Material detail = palette[4];
-                    if (detail.isBlock() && detail != Material.FIRE && !detail.name().endsWith("_LEAVES")) {
-                        world.getBlockAt(cx + x, topY + 1, cz + z).setType(detail, false);
+                // Add varied ground cover from the mid-ring outward. The central
+                // combat zone stays clear, while plants are scattered in small clusters.
+                if (radius >= 8.0 && radius <= 22.0) {
+                    int plantRoll = Math.floorMod(x * 73 + z * 151 + x * z * 19, 17);
+                    Material groundDetail = null;
+                    switch (arenaTheme()) {
+                        case "CHERRY_BLOSSOM" -> {
+                            if (plantRoll <= 3) groundDetail = Material.PINK_PETALS;
+                            else if (plantRoll == 4) groundDetail = Material.SHORT_GRASS;
+                            else if (plantRoll == 5) groundDetail = Material.FERN;
+                            else if (plantRoll == 6) groundDetail = Material.MOSS_CARPET;
+                        }
+                        case "FLOWER_PLAINS" -> {
+                            if (plantRoll <= 2) groundDetail = Material.POPPY;
+                            else if (plantRoll <= 4) groundDetail = Material.DANDELION;
+                            else if (plantRoll == 5) groundDetail = Material.AZURE_BLUET;
+                            else if (plantRoll == 6) groundDetail = Material.OXEYE_DAISY;
+                            else if (plantRoll == 7) groundDetail = Material.CORNFLOWER;
+                            else if (plantRoll == 8) groundDetail = Material.SHORT_GRASS;
+                            else if (plantRoll == 9) groundDetail = Material.FERN;
+                            else if (plantRoll == 10) groundDetail = Material.MOSS_CARPET;
+                        }
+                        case "PLAINS" -> {
+                            if (plantRoll <= 4) groundDetail = Material.SHORT_GRASS;
+                            else if (plantRoll <= 6) groundDetail = Material.FERN;
+                            else if (plantRoll == 7) groundDetail = Material.POPPY;
+                            else if (plantRoll == 8) groundDetail = Material.DANDELION;
+                            else if (plantRoll == 9) groundDetail = Material.MOSS_CARPET;
+                        }
+                        case "PALE_GARDEN" -> {
+                            if (plantRoll <= 3) groundDetail = Material.PALE_MOSS_CARPET;
+                            else if (plantRoll <= 5) groundDetail = Material.PALE_HANGING_MOSS;
+                            else if (plantRoll == 6) groundDetail = Material.FERN;
+                            else if (plantRoll == 7) groundDetail = Material.SHORT_GRASS;
+                        }
+                        case "WARPED" -> {
+                            if (plantRoll <= 2) groundDetail = Material.WARPED_ROOTS;
+                            else if (plantRoll <= 4) groundDetail = Material.NETHER_SPROUTS;
+                            else if (plantRoll == 5) groundDetail = Material.WARPED_FUNGUS;
+                        }
+                        case "CRIMSON" -> {
+                            if (plantRoll <= 2) groundDetail = Material.CRIMSON_ROOTS;
+                            else if (plantRoll <= 4) groundDetail = Material.NETHER_SPROUTS;
+                            else if (plantRoll == 5) groundDetail = Material.CRIMSON_FUNGUS;
+                        }
+                        case "NETHER" -> {
+                            if (plantRoll <= 2) groundDetail = Material.NETHER_SPROUTS;
+                            else if (plantRoll == 3) groundDetail = Material.CRIMSON_ROOTS;
+                            else if (plantRoll == 4) groundDetail = Material.WARPED_ROOTS;
+                        }
+                        case "END" -> {
+                            if (plantRoll <= 2) groundDetail = Material.CHORUS_FLOWER;
+                        }
+                        case "DESERT", "BADLANDS" -> {
+                            if (plantRoll == 0) groundDetail = Material.DEAD_BUSH;
+                        }
+                    }
+                    if (groundDetail != null) {
+                        world.getBlockAt(cx + x, topY + 1, cz + z).setType(groundDetail, false);
+                    }
+
+                    // A few subtle ground patches add texture between the plants.
+                    if ((arenaTheme().equals("PLAINS") || arenaTheme().equals("FLOWER_PLAINS")
+                            || arenaTheme().equals("CHERRY_BLOSSOM"))
+                            && Math.floorMod(x * 43 + z * 67, 31) == 0) {
+                        world.getBlockAt(cx + x, topY + 1, cz + z).setType(Material.MOSS_CARPET, false);
                     }
                 }
 
