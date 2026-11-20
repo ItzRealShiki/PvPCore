@@ -42,9 +42,10 @@ public final class PracticeCommand implements CommandExecutor, Listener {
     }
     private void difficulty(Player p){
         Inventory i=create("&8✦ ꜱᴛᴜɴ ꜱʟᴀᴍ ᴅɪꜰꜰɪᴄᴜʟᴛʏ","difficulty",27);
-        i.setItem(10,item(Material.LIME_CONCRETE,"&aEasy","&77-block height","&eClick to play"));
-        i.setItem(13,item(Material.YELLOW_CONCRETE,"&eNormal","&720-block height","&eClick to play"));
-        i.setItem(16,item(Material.RED_CONCRETE,"&cHard","&730-block height","&eClick to play"));
+        i.setItem(10,item(Material.LIME_CONCRETE,"&aEasy","&710-block height","&eClick to play"));
+        i.setItem(12,item(Material.YELLOW_CONCRETE,"&eNormal","&720-block height","&eClick to play"));
+        i.setItem(14,item(Material.ORANGE_CONCRETE,"&cHard","&730-block height","&eClick to play"));
+        i.setItem(16,item(Material.RED_CONCRETE,"&4Impossible","&7100-block height","&eClick to play"));
         i.setItem(22,item(Material.ARROW,"&cBack"));
         p.openInventory(i);
     }
@@ -83,8 +84,8 @@ public final class PracticeCommand implements CommandExecutor, Listener {
             else if(s==15){plugin.practice().setMode(p,PracticeManager.Mode.SWORD);p.closeInventory();plugin.practice().enter(p);}
             else if(s==22)kit(p);
         }else if(h.kind.equals("difficulty")){
-            if(s==10 || s==13 || s==16){
-                int height = s==10 ? 7 : s==13 ? 20 : 30;
+            if(s==10 || s==12 || s==14 || s==16){
+                int height = s==10 ? 10 : s==12 ? 20 : s==14 ? 30 : 100;
                 plugin.practice().setMode(p,PracticeManager.Mode.STUN_SLAM);
                 p.closeInventory();
                 plugin.practice().enter(p,height);
