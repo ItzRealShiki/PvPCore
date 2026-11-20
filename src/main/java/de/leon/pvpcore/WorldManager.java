@@ -231,6 +231,42 @@ public final class WorldManager {
             plugin.getConfig().set("worlds.rolling-terrain-restored-migrated", true);
         }
         plugin.saveConfig();
+        deleteOldArenaWorlds();
+    }
+
+    /**
+     * Remove only PvPCore's known legacy arena folders. The current v6 worlds
+     * and all unrelated server worlds are deliberately excluded.
+     */
+    private void deleteOldArenaWorlds() {
+        String[] keys = {"plains", "desert", "snow", "badlands"};
+        for (String key : keys) {
+            String[] oldNames = {
+                    "pvp_" + key + "_arena",
+                    "pvp_" + key + "_arena_v2",
+                    "pvp_" + key + "_arena_v3",
+                    "pvp_" + key + "_arena_v4",
+                    "pvp_" + key + "_arena_v5"
+            };
+            for (String oldName : oldNames) {
+                World loaded = Bukkit.getWorld(oldName);
+                if (loaded != null) {
+                    if (!loaded.getPlayers().isEmpty() || !Bukkit.unloadWorld(loaded, false)) {
+                        plugin.getLogger().warning("Keeping old arena " + oldName
+                                + " because it is currently in use; it can be removed after a restart.");
+                        continue;
+                    }
+                }
+                Path folder = Bukkit.getWorldContainer().toPath().resolve(oldName);
+                try {
+                    deleteWorldFolder(folder);
+                    plugin.getLogger().info("Deleted legacy PvPCore arena: " + oldName);
+                } catch (IOException error) {
+                    plugin.getLogger().warning("Could not delete legacy arena " + oldName
+                            + ": " + error.getMessage());
+                }
+            }
+        }
     }
 
     public void applyPermanentDay(World world) {
