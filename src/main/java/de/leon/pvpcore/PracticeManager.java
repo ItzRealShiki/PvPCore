@@ -244,8 +244,8 @@ public final class PracticeManager implements Listener {
     }
 
     public void enforcePracticeFood() {
+        // Keep hunger disabled globally, including worlds outside the practice arenas.
         for (Player player : Bukkit.getOnlinePlayers()) {
-            if (!player.getWorld().equals(world)) continue;
             if (player.getFoodLevel() != 20) player.setFoodLevel(20);
             if (player.getSaturation() < 20.0f) player.setSaturation(20.0f);
             if (player.getExhaustion() != 0.0f) player.setExhaustion(0.0f);
@@ -255,12 +255,11 @@ public final class PracticeManager implements Listener {
     @EventHandler
     public void onFoodLevelChange(FoodLevelChangeEvent event) {
         if (!(event.getEntity() instanceof Player player)) return;
-        if (player.getWorld().equals(world)) {
-            event.setCancelled(true);
-            player.setFoodLevel(20);
-            player.setSaturation(20.0f);
-            player.setExhaustion(0.0f);
-        }
+        // Cancel every hunger change so sprinting, jumping and time cannot drain food.
+        event.setCancelled(true);
+        if (player.getFoodLevel() != 20) player.setFoodLevel(20);
+        if (player.getSaturation() < 20.0f) player.setSaturation(20.0f);
+        if (player.getExhaustion() != 0.0f) player.setExhaustion(0.0f);
     }
 
     public void enter(Player p) { enter(p, selectedHeight(p)); }
