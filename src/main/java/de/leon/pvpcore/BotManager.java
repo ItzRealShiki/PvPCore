@@ -56,6 +56,7 @@ public final class BotManager implements Listener {
 
         removeOwned(owner);
         Location at = owner.getLocation().clone();
+        if (owner.getWorld().getName().equals("prac_rooms")) at.add(0, 0, 3);
 
         try {
             String botName = "Training Bot";
