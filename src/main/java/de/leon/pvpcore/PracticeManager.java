@@ -75,11 +75,11 @@ public final class PracticeManager implements Listener {
 
     public int selectedHeight(Player p) {
         return selectedHeights.getOrDefault(p.getUniqueId(),
-                plugin.getConfig().getInt("practice.players." + p.getUniqueId() + ".stun-slam-height", 7));
+                plugin.getConfig().getInt("practice.players." + p.getUniqueId() + ".stun-slam-height", 10));
     }
 
     public void setSelectedHeight(Player p, int height) {
-        if (height != 7 && height != 20 && height != 30) return;
+        if (height != 10 && height != 20 && height != 30 && height != 100) return;
         selectedHeights.put(p.getUniqueId(), height);
         plugin.getConfig().set("practice.players." + p.getUniqueId() + ".stun-slam-height", height);
         plugin.saveConfig();
@@ -152,14 +152,14 @@ public final class PracticeManager implements Listener {
         }
         if (challengeHeight > 0) activeAttempts.add(p.getUniqueId());
 
-remove immediate bot spawn        if (challengeHeight > 0) {
+        if (challengeHeight > 0) {
             plugin.message(p, "&aStun Slam &7- &e" + difficultyName(challengeHeight) + " &7(" + challengeHeight + " blocks).");
             plugin.message(p, "&7Score: &a" + score(p) + " &8| &7Land a hit on the bot to earn a point.");
         } else plugin.message(p, "&aEntered your private Sword practice room.");
     }
 
     private String difficultyName(int height) {
-        return switch (height) { case 7 -> "Easy"; case 20 -> "Normal"; default -> "Hard"; };
+        return switch (height) { case 10 -> "Easy"; case 20 -> "Normal"; case 30 -> "Hard"; default -> "Impossible"; };
     }
 
     private Location startLocation(Player p, int height) {
@@ -172,7 +172,7 @@ remove immediate bot spawn        if (challengeHeight > 0) {
     public Location botSpawnLocation(Player owner) {
         int index = plugin.getConfig().getInt("practice.players." + owner.getUniqueId() + ".room", 0);
         int cx = 128 + index * 96, cz = 128;
-        return new Location(world, cx + 0.5, 81, cz + 5.5);
+        return new Location(world, cx + 0.5, 81, cz + 0.5);
     }
 
     private void buildRoom(int cx, int cz) {
