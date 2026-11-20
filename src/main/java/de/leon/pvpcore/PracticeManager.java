@@ -1117,6 +1117,21 @@ public final class PracticeManager implements Listener {
         plugin.saveConfig();
     }
 
+    private void loadDuelKit(Player player, Mode mode, PlayerInventory inventory) {
+        String personalPath = "practice.players." + player.getUniqueId() + ".duel-kits." + mode.name();
+        String path = plugin.getConfig().contains(personalPath + ".contents")
+                ? personalPath : "practice.admin-kits." + mode.name();
+        if (!plugin.getConfig().contains(path + ".contents")) return;
+        for (int slot = 0; slot < 36; slot++) {
+            ItemStack item = plugin.getConfig().getItemStack(path + ".contents." + slot);
+            inventory.setItem(slot, item == null ? null : item.clone());
+        }
+        inventory.setHelmet(plugin.getConfig().getItemStack(path + ".helmet"));
+        inventory.setChestplate(plugin.getConfig().getItemStack(path + ".chestplate"));
+        inventory.setLeggings(plugin.getConfig().getItemStack(path + ".leggings"));
+        inventory.setBoots(plugin.getConfig().getItemStack(path + ".boots"));
+    }
+
     private void loadDuelKit(Player player, Mode mode, Inventory inventory) {
         String personalPath = "practice.players." + player.getUniqueId() + ".duel-kits." + mode.name();
         String path = plugin.getConfig().contains(personalPath + ".contents")
