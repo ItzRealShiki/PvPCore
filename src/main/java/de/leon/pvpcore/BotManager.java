@@ -68,6 +68,9 @@ public final class BotManager implements Listener {
             bot.setInvulnerable(false);
             bot.setGravity(true);
             owned.put(owner.getUniqueId(), fake);
+            boolean stunSlam = owner.getWorld().getName().equals("prac_rooms")
+                    && plugin.practice().mode(owner) == PracticeManager.Mode.STUN_SLAM;
+            fake.setKnockbackEnabled(!(stunSlam || !option(owner, "knockback", true)));
             equip(owner, fake);
             plugin.message(owner, "&aYour survival player bot has been created.");
         } catch (LinkageError error) {
@@ -166,6 +169,7 @@ public final class BotManager implements Listener {
                 }
                 boolean practiceStunSlam = owner.getWorld().getName().equals("prac_rooms")
                         && plugin.practice().mode(owner) == PracticeManager.Mode.STUN_SLAM;
+                fake.setKnockbackEnabled(!(practiceStunSlam || !option(owner, "knockback", true)));
                 boolean shieldEnabled = practiceStunSlam || option(owner, "shield", false);
                 boolean shieldDisabled = !practiceStunSlam && shieldDisabledUntil.getOrDefault(ownerId, 0L) > System.currentTimeMillis();
                 fake.setShieldRaised(shieldEnabled && !shieldDisabled);
