@@ -11,6 +11,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.FoodLevelChangeEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
@@ -872,6 +873,18 @@ public final class PracticeManager implements Listener {
         if (!activeAttempts.contains(p.getUniqueId())) return;
         if (event.getTo().getY() >= event.getFrom().getY()) return;
         if (event.getTo().getY() <= 81.0) retry(p, false);
+    }
+
+    @EventHandler
+    public void onFightDeath(PlayerDeathEvent event) {
+        Player defeated = event.getEntity();
+        if (isFighting(defeated)) endFight(defeated, "&a" + defeated.getName() + " was defeated.");
+    }
+
+    @EventHandler
+    public void onFightRespawn(org.bukkit.event.player.PlayerRespawnEvent event) {
+        Location destination = fightReturnLocations.remove(event.getPlayer().getUniqueId());
+        if (destination != null) event.setRespawnLocation(destination);
     }
 
     @EventHandler
