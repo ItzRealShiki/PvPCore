@@ -182,9 +182,9 @@ public final class BotManager implements Listener {
 
                 Player bot = fake.bukkit();
                 if (owner.getWorld().getName().equals("prac_rooms")) {
-                    // Practice bots must take damage on every registered hit.
+                    // Keep bots damageable, but preserve vanilla player hit immunity frames.
+                    // Do not reset noDamageTicks here: doing so bypasses the normal attack cooldown.
                     bot.setInvulnerable(false);
-                    bot.setNoDamageTicks(0);
                 }
                 if (option(owner, "infinite-totem", true)
                         && bot.getInventory().getItemInOffHand().getType().isAir()) {
