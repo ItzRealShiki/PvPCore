@@ -52,7 +52,7 @@ public final class PracticeManager implements Listener {
             }
             nearbyRooms.add(index);
             if (activeForceFields.add(index)) buildForceField(cx, cz);
-            if (!plugin.bots().hasOwnedBot(player)) plugin.bots().spawn(player);
+            if (plugin.bots().isAvailable() && !plugin.bots().hasOwnedBot(player)) plugin.bots().spawn(player);
         }
         for (int index : new HashSet<>(activeForceFields)) {
             if (nearbyRooms.contains(index)) continue;
@@ -138,6 +138,7 @@ public final class PracticeManager implements Listener {
             plugin.getConfig().set(base + ".built", true);
             plugin.saveConfig();
         }
+        clearPlatform(cx, cz);
         plugin.bots().removeOwned(p);
         p.setGameMode(GameMode.SURVIVAL);
         p.setFallDistance(0);
@@ -164,7 +165,8 @@ remove immediate bot spawn        if (challengeHeight > 0) {
     private Location startLocation(Player p, int height) {
         int index = plugin.getConfig().getInt("practice.players." + p.getUniqueId() + ".room", 0);
         int cx = 128 + index * 96, cz = 128;
-        return new Location(world, cx + 0.5, 81 + Math.max(0, height), cz + 0.5);
+        int spawnHeight = height > 0 ? height : 20;
+        return new Location(world, cx + 0.5, 81 + spawnHeight, cz + 0.5);
     }
 
     public Location botSpawnLocation(Player owner) {
@@ -176,6 +178,12 @@ remove immediate bot spawn        if (challengeHeight > 0) {
     private void buildRoom(int cx, int cz) {
         for (int x = -24; x <= 24; x++) for (int z = -24; z <= 24; z++) {
             // No launch platform: the arena floor stays empty so players fall straight down.
+            world.getBlockAt(cx + x, 80, cz + z).setType(Material.AIR, false);
+        }
+    }
+
+    private void clearPlatform(int cx, int cz) {
+        for (int x = -24; x <= 24; x++) for (int z = -24; z <= 24; z++) {
             world.getBlockAt(cx + x, 80, cz + z).setType(Material.AIR, false);
         }
     }
