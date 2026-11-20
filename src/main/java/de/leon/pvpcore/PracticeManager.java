@@ -548,8 +548,9 @@ public final class PracticeManager implements Listener {
 
     private void buildForceField(int cx, int cz) {
         if (world == null) return;
+        int roofY = world.getMaxHeight() - 1;
         for (int offset = -24; offset <= 24; offset++) {
-            for (int y = 81; y <= 110; y++) {
+            for (int y = 81; y <= roofY; y++) {
                 world.getBlockAt(cx - 24, y, cz + offset).setType(forceFieldMaterial(), false);
                 world.getBlockAt(cx + 24, y, cz + offset).setType(forceFieldMaterial(), false);
                 world.getBlockAt(cx + offset, y, cz - 24).setType(forceFieldMaterial(), false);
@@ -557,10 +558,10 @@ public final class PracticeManager implements Listener {
             }
         }
 
-        // Close the arena at the top with a complete glass roof.
+        // Close the arena with a complete glass roof at the world's maximum build height.
         for (int x = -24; x <= 24; x++) {
             for (int z = -24; z <= 24; z++) {
-                world.getBlockAt(cx + x, 110, cz + z).setType(forceFieldMaterial(), false);
+                world.getBlockAt(cx + x, roofY, cz + z).setType(forceFieldMaterial(), false);
             }
         }
     }
@@ -583,8 +584,9 @@ public final class PracticeManager implements Listener {
 
     private void removeForceField(int cx, int cz) {
         if (world == null) return;
+        int roofY = world.getMaxHeight() - 1;
         for (int offset = -24; offset <= 24; offset++) {
-            for (int y = 81; y <= 110; y++) {
+            for (int y = 81; y <= roofY; y++) {
                 world.getBlockAt(cx - 24, y, cz + offset).setType(Material.AIR, false);
                 world.getBlockAt(cx + 24, y, cz + offset).setType(Material.AIR, false);
                 world.getBlockAt(cx + offset, y, cz - 24).setType(Material.AIR, false);
@@ -593,7 +595,7 @@ public final class PracticeManager implements Listener {
         }
         for (int x = -24; x <= 24; x++) {
             for (int z = -24; z <= 24; z++) {
-                world.getBlockAt(cx + x, 110, cz + z).setType(Material.AIR, false);
+                world.getBlockAt(cx + x, roofY, cz + z).setType(Material.AIR, false);
             }
         }
     }
