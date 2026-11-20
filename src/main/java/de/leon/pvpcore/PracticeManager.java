@@ -296,9 +296,10 @@ public final class PracticeManager implements Listener {
             int cx = 128 + roomIndex * 96;
             int cz = 128;
             Location to = event.getTo();
-            // The glass wall is at +/-24; teleport anyone who bypasses it back inside.
-            if (to.getX() < cx - 23.5 || to.getX() > cx + 23.5
-                    || to.getZ() < cz - 23.5 || to.getZ() > cz + 23.5) {
+            // Only teleport after the player's position has passed beyond the outer edge
+            // of the glass wall (at +/-24), not while approaching or touching its inner face.
+            if (to.getX() < cx - 24.5 || to.getX() > cx + 24.5
+                    || to.getZ() < cz - 24.5 || to.getZ() > cz + 24.5) {
                 int height = mode(p) == Mode.STUN_SLAM && activeAttempts.contains(p.getUniqueId())
                         ? selectedHeight(p) : 0;
                 p.setFallDistance(0);
