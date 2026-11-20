@@ -41,6 +41,20 @@ public final class Menus implements Listener {
         return inv;
     }
 
+    public void openDuels(Player p) {
+        Inventory inv = create("duels", "&8ᴅᴜᴇʟ · ɪɴᴠɪᴛᴀᴛɪᴏɴꜱ", 27);
+        Player challenger = plugin.fights().incomingFrom(p);
+        if (challenger == null || !challenger.isOnline()) {
+            inv.setItem(11, item(Material.GRAY_DYE, "&7No incoming invitation", "&7You do not have a pending invitation."));
+        } else {
+            inv.setItem(11, item(Material.PAPER, "&ePending invitation", "&7From: &f" + challenger.getName(), "&7Use the existing /fight accept or /fight deny commands to respond."));
+        }
+        int outgoing = plugin.fights().outgoingInviteCount(p);
+        inv.setItem(15, item(Material.BARRIER, "&cCancel outgoing invitations", "&7Pending: &f" + outgoing, "&eClick to cancel all outgoing invitations"));
+        inv.setItem(22, item(Material.BARRIER, "&7Close"));
+        p.openInventory(inv);
+    }
+
     public void openPvp(Player p) {
         Inventory inv = create("pvp", plugin.getConfig().getString("menus.title-pvp", "&8ᴛʀᴀɪɴɪɴɢ ʙᴏᴛ"), 54);
         boolean totem = botOption(p, "infinite-totem", true);
@@ -190,7 +204,7 @@ public final class Menus implements Listener {
 
         int slot = e.getSlot();
         switch (holder.key) {
-            case "pvp" -> {
+            case "duels" -> {\n                if (slot == 15) {\n                    int cancelled = plugin.fights().cancelOutgoingInvites(p);\n                    plugin.message(p, cancelled == 0 ? "&7No outgoing invitations to cancel." : "&aCancelled &f" + cancelled + " &apending invitation(s).");\n                    openDuels(p);\n                } else if (slot == 22) p.closeInventory();\n            }\n            case "pvp" -> {
                 switch (slot) {
                     case 13 -> toggleBotOption(p, "infinite-totem", true);
                     case 16 -> toggleBotOption(p, "knockback", true);
