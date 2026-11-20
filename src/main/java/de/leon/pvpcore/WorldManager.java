@@ -8,8 +8,8 @@ import org.bukkit.generator.ChunkGenerator;
 
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.CompletableFuture;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.io.UncheckedIOException;
 import java.nio.file.*;
 import java.util.stream.Stream;
@@ -129,7 +129,40 @@ public final class WorldManager {
                 }
             }
 
-            // Intentionally no trees, bushes, snow layers, or other surface obstacles.
+            // Deterministic sparse oak trees: 5% of 300x300 cells, with candidates
+            // kept 40 blocks from each cell edge (therefore at least 220 blocks apart).
+            int minCellX = Math.floorDiv(chunkX * 16 - 200, 300);
+            int maxCellX = Math.floorDiv(chunkX * 16 + 215, 300);
+            int minCellZ = Math.floorDiv(chunkZ * 16 - 200, 300);
+            int maxCellZ = Math.floorDiv(chunkZ * 16 + 215, 300);
+            org.bukkit.block.data.BlockData leaves = Bukkit.createBlockData("minecraft:oak_leaves[persistent=true]");
+            for (int cellX = minCellX; cellX <= maxCellX; cellX++) {
+                for (int cellZ = minCellZ; cellZ <= maxCellZ; cellZ++) {
+                    long treeSeed = seed ^ (cellX * 0x9E3779B97F4A7C15L) ^ (cellZ * 0xC2B2AE3D27D4EB4FL);
+                    Random treeRandom = new Random(treeSeed);
+                    if (treeRandom.nextDouble() >= 0.05) continue;
+                    int treeX = cellX * 300 + 150 + treeRandom.nextInt(81) - 40;
+                    int treeZ = cellZ * 300 + 150 + treeRandom.nextInt(81) - 40;
+                    if ((treeX >> 4) != chunkX || (treeZ >> 4) != chunkZ) continue;
+                    int lx = Math.floorMod(treeX, 16);
+                    int lz = Math.floorMod(treeZ, 16);
+                    int groundY = height(treeX, treeZ, seed);
+                    for (int y = groundY + 1; y <= groundY + 4; y++) {
+                        data.setBlock(lx, y, lz, Material.OAK_LOG);
+                    }
+                    for (int dy = 2; dy <= 5; dy++) {
+                        int radius = dy == 5 ? 1 : (dy == 2 ? 1 : 2);
+                        for (int dx = -radius; dx <= radius; dx++) {
+                            for (int dz = -radius; dz <= radius; dz++) {
+                                if (Math.abs(dx) == radius && Math.abs(dz) == radius && radius == 2) continue;
+                                int tx = lx + dx, tz = lz + dz, ty = groundY + dy;
+                                if (tx < 0 || tx > 15 || tz < 0 || tz > 15) continue;
+                                if (data.getType(tx, ty, tz).isAir()) data.setBlock(tx, ty, tz, leaves);
+                            }
+                        }
+                    }
+                }
+            }
             return data;
         }
         @Override public boolean shouldGenerateNoise(){return false;}
@@ -459,140 +492,145 @@ public final class WorldManager {
         Bukkit.getScheduler().runTaskLater(plugin, () -> showRegenerationCountdown(seconds - 1), 20L);
     }
 
-    private record PlayerReturn(Player player, String worldKey, int x, int z, float yaw, float pitch) {}
+    private record PlayerReturn(Player player, World world, int x, int z, float yaw, float pitch,
+                                 boolean allowFlight, boolean flying) {}
+    private record ChunkTarget(World world, int x, int z) {}
 
     private void regenerateSharedWorlds() {
-        World holding = Bukkit.getWorld("pvpcore_regeneration_holding");
-        if (holding == null) {
-            holding = new WorldCreator("pvpcore_regeneration_holding").environment(World.Environment.NORMAL)
-                    .type(WorldType.NORMAL).createWorld();
+        List<PlayerReturn> players = new ArrayList<>();
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            if (!isManagedWorldName(player.getWorld().getName())) continue;
+            Location old = player.getLocation();
+            players.add(new PlayerReturn(player, old.getWorld(), old.getBlockX(), old.getBlockZ(),
+                    old.getYaw(), old.getPitch(), player.getAllowFlight(), player.isFlying()));
         }
-        if (holding == null) {
-            plugin.getLogger().severe("Could not find or create a temporary world; arena regeneration was cancelled.");
+
+        // Move players straight upward in their current arena. Flight is temporarily
+        // enabled so they remain safely above the terrain while chunks are rebuilt.
+        for (PlayerReturn target : players) {
+            Player player = target.player();
+            if (!player.isOnline()) continue;
+            World world = target.world();
+            player.setAllowFlight(true);
+            player.setFlying(true);
+            Location above = new Location(world, target.x() + 0.5,
+                    Math.min(world.getMaxHeight() - 4, Math.max(world.getMinHeight() + 8, world.getMaxHeight() - 8)),
+                    target.z() + 0.5, target.yaw(), target.pitch());
+            player.teleport(above);
+            player.setAllowFlight(true);
+            player.setFlying(true);
+            plugin.message(player, "&eArena regenerating in place...");
+        }
+
+        List<ChunkTarget> chunks = new ArrayList<>();
+        for (String key : WORLD_KEYS) {
+            String name = plugin.getConfig().getString("worlds." + key + ".name", "pvp_" + key + "_arena");
+            World world = Bukkit.getWorld(name);
+            if (world == null) {
+                plugin.getLogger().warning("Skipping regeneration of unloaded arena " + name + ".");
+                continue;
+            }
+            rtpLocationCache.get(key).clear();
+            chunks.addAll(collectStoredChunks(world));
+            for (Chunk loaded : world.getLoadedChunks()) {
+                chunks.add(new ChunkTarget(world, loaded.getX(), loaded.getZ()));
+            }
+        }
+
+        // De-duplicate region-file entries and currently loaded chunks.
+        Map<String, ChunkTarget> unique = new LinkedHashMap<>();
+        for (ChunkTarget target : chunks) {
+            String id = target.world().getUID() + ":" + target.x() + ":" + target.z();
+            unique.put(id, target);
+        }
+        Deque<ChunkTarget> queue = new ArrayDeque<>(unique.values());
+        final int total = queue.size();
+        final int[] completed = {0};
+
+        if (total == 0) {
+            finishRegeneration(players);
             return;
         }
 
-        final World holdingWorld = holding;
-        List<PlayerReturn> returnTargets = new ArrayList<>();
-        List<CompletableFuture<?>> chunkLoads = new ArrayList<>();
-        Map<Player, Location> holdingDestinations = new LinkedHashMap<>();
-
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            String key = keyForWorldName(player.getWorld().getName());
-            if (key == null) continue;
-
-            Location original = player.getLocation();
-            returnTargets.add(new PlayerReturn(player, key, original.getBlockX(), original.getBlockZ(),
-                    original.getYaw(), original.getPitch()));
-
-            int platformY = Math.max(holdingWorld.getMinHeight() + 1,
-                    Math.min(holdingWorld.getMaxHeight() - 3, original.getBlockY()));
-            int chunkX = original.getBlockX() >> 4;
-            int chunkZ = original.getBlockZ() >> 4;
-            chunkLoads.add(holdingWorld.getChunkAtAsync(chunkX, chunkZ, true));
-            holdingDestinations.put(player, new Location(holdingWorld,
-                    original.getBlockX() + 0.5, platformY + 1.0, original.getBlockZ() + 0.5,
-                    original.getYaw(), original.getPitch()));
-        }
-
-        CompletableFuture.allOf(chunkLoads.toArray(new CompletableFuture<?>[0])).whenComplete((ignored, loadError) ->
-                Bukkit.getScheduler().runTask(plugin, () -> {
-                    if (loadError != null) {
-                        plugin.getLogger().severe("Could not prepare temporary holding locations; arena regeneration was cancelled.");
-                        return;
+        Bukkit.getScheduler().runTaskTimer(plugin, task -> {
+            int budget = 1; // Keep each tick bounded; regenerate every saved chunk, including underground.
+            while (budget-- > 0 && !queue.isEmpty()) {
+                ChunkTarget target = queue.pollFirst();
+                try {
+                    if (!target.world().regenerateChunk(target.x(), target.z())) {
+                        plugin.getLogger().warning("Could not regenerate chunk " + target.x() + "," + target.z()
+                                + " in " + target.world().getName());
                     }
+                } catch (Throwable error) {
+                    plugin.getLogger().warning("Chunk regeneration failed in " + target.world().getName()
+                            + " at " + target.x() + "," + target.z() + ": " + error.getMessage());
+                }
+                completed[0]++;
+            }
 
-                    List<CompletableFuture<Boolean>> teleports = new ArrayList<>();
-                    for (Map.Entry<Player, Location> entry : holdingDestinations.entrySet()) {
-                        Player player = entry.getKey();
-                        if (!player.isOnline()) continue;
-                        Location destination = entry.getValue();
-                        int platformY = destination.getBlockY() - 1;
-                        int bx = destination.getBlockX();
-                        int bz = destination.getBlockZ();
-
-                        // A small temporary platform keeps each player at the same X/Z,
-                        // just one block above their original block position.
-                        for (int dx = -1; dx <= 1; dx++) {
-                            for (int dz = -1; dz <= 1; dz++) {
-                                holdingWorld.getBlockAt(bx + dx, platformY, bz + dz).setType(Material.GLASS, false);
-                            }
-                        }
-                        holdingWorld.getBlockAt(bx, platformY + 1, bz).setType(Material.AIR, false);
-                        holdingWorld.getBlockAt(bx, platformY + 2, bz).setType(Material.AIR, false);
-                        teleports.add(player.teleportAsync(destination));
-                    }
-
-                    CompletableFuture.allOf(teleports.toArray(new CompletableFuture<?>[0])).whenComplete((done, teleportError) ->
-                            Bukkit.getScheduler().runTask(plugin, () -> {
-                                if (teleportError != null) {
-                                    plugin.getLogger().severe("A player could not be moved to the temporary holding world; arena regeneration was cancelled.");
-                                    return;
-                                }
-                                for (PlayerReturn target : returnTargets) {
-                                    if (target.player().isOnline() && isManagedWorldName(target.player().getWorld().getName())) {
-                                        plugin.getLogger().warning("Player remained in an arena world; skipping regeneration to avoid unloading a world with players.");
-                                        return;
-                                    }
-                                }
-
-                                regenerateArenaFolders();
-
-                                for (PlayerReturn target : returnTargets) {
-                                    Player player = target.player();
-                                    if (!player.isOnline()) continue;
-                                    World fresh = Bukkit.getWorld(plugin.getConfig().getString(
-                                            "worlds." + target.worldKey() + ".name", "pvp_" + target.worldKey() + "_arena"));
-                                    if (fresh == null) {
-                                        plugin.message(player, "&cYour arena was regenerated, but your return location is unavailable.");
-                                        continue;
-                                    }
-                                    fresh.getChunkAtAsync(target.x() >> 4, target.z() >> 4, true).whenComplete((chunk, error) ->
-                                            Bukkit.getScheduler().runTask(plugin, () -> {
-                                                if (!player.isOnline() || error != null || chunk == null) return;
-                                                Location safe = highestSafeLocationAt(fresh, target.x(), target.z());
-                                                if (safe == null) safe = highestSafeLocation(fresh);
-                                                if (safe == null) {
-                                                    plugin.message(player, "&cYour arena was regenerated, but no safe return location was found.");
-                                                    return;
-                                                }
-                                                safe.setYaw(target.yaw());
-                                                safe.setPitch(target.pitch());
-                                                player.teleportAsync(safe);
-                                            }));
-                                }
-                                Bukkit.broadcastMessage(plugin.color("&8[&aPvPCore&8] &aAll shared arena worlds have been regenerated!"));
-                            }));
-                }));
+            if (completed[0] % 100 == 0 || queue.isEmpty()) {
+                Bukkit.broadcastMessage(plugin.color("&8[&aPvPCore&8] &eRegenerating arenas: &f"
+                        + completed[0] + "/" + total + " &echunks"));
+            }
+            if (queue.isEmpty()) {
+                task.cancel();
+                finishRegeneration(players);
+            }
+        }, 1L, 1L);
     }
 
-    private void regenerateArenaFolders() {
-        for (String key : WORLD_KEYS) {
-            String name = plugin.getConfig().getString("worlds." + key + ".name", "pvp_" + key + "_arena");
-            rtpLocationCache.get(key).clear();
-            World oldWorld = Bukkit.getWorld(name);
-            Path worldFolder = oldWorld != null ? oldWorld.getWorldFolder().toPath()
-                    : Bukkit.getWorldContainer().toPath().resolve(name);
-            if (oldWorld != null && !Bukkit.unloadWorld(oldWorld, false)) {
-                plugin.getLogger().severe("Could not unload " + name + "; skipping its regeneration.");
-                continue;
-            }
-            try {
-                deleteWorldFolder(worldFolder);
-            } catch (IOException exception) {
-                plugin.getLogger().severe("Could not delete old arena folder " + name + ": " + exception.getMessage());
-                continue;
-            }
-
-            World fresh = new WorldCreator(name).environment(World.Environment.NORMAL)
-                    .type(WorldType.NORMAL).seed(worldSeed(key)).generator(new PvPGenerator(key)).generateStructures(false).createWorld();
-            if (fresh == null) {
-                plugin.getLogger().severe("Could not create regenerated arena " + name);
-            } else {
-                fresh.setGameRule(GameRule.DO_MOB_SPAWNING, false);
-                applyPermanentDay(fresh);
-            }
+    private List<ChunkTarget> collectStoredChunks(World world) {
+        List<ChunkTarget> chunks = new ArrayList<>();
+        Path regionFolder = world.getWorldFolder().toPath().resolve("region");
+        if (!Files.isDirectory(regionFolder)) return chunks;
+        try (Stream<Path> files = Files.list(regionFolder)) {
+            files.filter(path -> path.getFileName().toString().matches("r\\.-?\\d+\\.-?\\d+\\.mca"))
+                    .forEach(path -> {
+                        String[] parts = path.getFileName().toString()
+                                .replaceFirst("^r\\.", "").replace(".mca", "").split("\\.");
+                        int regionX = Integer.parseInt(parts[0]);
+                        int regionZ = Integer.parseInt(parts[1]);
+                        try (RandomAccessFile file = new RandomAccessFile(path.toFile(), "r")) {
+                            for (int slot = 0; slot < 1024; slot++) {
+                                file.seek((long) slot * 4L);
+                                if (file.readInt() == 0) continue;
+                                int chunkX = regionX * 32 + (slot & 31);
+                                int chunkZ = regionZ * 32 + (slot >> 5);
+                                chunks.add(new ChunkTarget(world, chunkX, chunkZ));
+                            }
+                        } catch (IOException error) {
+                            plugin.getLogger().warning("Could not read region file " + path + ": " + error.getMessage());
+                        }
+                    });
+        } catch (IOException error) {
+            plugin.getLogger().severe("Could not list region files for " + world.getName() + ": " + error.getMessage());
         }
+        return chunks;
+    }
+
+    private void finishRegeneration(List<PlayerReturn> players) {
+        for (PlayerReturn target : players) {
+            Player player = target.player();
+            if (!player.isOnline()) continue;
+            World world = target.world();
+            world.getChunkAtAsync(target.x() >> 4, target.z() >> 4, true).whenComplete((chunk, error) ->
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        if (!player.isOnline()) return;
+                        Location safe = error == null && chunk != null
+                                ? highestSafeLocationAt(world, target.x(), target.z()) : null;
+                        if (safe == null) safe = highestSafeLocation(world);
+                        if (safe != null) {
+                            safe.setYaw(target.yaw());
+                            safe.setPitch(target.pitch());
+                            player.teleport(safe);
+                        }
+                        player.setFlying(false);
+                        player.setAllowFlight(target.allowFlight());
+                        if (target.flying() && target.allowFlight()) player.setFlying(true);
+                        plugin.message(player, "&aYour arena has been regenerated.");
+                    }));
+        }
+        Bukkit.broadcastMessage(plugin.color("&8[&aPvPCore&8] &aAll saved arena chunks have been regenerated!"));
     }
 
     private Location highestSafeLocation(World world) {
