@@ -47,7 +47,7 @@ public final class Menus implements Listener {
         if (challenger == null || !challenger.isOnline()) {
             inv.setItem(11, item(Material.GRAY_DYE, "&7No incoming invitation", "&7You do not have a pending invitation."));
         } else {
-            inv.setItem(11, item(Material.PAPER, "&ePending invitation", "&7From: &f" + challenger.getName(), "&7Use the existing /fight accept or /fight deny commands to respond."));
+            inv.setItem(11, item(Material.PAPER, "&ePending invitation", "&7From: &f" + challenger.getName(), "&7Invitation status only; this menu does not start a match."));
         }
         int outgoing = plugin.fights().outgoingInviteCount(p);
         inv.setItem(15, item(Material.BARRIER, "&cCancel outgoing invitations", "&7Pending: &f" + outgoing, "&eClick to cancel all outgoing invitations"));
