@@ -11,6 +11,8 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.FoodLevelChangeEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
+import org.bukkit.event.player.PlayerAnimationEvent;
+import org.bukkit.event.player.PlayerAnimationType;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.*;
@@ -25,6 +27,8 @@ public final class PracticeManager implements Listener {
     private World world;
     private final Map<UUID, Integer> scores = new HashMap<>();
     private final Map<UUID, Integer> selectedHeights = new HashMap<>();
+    private final Map<UUID, Integer> swordSwings = new HashMap<>();
+    private final Map<UUID, Integer> swordHits = new HashMap<>();
     private final Set<UUID> activeAttempts = new HashSet<>();
     private final Set<UUID> resetting = new HashSet<>();
 
@@ -113,6 +117,11 @@ public final class PracticeManager implements Listener {
         p.teleport(startLocation(p, challengeHeight));
         applyKit(p);
         scores.putIfAbsent(p.getUniqueId(), 0);
+        if (mode(p) == Mode.SWORD) {
+            swordSwings.put(p.getUniqueId(), 0);
+            swordHits.put(p.getUniqueId(), 0);
+            updateSwordAccuracy(p);
+        }
         if (challengeHeight > 0) activeAttempts.add(p.getUniqueId());
 
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
@@ -170,13 +179,40 @@ public final class PracticeManager implements Listener {
     }
 
     @EventHandler
+    public void onSwordSwing(PlayerAnimationEvent event) {
+        Player player = event.getPlayer();
+        if (event.getAnimationType() != PlayerAnimationType.ARM_SWING
+                || !player.getWorld().getName().equals("prac_rooms")
+                || mode(player) != Mode.SWORD) return;
+        swordSwings.merge(player.getUniqueId(), 1, Integer::sum);
+        updateSwordAccuracy(player);
+    }
+
+    @EventHandler(ignoreCancelled = true)
     public void onBotHit(EntityDamageByEntityEvent event) {
         if (!(event.getDamager() instanceof Player player)) return;
         if (!player.getWorld().getName().equals("prac_rooms")) return;
-        if (!activeAttempts.contains(player.getUniqueId())) return;
         if (!plugin.bots().isOwnedBot(player, event.getEntity())) return;
+
+        if (mode(player) == Mode.SWORD) {
+            swordHits.merge(player.getUniqueId(), 1, Integer::sum);
+            updateSwordAccuracy(player);
+            return;
+        }
+
+        if (!activeAttempts.contains(player.getUniqueId())) return;
         event.setCancelled(true);
         retry(player, true);
+    }
+
+    private void updateSwordAccuracy(Player player) {
+        UUID id = player.getUniqueId();
+        int swings = swordSwings.getOrDefault(id, 0);
+        int hits = swordHits.getOrDefault(id, 0);
+        int accuracy = swings == 0 ? 0 : Math.min(100, Math.round(hits * 100.0f / swings));
+        player.sendActionBar(ChatColor.GREEN + "Accuracy: " + ChatColor.YELLOW + accuracy + "%"
+                + ChatColor.DARK_GRAY + " | " + ChatColor.GRAY + "Hits: "
+                + ChatColor.GREEN + hits + ChatColor.GRAY + "/" + swings);
     }
 
     @EventHandler
@@ -204,7 +240,8 @@ public final class PracticeManager implements Listener {
 
     @EventHandler public void onQuit(PlayerQuitEvent event) {
         UUID id = event.getPlayer().getUniqueId();
-        scores.remove(id); selectedHeights.remove(id); activeAttempts.remove(id); resetting.remove(id);
+        scores.remove(id); selectedHeights.remove(id); swordSwings.remove(id); swordHits.remove(id);
+        activeAttempts.remove(id); resetting.remove(id);
     }
 
     @EventHandler public void onWorldChange(PlayerChangedWorldEvent event) {
