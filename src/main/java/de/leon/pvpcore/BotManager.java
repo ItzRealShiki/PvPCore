@@ -204,9 +204,9 @@ public final class BotManager implements Listener {
             boolean shieldWasRaised = shieldDisabledUntil.getOrDefault(ownerId, 0L) <= System.currentTimeMillis();
             Material weapon = attacker.getInventory().getItemInMainHand().getType();
 
-            // An axe disables the shield for the full vanilla-style cooldown.
+            // An axe disables the shield for the 1-second cooldown.
             if (shieldWasRaised && weapon.name().endsWith("_AXE")) {
-                shieldDisabledUntil.put(ownerId, System.currentTimeMillis() + 5000L);
+                shieldDisabledUntil.put(ownerId, System.currentTimeMillis() + 1000L);
                 fake.setShieldRaised(false);
             }
 
