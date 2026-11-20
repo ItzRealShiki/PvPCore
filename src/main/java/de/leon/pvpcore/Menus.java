@@ -204,7 +204,14 @@ public final class Menus implements Listener {
 
         int slot = e.getSlot();
         switch (holder.key) {
-            case "duels" -> {\n                if (slot == 15) {\n                    int cancelled = plugin.fights().cancelOutgoingInvites(p);\n                    plugin.message(p, cancelled == 0 ? "&7No outgoing invitations to cancel." : "&aCancelled &f" + cancelled + " &apending invitation(s).");\n                    openDuels(p);\n                } else if (slot == 22) p.closeInventory();\n            }\n            case "pvp" -> {
+            case "duels" -> {
+                if (slot == 15) {
+                    int cancelled = plugin.fights().cancelOutgoingInvites(p);
+                    plugin.message(p, cancelled == 0 ? "&7No outgoing invitations to cancel." : "&aCancelled &f" + cancelled + " &apending invitation(s).");
+                    openDuels(p);
+                } else if (slot == 22) p.closeInventory();
+            }
+            case "pvp" -> {
                 switch (slot) {
                     case 13 -> toggleBotOption(p, "infinite-totem", true);
                     case 16 -> toggleBotOption(p, "knockback", true);
