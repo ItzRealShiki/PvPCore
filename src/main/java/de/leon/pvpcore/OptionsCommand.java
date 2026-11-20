@@ -65,11 +65,11 @@ public final class OptionsCommand implements CommandExecutor, Listener {
             item.setItemMeta(meta);
             inventory.setItem(index, item);
         }
-        inventory.setItem(22, arenaItem());
+        inventory.setItem(22, arenaItem(player));
         player.openInventory(inventory);
     }
 
-    private ItemStack arenaItem() {
+    private ItemStack arenaItem(Player player) {
         ItemStack item = new ItemStack(Material.GRASS_BLOCK);
         ItemMeta meta = item.getItemMeta();
         meta.setDisplayName(plugin.color("&aArena Ground"));
