@@ -236,18 +236,12 @@ public final class WorldManager {
     }
 
     public void initializeWorldsOnce() {
+        // Never create or synchronously generate arena worlds during onEnable().
+        // Bukkit's createWorld() performs spawn-chunk generation on the server thread,
+        // which can stall plugin startup on hosted servers and leave the plugin red in /plugins.
+        // Arenas are created lazily when a player actually selects one through /rtp.
         migrateArenaSettings();
-        if (plugin.getConfig().getBoolean("worlds.initialized", false)) return;
-        for (String key : WORLD_KEYS) {
-            World world = loadOrCreateWorld(key);
-            if (world == null) {
-                plugin.getLogger().severe("Could not initialize arena world: " + key);
-                return;
-            }
-        }
-        plugin.getConfig().set("worlds.initialized", true);
-        plugin.saveConfig();
-        plugin.getLogger().info("All PvPCore arena worlds were created on first startup.");
+        plugin.getLogger().info("Arena world creation deferred until first RTP request.");
     }
 
     private long worldSeed(String key) {
