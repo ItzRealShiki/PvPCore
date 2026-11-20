@@ -35,6 +35,8 @@ public final class PracticeManager implements Listener {
     }
 
     public void setMode(Player p, Mode mode) {
+        activeAttempts.remove(p.getUniqueId());
+        resetting.remove(p.getUniqueId());
         plugin.getConfig().set("practice.players." + p.getUniqueId() + ".mode", mode.name());
         plugin.saveConfig();
     }
