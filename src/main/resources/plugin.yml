@@ -9,6 +9,9 @@ commands:
     description: Opens private PvP practice rooms and kit editor.
     usage: /prac [kit|join]
     aliases: [practise]
+  kits:
+    description: Opens your personal kit editor.
+    usage: /kits
   options:
     description: Opens PvPCore visual options.
     usage: /options
