@@ -142,6 +142,11 @@ public final class BotManager implements Listener {
         return fake != null && fake.isValid() && fake.bukkit().equals(entity);
     }
 
+    /** Returns true when the entity is one of this plugin's fake-player training bots. */
+    public boolean isPracticeBot(Entity entity) {
+        return ownerOf(entity) != null;
+    }
+
     private UUID ownerOf(Entity entity) {
         for (Map.Entry<UUID, FakePlayer> entry : owned.entrySet()) {
             if (entry.getValue().isValid() && entry.getValue().bukkit().equals(entity)) return entry.getKey();
@@ -236,7 +241,7 @@ public final class BotManager implements Listener {
                 && byEntity.getDamager() instanceof Player attacker) {
             Material weapon = attacker.getInventory().getItemInMainHand().getType();
 
-            // An axe disables the shield for 2 seconds, allowing follow-up hits.
+            // An axe disables the shield for 1 second, allowing follow-up hits.
             if (weapon.name().endsWith("_AXE")) {
                 long disabledUntil = System.currentTimeMillis() + 1000L;
                 shieldDisabledUntil.put(ownerId, disabledUntil);
