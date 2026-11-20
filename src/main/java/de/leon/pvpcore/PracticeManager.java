@@ -571,8 +571,8 @@ public final class PracticeManager implements Listener {
         if (plugin.getConfig().getBoolean(path, false) || !foundationBuildingRooms.add(roomIndex)) return;
         int stoneDepth = Math.max(1, Math.min(64, plugin.getConfig().getInt("duels.foundation.stone-depth", 64)));
         int deepslateDepth = Math.max(1, Math.min(128, plugin.getConfig().getInt("duels.foundation.deepslate-depth", 64)));
-        List<int[]> columns = new ArrayList<>((ARENA_RADIUS * 2 + 1) * (ARENA_RADIUS * 2 + 1));
-        for (int x = -ARENA_RADIUS; x <= ARENA_RADIUS; x++) for (int z = -ARENA_RADIUS; z <= ARENA_RADIUS; z++) columns.add(new int[]{cx + x, cz + z});
+        List<int[]> columns = new ArrayList<>((DUEL_ARENA_RADIUS * 2 + 1) * (DUEL_ARENA_RADIUS * 2 + 1));
+        for (int x = -DUEL_ARENA_RADIUS; x <= DUEL_ARENA_RADIUS; x++) for (int z = -DUEL_ARENA_RADIUS; z <= DUEL_ARENA_RADIUS; z++) columns.add(new int[]{cx + x, cz + z});
         int[] cursor = {0};
         Bukkit.getScheduler().runTaskTimer(plugin, task -> {
             int processed = 0;
@@ -649,7 +649,8 @@ public final class PracticeManager implements Listener {
         plugin.saveConfig();
         if (world == null) world = Bukkit.getWorld(PRACTICE_WORLD);
         int room = plugin.getConfig().getInt(base + ".room", -1);
-        if (world != null && room >= 0) buildArenaPlatform(roomCenterX(room), 128);
+        if (world != null && room >= 0) buildArenaPlatform(roomCenterX(room), 128,
+                isFighting(player) ? DUEL_ARENA_RADIUS : PRACTICE_ARENA_RADIUS);
         plugin.message(player, "&aYour box design is now &e" + normalized.replace('_', ' ') + "&a.");
     }
 
