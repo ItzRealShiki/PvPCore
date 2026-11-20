@@ -10,7 +10,7 @@ commands:
     usage: /bot
   rtp:
     description: Opens the random teleport world selector.
-    usage: /rtp
+    usage: /rtp [reset]
   spawn:
     description: Teleports you or an admin-selected player to spawn.
     usage: /spawn [player]
