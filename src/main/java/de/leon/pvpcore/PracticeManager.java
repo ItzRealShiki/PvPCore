@@ -50,6 +50,7 @@ public final class PracticeManager implements Listener {
     private final Map<UUID, Integer> fightRooms = new HashMap<>();
     private final Map<UUID, Integer> fightSpawnOffsets = new HashMap<>();
     private final Map<UUID, Mode> fightModes = new HashMap<>();
+    private final Map<UUID, Location> fightReturnLocations = new HashMap<>();
     private final Map<UUID, Integer> adminBoxVisits = new HashMap<>();
     private final Map<Integer, org.bukkit.scheduler.BukkitTask> leafDecayTasks = new HashMap<>();
     private final Map<UUID, Scoreboard> practiceBoards = new HashMap<>();
@@ -211,6 +212,8 @@ public final class PracticeManager implements Listener {
         resetting.remove(challenger.getUniqueId());
         resetting.remove(opponent.getUniqueId());
         Mode selected = mode(challenger);
+        fightReturnLocations.put(challenger.getUniqueId(), challenger.getLocation().clone());
+        fightReturnLocations.put(opponent.getUniqueId(), opponent.getLocation().clone());
         fightRooms.put(challenger.getUniqueId(), index);
         fightRooms.put(opponent.getUniqueId(), index);
         fightSpawnOffsets.put(challenger.getUniqueId(), -3);
@@ -248,12 +251,16 @@ public final class PracticeManager implements Listener {
         }
         fightSpawnOffsets.remove(player.getUniqueId());
         fightModes.remove(player.getUniqueId());
+        returnFighter(player);
         for (UUID id : participants) {
             fightRooms.remove(id);
             fightSpawnOffsets.remove(id);
             fightModes.remove(id);
             Player other = Bukkit.getPlayer(id);
-            if (other != null) plugin.message(other, "&eThe 1v1 has ended. " + reason);
+            if (other != null) {
+                plugin.message(other, "&eThe 1v1 has ended. " + reason);
+                returnFighter(other);
+            } else fightReturnLocations.remove(id);
         }
         plugin.message(player, "&eThe 1v1 has ended. " + reason);
         restorePlayerVisibility(player);
@@ -261,6 +268,20 @@ public final class PracticeManager implements Listener {
             Player other = Bukkit.getPlayer(id);
             if (other != null) restorePlayerVisibility(other);
         }
+    }
+
+    private void returnFighter(Player fighter) {
+        Location destination = fightReturnLocations.get(fighter.getUniqueId());
+        if (destination == null) return;
+        if (fighter.isDead()) return;
+        if (fighter.getWorld().equals(world)) fighter.teleport(destination);
+        fightReturnLocations.remove(fighter.getUniqueId());
+    }
+
+    @EventHandler
+    public void onFightRespawn(org.bukkit.event.player.PlayerRespawnEvent event) {
+        Location destination = fightReturnLocations.remove(event.getPlayer().getUniqueId());
+        if (destination != null) event.setRespawnLocation(destination);
     }
 
     public void setMode(Player p, Mode mode) {
@@ -875,6 +896,7 @@ public final class PracticeManager implements Listener {
         restorePlayerVisibility(event.getPlayer());
         if (isFighting(event.getPlayer())) endFight(event.getPlayer(), "&cA player left.");
         adminBoxVisits.remove(id);
+        fightReturnLocations.remove(id);
         scores.remove(id); selectedHeights.remove(id); swordSwings.remove(id); swordHits.remove(id);
         activeAttempts.remove(id); resetting.remove(id);
     }
