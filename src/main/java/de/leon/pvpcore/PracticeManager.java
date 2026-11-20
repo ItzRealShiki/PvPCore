@@ -9,6 +9,7 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.FoodLevelChangeEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -54,6 +55,26 @@ public final class PracticeManager implements Listener {
     }
 
     public int score(Player p) { return scores.getOrDefault(p.getUniqueId(), 0); }
+
+    public void enforceStunSlamFood() {
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            if (!player.getWorld().getName().equals("prac_rooms") || mode(player) != Mode.STUN_SLAM) continue;
+            if (player.getFoodLevel() != 20) player.setFoodLevel(20);
+            if (player.getSaturation() < 20.0f) player.setSaturation(20.0f);
+            if (player.getExhaustion() != 0.0f) player.setExhaustion(0.0f);
+        }
+    }
+
+    @EventHandler
+    public void onFoodLevelChange(FoodLevelChangeEvent event) {
+        if (!(event.getEntity() instanceof Player player)) return;
+        if (player.getWorld().getName().equals("prac_rooms") && mode(player) == Mode.STUN_SLAM) {
+            event.setCancelled(true);
+            player.setFoodLevel(20);
+            player.setSaturation(20.0f);
+            player.setExhaustion(0.0f);
+        }
+    }
 
     public void enter(Player p) { enter(p, selectedHeight(p)); }
 
