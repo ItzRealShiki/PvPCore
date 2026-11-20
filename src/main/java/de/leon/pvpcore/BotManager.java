@@ -34,6 +34,8 @@ public final class BotManager implements Listener {
 
     private final PvPCore plugin;
     private final Map<UUID, FakePlayer> owned = new HashMap<>();
+    // Vanilla shield-disable window after an axe hit (100 ticks / 5 seconds).
+    private final Map<UUID, Long> shieldDisabledUntil = new HashMap<>();
     private boolean available;
     private boolean warned;
 
@@ -152,7 +154,9 @@ public final class BotManager implements Listener {
                         && bot.getInventory().getItemInOffHand().getType().isAir()) {
                     bot.getInventory().setItemInOffHand(new ItemStack(Material.TOTEM_OF_UNDYING));
                 }
-                fake.setShieldRaised(option(owner, "shield", false));
+                boolean shieldEnabled = option(owner, "shield", false);
+                boolean shieldDisabled = shieldDisabledUntil.getOrDefault(ownerId, 0L) > System.currentTimeMillis();
+                fake.setShieldRaised(shieldEnabled && !shieldDisabled);
                 fake.tick();
             }
         } catch (LinkageError error) {
@@ -194,15 +198,24 @@ public final class BotManager implements Listener {
             });
         }
 
-        if (option(owner, "shield", false)) {
-            fake.setShieldRaised(false);
-            int delay = difficultyTicks(owner, "shield-difficulty");
-            Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                Player currentOwner = Bukkit.getPlayer(ownerId);
-                FakePlayer current = owned.get(ownerId);
-                if (currentOwner != null && current != null && current.isValid()
-                        && option(currentOwner, "shield", false)) current.setShieldRaised(true);
-            }, delay);
+        if (option(owner, "shield", false)
+                && event instanceof EntityDamageByEntityEvent byEntity
+                && byEntity.getDamager() instanceof Player attacker) {
+            boolean shieldWasRaised = shieldDisabledUntil.getOrDefault(ownerId, 0L) <= System.currentTimeMillis();
+            Material weapon = attacker.getInventory().getItemInMainHand().getType();
+
+            // An axe disables the shield for the full vanilla-style cooldown.
+            if (shieldWasRaised && weapon.name().endsWith("_AXE")) {
+                shieldDisabledUntil.put(ownerId, System.currentTimeMillis() + 5000L);
+                fake.setShieldRaised(false);
+            }
+
+            // A player hitting the raised shield must not receive shield-impact knockback.
+            if (shieldWasRaised) {
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    if (attacker.isOnline()) attacker.setVelocity(new Vector(0, 0, 0));
+                });
+            }
         }
     }
 
@@ -239,6 +252,7 @@ public final class BotManager implements Listener {
     public void removeOwned(Player owner) { removeOwned(owner.getUniqueId()); }
 
     private void removeOwned(UUID ownerId) {
+        shieldDisabledUntil.remove(ownerId);
         FakePlayer fake = owned.remove(ownerId);
         if (fake != null) {
             try {
