@@ -799,8 +799,8 @@ public final class PracticeManager implements Listener {
         }
 
         // Close the arena with a complete glass roof at the calculated mode-specific height.
-        for (int x = -24; x <= 24; x++) {
-            for (int z = -24; z <= 24; z++) {
+        for (int x = -ARENA_RADIUS; x <= ARENA_RADIUS; x++) {
+            for (int z = -ARENA_RADIUS; z <= ARENA_RADIUS; z++) {
                 world.getBlockAt(cx + x, roofY, cz + z).setType(forceFieldMaterial(), false);
             }
         }
@@ -825,12 +825,12 @@ public final class PracticeManager implements Listener {
     private void removeForceField(int cx, int cz, int glassHeight) {
         if (world == null) return;
         int roofY = 80 + glassHeight;
-        for (int offset = -24; offset <= 24; offset++) {
+        for (int offset = -ARENA_RADIUS; offset <= ARENA_RADIUS; offset++) {
             for (int y = 81; y <= roofY; y++) {
-                world.getBlockAt(cx - 24, y, cz + offset).setType(Material.AIR, false);
-                world.getBlockAt(cx + 24, y, cz + offset).setType(Material.AIR, false);
-                world.getBlockAt(cx + offset, y, cz - 24).setType(Material.AIR, false);
-                world.getBlockAt(cx + offset, y, cz + 24).setType(Material.AIR, false);
+                world.getBlockAt(cx - ARENA_RADIUS, y, cz + offset).setType(Material.AIR, false);
+                world.getBlockAt(cx + ARENA_RADIUS, y, cz + offset).setType(Material.AIR, false);
+                world.getBlockAt(cx + offset, y, cz - ARENA_RADIUS).setType(Material.AIR, false);
+                world.getBlockAt(cx + offset, y, cz + ARENA_RADIUS).setType(Material.AIR, false);
             }
         }
         for (int x = -24; x <= 24; x++) {
@@ -914,7 +914,7 @@ public final class PracticeManager implements Listener {
             int cz = 128;
             Location to = event.getTo();
             // Only teleport after the player's position has passed beyond the outer edge
-            // of the glass wall (at +/-24), not while approaching or touching its inner face.
+            // of the glass wall (at +/-48), not while approaching or touching its inner face.
             if (to.getX() < cx - ARENA_RADIUS - 0.5 || to.getX() > cx + ARENA_RADIUS + 0.5
                     || to.getZ() < cz - ARENA_RADIUS - 0.5 || to.getZ() > cz + ARENA_RADIUS + 0.5) {
                 p.setFallDistance(0);
