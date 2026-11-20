@@ -31,8 +31,35 @@ public final class PracticeManager implements Listener {
     private final Map<UUID, Integer> swordHits = new HashMap<>();
     private final Set<UUID> activeAttempts = new HashSet<>();
     private final Set<UUID> resetting = new HashSet<>();
+    private final Set<Integer> activeForceFields = new HashSet<>();
 
-    public PracticeManager(PvPCore plugin) { this.plugin = plugin; }
+    public PracticeManager(PvPCore plugin) {
+        this.plugin = plugin;
+        Bukkit.getScheduler().runTaskTimer(plugin, this::updateNearbyArenas, 1L, 10L);
+    }
+
+    private void updateNearbyArenas() {
+        Set<Integer> nearbyRooms = new HashSet<>();
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            if (!player.getWorld().getName().equals("prac_rooms")) continue;
+            int index = plugin.getConfig().getInt("practice.players." + player.getUniqueId() + ".room", -1);
+            if (index < 0) continue;
+            int cx = 128 + index * 96, cz = 128;
+            boolean nearby = player.getLocation().distanceSquared(new Location(world == null ? player.getWorld() : world, cx + 0.5, player.getLocation().getY(), cz + 0.5)) <= 36.0 * 36.0;
+            if (!nearby) {
+                plugin.bots().removeOwned(player);
+                continue;
+            }
+            nearbyRooms.add(index);
+            if (activeForceFields.add(index)) buildForceField(cx, cz);
+            if (!plugin.bots().hasOwnedBot(player)) plugin.bots().spawn(player);
+        }
+        for (int index : new HashSet<>(activeForceFields)) {
+            if (nearbyRooms.contains(index)) continue;
+            removeForceField(128 + index * 96, 128);
+            activeForceFields.remove(index);
+        }
+    }
 
     public Mode mode(Player p) {
         try { return Mode.valueOf(plugin.getConfig().getString("practice.players." + p.getUniqueId() + ".mode", "STUN_SLAM")); }
@@ -111,7 +138,6 @@ public final class PracticeManager implements Listener {
             plugin.getConfig().set(base + ".built", true);
             plugin.saveConfig();
         }
-        buildForceField(cx, cz);
         plugin.bots().removeOwned(p);
         p.setGameMode(GameMode.SURVIVAL);
         p.setFallDistance(0);
@@ -125,11 +151,7 @@ public final class PracticeManager implements Listener {
         }
         if (challengeHeight > 0) activeAttempts.add(p.getUniqueId());
 
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            if (p.isOnline() && p.getWorld() == world) plugin.bots().spawn(p);
-        }, 2L);
-
-        if (challengeHeight > 0) {
+remove immediate bot spawn        if (challengeHeight > 0) {
             plugin.message(p, "&aStun Slam &7- &e" + difficultyName(challengeHeight) + " &7(" + challengeHeight + " blocks).");
             plugin.message(p, "&7Score: &a" + score(p) + " &8| &7Land a hit on the bot to earn a point.");
         } else plugin.message(p, "&aEntered your private Sword practice room.");
@@ -153,20 +175,31 @@ public final class PracticeManager implements Listener {
 
     private void buildRoom(int cx, int cz) {
         for (int x = -24; x <= 24; x++) for (int z = -24; z <= 24; z++) {
-            world.getBlockAt(cx+x, 80, cz+z).setType(Material.SMOOTH_STONE, false);
-            if (Math.abs(x) == 24 || Math.abs(z) == 24)
-                for (int y=81; y<=86; y++) world.getBlockAt(cx+x,y,cz+z).setType(Material.GLASS,false);
+            // No launch platform: the arena floor stays empty so players fall straight down.
+            world.getBlockAt(cx + x, 80, cz + z).setType(Material.AIR, false);
         }
     }
 
     private void buildForceField(int cx, int cz) {
-        // Keep every practice room enclosed by a tall, visible glass perimeter.
+        if (world == null) return;
         for (int offset = -24; offset <= 24; offset++) {
             for (int y = 81; y <= 110; y++) {
                 world.getBlockAt(cx - 24, y, cz + offset).setType(Material.GLASS, false);
                 world.getBlockAt(cx + 24, y, cz + offset).setType(Material.GLASS, false);
                 world.getBlockAt(cx + offset, y, cz - 24).setType(Material.GLASS, false);
                 world.getBlockAt(cx + offset, y, cz + 24).setType(Material.GLASS, false);
+            }
+        }
+    }
+
+    private void removeForceField(int cx, int cz) {
+        if (world == null) return;
+        for (int offset = -24; offset <= 24; offset++) {
+            for (int y = 81; y <= 110; y++) {
+                world.getBlockAt(cx - 24, y, cz + offset).setType(Material.AIR, false);
+                world.getBlockAt(cx + 24, y, cz + offset).setType(Material.AIR, false);
+                world.getBlockAt(cx + offset, y, cz - 24).setType(Material.AIR, false);
+                world.getBlockAt(cx + offset, y, cz + 24).setType(Material.AIR, false);
             }
         }
     }
@@ -214,7 +247,8 @@ public final class PracticeManager implements Listener {
         }
 
         if (!activeAttempts.contains(player.getUniqueId())) return;
-        event.setCancelled(true);
+        // Stun Slam only scores a real mace hit; other weapons still deal normal damage.
+        if (player.getInventory().getItemInMainHand().getType() != Material.MACE) return;
         retry(player, true);
     }
 
@@ -292,7 +326,6 @@ public final class PracticeManager implements Listener {
             p.getInventory().setItem(2, enchanted(spearMaterial(), "lunge", 3));
         }
         loadSavedKit(p, p.getInventory());
-        if (mode(p) == Mode.STUN_SLAM) setSingleSpear(p.getInventory());
         p.getInventory().setHeldItemSlot(0);
         p.setHealth(20); p.setFoodLevel(20); p.setSaturation(20); p.setFireTicks(0);
     }
@@ -337,23 +370,22 @@ public final class PracticeManager implements Listener {
         editor.setItem(48, gear(Material.DIAMOND_BOOTS));
         String path = "practice.players." + player.getUniqueId() + ".kits." + mode(player).name();
         if (!plugin.getConfig().contains(path + ".contents")) return;
-        java.util.List<?> contents = plugin.getConfig().getList(path + ".contents");
-        if (contents != null) for (int slot=0; slot<Math.min(36, contents.size()); slot++) {
-            Object value = contents.get(slot);
-            if (value instanceof ItemStack item) editor.setItem(slot, item.clone());
+        for (int slot = 0; slot < 36; slot++) {
+            ItemStack item = plugin.getConfig().getItemStack(path + ".contents." + slot);
+            editor.setItem(slot, item == null ? null : item.clone());
         }
         editor.setItem(45, plugin.getConfig().getItemStack(path + ".helmet"));
         editor.setItem(46, plugin.getConfig().getItemStack(path + ".chestplate"));
         editor.setItem(47, plugin.getConfig().getItemStack(path + ".leggings"));
         editor.setItem(48, plugin.getConfig().getItemStack(path + ".boots"));
-        if (mode(player) == Mode.STUN_SLAM) setSingleSpear(editor);
     }
 
     public void saveKit(Player player, Inventory editor) {
         String path = "practice.players." + player.getUniqueId() + ".kits." + mode(player).name();
-        java.util.List<ItemStack> contents = new java.util.ArrayList<>();
-        for (int slot=0; slot<36; slot++) contents.add(editor.getItem(slot));
-        plugin.getConfig().set(path + ".contents", contents);
+        for (int slot = 0; slot < 36; slot++) {
+            ItemStack item = editor.getItem(slot);
+            plugin.getConfig().set(path + ".contents." + slot, item == null || item.getType().isAir() ? null : item.clone());
+        }
         plugin.getConfig().set(path + ".helmet", editor.getItem(45));
         plugin.getConfig().set(path + ".chestplate", editor.getItem(46));
         plugin.getConfig().set(path + ".leggings", editor.getItem(47));
@@ -364,11 +396,9 @@ public final class PracticeManager implements Listener {
     private void loadSavedKit(Player player, PlayerInventory inventory) {
         String path = "practice.players." + player.getUniqueId() + ".kits." + mode(player).name();
         if (!plugin.getConfig().contains(path + ".contents")) return;
-        java.util.List<?> contents = plugin.getConfig().getList(path + ".contents");
-        if (contents != null) for (int slot=0; slot<Math.min(36, contents.size()); slot++) {
-            inventory.setItem(slot, null);
-            Object value = contents.get(slot);
-            if (value instanceof ItemStack item) inventory.setItem(slot, item.clone());
+        for (int slot = 0; slot < 36; slot++) {
+            ItemStack item = plugin.getConfig().getItemStack(path + ".contents." + slot);
+            inventory.setItem(slot, item == null ? null : item.clone());
         }
         inventory.setHelmet(plugin.getConfig().getItemStack(path + ".helmet"));
         inventory.setChestplate(plugin.getConfig().getItemStack(path + ".chestplate"));
