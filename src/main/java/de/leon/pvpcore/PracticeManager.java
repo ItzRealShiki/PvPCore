@@ -71,6 +71,17 @@ public final class PracticeManager {
         p.getInventory().setHeldItemSlot(0);
         p.setHealth(20); p.setFoodLevel(20); p.setSaturation(20); p.setFireTicks(0);
     }
+    public void applyBotKit(Player bot, Player owner) {
+        bot.getInventory().clear();
+        bot.getInventory().setArmorContents(new ItemStack[]{gear(Material.DIAMOND_BOOTS),gear(Material.DIAMOND_LEGGINGS),gear(Material.DIAMOND_CHESTPLATE),gear(Material.DIAMOND_HELMET)});
+        if (mode(owner) == Mode.SWORD) bot.getInventory().setItem(0, gear(Material.DIAMOND_SWORD));
+        else {
+            bot.getInventory().setItem(0, enchanted(Material.NETHERITE_AXE, "sharpness", 5));
+            ItemStack mace = enchanted(Material.MACE, "density", 5); enchant(mace, "wind_burst", 3);
+            bot.getInventory().setItem(1, mace);
+            bot.getInventory().setItem(2, enchanted(Material.SPEAR, "lunge", 3));
+        }
+    }
     private ItemStack gear(Material type) {
         ItemStack item = new ItemStack(type); ItemMeta meta = item.getItemMeta(); meta.setUnbreakable(true); item.setItemMeta(meta); return item;
     }
