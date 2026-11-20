@@ -64,8 +64,12 @@ public final class WorldManager {
             return (a + (b-a)*fx) * (1-fz) + (c + (d-c)*fx) * fz;
         }
         private static int height(int x, int z, long seed) {
-            // Keep every arena completely level so the FFA has no terrain obstacles.
-            return 64;
+            // Restore the original gently rolling terrain: broad hills with smaller,
+            // softer variations layered on top instead of a completely flat surface.
+            double n = noise(x, z, 150, seed) * 2.8
+                    + noise(x, z, 55, seed + 7) * 1.6
+                    + noise(x, z, 22, seed + 19) * 0.65;
+            return 64 + (int) Math.round(n);
         }
 
         @Override
@@ -211,12 +215,12 @@ public final class WorldManager {
             }
             plugin.getConfig().set("worlds.custom-terrain-migrated", true);
         }
-        if (!plugin.getConfig().getBoolean("worlds.flat-open-arena-migrated", false)) {
+        if (!plugin.getConfig().getBoolean("worlds.rolling-terrain-restored-migrated", false)) {
             String[][] arenas = {
-                    {"plains", "pvp_plains_arena_v4", "pvp_plains_arena_v5"},
-                    {"desert", "pvp_desert_arena_v4", "pvp_desert_arena_v5"},
-                    {"snow", "pvp_snow_arena_v4", "pvp_snow_arena_v5"},
-                    {"badlands", "pvp_badlands_arena_v4", "pvp_badlands_arena_v5"}
+                    {"plains", "pvp_plains_arena_v5", "pvp_plains_arena_v6"},
+                    {"desert", "pvp_desert_arena_v5", "pvp_desert_arena_v6"},
+                    {"snow", "pvp_snow_arena_v5", "pvp_snow_arena_v6"},
+                    {"badlands", "pvp_badlands_arena_v5", "pvp_badlands_arena_v6"}
             };
             for (String[] arena : arenas) {
                 String path = "worlds." + arena[0] + ".name";
@@ -224,7 +228,7 @@ public final class WorldManager {
                     plugin.getConfig().set(path, arena[2]);
                 }
             }
-            plugin.getConfig().set("worlds.flat-open-arena-migrated", true);
+            plugin.getConfig().set("worlds.rolling-terrain-restored-migrated", true);
         }
         plugin.saveConfig();
     }
