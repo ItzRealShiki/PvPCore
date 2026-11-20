@@ -10,6 +10,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
@@ -33,7 +34,7 @@ import io.papermc.paper.scoreboard.numbers.NumberFormat;
 import java.util.*;
 
 public final class PracticeManager implements Listener {
-    public enum Mode { STUN_SLAM, SWORD }
+    public enum Mode { STUN_SLAM, SWORD, CRYSTAL_ANCHOR }
 
     private static final int ROOM_SPACING = 1024;
     private static final int DUEL_ARENA_RADIUS = 48;
@@ -50,6 +51,8 @@ public final class PracticeManager implements Listener {
     private final Map<UUID, Integer> selectedHeights = new HashMap<>();
     private final Map<UUID, Integer> swordSwings = new HashMap<>();
     private final Map<UUID, Integer> swordHits = new HashMap<>();
+    private final Map<UUID, Long> crystalAnchorStartTicks = new HashMap<>();
+    private final Map<UUID, Location> crystalAnchorLocations = new HashMap<>();
     private final Set<UUID> activeAttempts = new HashSet<>();
     private final Set<UUID> resetting = new HashSet<>();
     private final Set<Integer> activeForceFields = new HashSet<>();
@@ -131,7 +134,7 @@ public final class PracticeManager implements Listener {
                 forceFieldRadii.put(index, arenaRadius);
             }
             if (!isFighting(player) && !adminBoxVisits.containsKey(player.getUniqueId())
-                    && plugin.bots().isAvailable() && !plugin.bots().hasOwnedBot(player)) plugin.bots().spawn(player);
+                    && mode(player) != Mode.CRYSTAL_ANCHOR && plugin.bots().isAvailable() && !plugin.bots().hasOwnedBot(player)) plugin.bots().spawn(player);
             if (mode(player) == Mode.SWORD) recoverSwordBotAtEdge(player, cx, cz);
             updatePracticeBoard(player);
             updatePlayerVisibility(player);
@@ -379,7 +382,7 @@ public final class PracticeManager implements Listener {
         List<String> lines = new ArrayList<>();
         lines.add("&8&m----------------");
         if (scoreboardOption(player, "mode")) {
-            lines.add("&7Mode: " + (mode(player) == Mode.SWORD ? "&bSword" : "&dStun Slam"));
+            lines.add("&7Mode: " + (mode(player) == Mode.SWORD ? "&bSword" : mode(player) == Mode.CRYSTAL_ANCHOR ? "&6Crystal Anchor" : "&dStun Slam"));
         }
         if (scoreboardOption(player, "sword")) {
             lines.add("&b&lSWORD");
@@ -391,6 +394,14 @@ public final class PracticeManager implements Listener {
             lines.add("&d&lSTUN SLAM");
             lines.add("&7Current Combo: &f" + score(player));
             if (scoreboardOption(player, "personal-bests")) lines.add("&7Personal Best: &e" + highScore(player, Mode.STUN_SLAM));
+        }
+        if (mode(player) == Mode.CRYSTAL_ANCHOR) {
+            long bestTicks = plugin.getConfig().getLong("practice.highscores." + id + ".crystal-anchor-best-ticks", 0L);
+            long currentTicks = crystalAnchorStartTicks.containsKey(id)
+                    ? Math.max(0L, world.getGameTime() - crystalAnchorStartTicks.get(id)) : 0L;
+            lines.add("&6&lCRYSTAL ANCHOR");
+            lines.add("&7Current: &f" + (currentTicks == 0L ? "--" : String.format(Locale.US, "%.2fs", currentTicks / 20.0)));
+            lines.add("&7Best: &e" + (bestTicks == 0L ? "--" : String.format(Locale.US, "%.2fs", bestTicks / 20.0)));
         }
         if (scoreboardOption(player, "footer")) {
             lines.add("&8&m----------------");
@@ -489,6 +500,10 @@ public final class PracticeManager implements Listener {
         applyKit(p);
         stunCombos.putIfAbsent(p.getUniqueId(), 0);
         swordCombos.putIfAbsent(p.getUniqueId(), 0);
+        if (mode(p) == Mode.CRYSTAL_ANCHOR) {
+            crystalAnchorStartTicks.remove(p.getUniqueId());
+            crystalAnchorLocations.remove(p.getUniqueId());
+        }
         if (mode(p) == Mode.SWORD) {
             swordSwings.put(p.getUniqueId(), 0);
             swordHits.put(p.getUniqueId(), 0);
@@ -499,6 +514,9 @@ public final class PracticeManager implements Listener {
         if (challengeHeight > 0) {
             plugin.message(p, "&aStun Slam &7- &e" + difficultyName(challengeHeight) + " &7(" + challengeHeight + " blocks).");
             plugin.message(p, "&7Score: &a" + score(p) + " &8| &7Land a hit on the bot to earn a point.");
+        } else if (mode(p) == Mode.CRYSTAL_ANCHOR) {
+            plugin.message(p, "&aEntered Crystal Anchor practice. &7Place an anchor, then explode it to record your time.");
+            updatePracticeBoard(p);
         } else plugin.message(p, "&aEntered your private Sword practice room.");
     }
 
@@ -1068,7 +1086,49 @@ public final class PracticeManager implements Listener {
     }
 
     @EventHandler public void onPlace(BlockPlaceEvent event) {
-        if (event.getBlock().getWorld().equals(world)) event.setCancelled(true);
+        if (!event.getBlock().getWorld().equals(world)) return;
+        Player player = event.getPlayer();
+        if (!isFighting(player) && mode(player) == Mode.CRYSTAL_ANCHOR
+                && event.getBlockPlaced().getType() == Material.RESPAWN_ANCHOR) {
+            UUID id = player.getUniqueId();
+            crystalAnchorStartTicks.put(id, world.getGameTime());
+            crystalAnchorLocations.put(id, event.getBlockPlaced().getLocation());
+            player.sendActionBar(ChatColor.GOLD + "Anchor placed! " + ChatColor.GRAY + "Timer started.");
+            updatePracticeBoard(player);
+            return;
+        }
+        event.setCancelled(true);
+    }
+
+    @EventHandler
+    public void onAnchorExplode(BlockExplodeEvent event) {
+        if (world == null || !event.getBlock().getWorld().equals(world)
+                || event.getBlock().getType() != Material.RESPAWN_ANCHOR) return;
+        Location exploded = event.getBlock().getLocation();
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            UUID id = player.getUniqueId();
+            Location tracked = crystalAnchorLocations.get(id);
+            Long started = crystalAnchorStartTicks.get(id);
+            if (tracked == null || started == null || !tracked.equals(exploded)
+                    || !player.getWorld().equals(world) || mode(player) != Mode.CRYSTAL_ANCHOR) continue;
+            long elapsed = Math.max(1L, world.getGameTime() - started);
+            String path = "practice.highscores." + id + ".crystal-anchor-best-ticks";
+            long best = plugin.getConfig().getLong(path, 0L);
+            if (best == 0L || elapsed < best) {
+                plugin.getConfig().set(path, elapsed);
+                plugin.saveConfig();
+                player.sendMessage(ChatColor.GREEN + "New Crystal Anchor best: "
+                        + String.format(Locale.US, "%.2f", elapsed / 20.0) + "s");
+            } else {
+                player.sendMessage(ChatColor.GOLD + "Crystal Anchor time: "
+                        + String.format(Locale.US, "%.2f", elapsed / 20.0) + "s"
+                        + ChatColor.GRAY + " | Best: " + String.format(Locale.US, "%.2f", best / 20.0) + "s");
+            }
+            crystalAnchorStartTicks.remove(id);
+            crystalAnchorLocations.remove(id);
+            updatePracticeBoard(player);
+            break;
+        }
     }
 
     @EventHandler public void onQuit(PlayerQuitEvent event) {
@@ -1079,6 +1139,7 @@ public final class PracticeManager implements Listener {
         adminBoxVisits.remove(id);
         fightReturnLocations.remove(id);
         stunCombos.remove(id); swordCombos.remove(id); lastSwordHitTicks.remove(id);
+        crystalAnchorStartTicks.remove(id); crystalAnchorLocations.remove(id);
         swordSwingSequence.remove(id); swordHitSwingSequence.remove(id);
         selectedHeights.remove(id); swordSwings.remove(id); swordHits.remove(id);
         activeAttempts.remove(id); resetting.remove(id);
@@ -1100,7 +1161,11 @@ public final class PracticeManager implements Listener {
     public void applyKit(Player p) {
         p.getInventory().clear();
         p.getInventory().setArmorContents(new ItemStack[]{gear(Material.DIAMOND_BOOTS),gear(Material.DIAMOND_LEGGINGS),gear(Material.DIAMOND_CHESTPLATE),gear(Material.DIAMOND_HELMET)});
-        if (mode(p) == Mode.SWORD) p.getInventory().setItem(0, gear(Material.DIAMOND_SWORD));
+        if (mode(p) == Mode.CRYSTAL_ANCHOR) {
+            p.getInventory().setItem(0, gear(Material.RESPAWN_ANCHOR));
+            p.getInventory().setItem(1, new ItemStack(Material.GLOWSTONE, 64));
+            p.getInventory().setItem(2, new ItemStack(Material.OBSIDIAN, 64));
+        } else if (mode(p) == Mode.SWORD) p.getInventory().setItem(0, gear(Material.DIAMOND_SWORD));
         else {
             p.getInventory().setItem(0, enchanted(Material.NETHERITE_AXE, "sharpness", 5));
             ItemStack mace = enchanted(Material.MACE, "density", 5); enchant(mace, "wind_burst", 3);
@@ -1139,7 +1204,11 @@ public final class PracticeManager implements Listener {
 
     public void applyKitToInventory(Player player, Inventory editor) {
         editor.clear();
-        if (mode(player) == Mode.SWORD) editor.setItem(0, gear(Material.DIAMOND_SWORD));
+        if (mode(player) == Mode.CRYSTAL_ANCHOR) {
+            editor.setItem(0, gear(Material.RESPAWN_ANCHOR));
+            editor.setItem(1, new ItemStack(Material.GLOWSTONE, 64));
+            editor.setItem(2, new ItemStack(Material.OBSIDIAN, 64));
+        } else if (mode(player) == Mode.SWORD) editor.setItem(0, gear(Material.DIAMOND_SWORD));
         else {
             editor.setItem(0, enchanted(Material.NETHERITE_AXE, "sharpness", 5));
             ItemStack mace = enchanted(Material.MACE, "density", 5); enchant(mace, "wind_burst", 3);
