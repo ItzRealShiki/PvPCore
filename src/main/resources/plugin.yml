@@ -12,6 +12,9 @@ commands:
   options:
     description: Opens PvPCore visual options.
     usage: /options
+  scoreboard:
+    description: Customize your practice scoreboard.
+    usage: /scoreboard
   spawn:
     description: Teleports you or an admin-selected player to spawn.
     usage: /spawn [player]

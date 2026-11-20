@@ -148,44 +148,73 @@ public final class PracticeManager implements Listener {
         plugin.saveConfig();
     }
 
+    private String scoreboardPath(Player player, String option) {
+        return "practice.scoreboard." + player.getUniqueId() + "." + option;
+    }
+
+    public boolean scoreboardOption(Player player, String option) {
+        return plugin.getConfig().getBoolean(scoreboardPath(player, option), true);
+    }
+
+    public void toggleScoreboardOption(Player player, String option) {
+        String path = scoreboardPath(player, option);
+        plugin.getConfig().set(path, !scoreboardOption(player, option));
+        plugin.saveConfig();
+        refreshScoreboard(player);
+    }
+
+    public void refreshScoreboard(Player player) {
+        if (world != null && player.getWorld().equals(world)) updatePracticeBoard(player);
+    }
+
     private void updatePracticeBoard(Player player) {
         UUID id = player.getUniqueId();
+        if (!scoreboardOption(player, "enabled")) {
+            restorePracticeBoard(player);
+            return;
+        }
         Scoreboard board = practiceBoards.get(id);
         if (board == null || player.getScoreboard() != board) {
             if (board == null) previousBoards.put(id, player.getScoreboard());
             board = Bukkit.getScoreboardManager().getNewScoreboard();
-            Objective objective = board.registerNewObjective("practice", Criteria.DUMMY,
-                    net.kyori.adventure.text.Component.text("✦ PRACTICE"));
-            objective.setDisplaySlot(DisplaySlot.SIDEBAR);
-            objective.numberFormat(NumberFormat.blank());
             practiceBoards.put(id, board);
             player.setScoreboard(board);
         }
-        Objective objective = board.getObjective("practice");
-        if (objective == null) return;
+        Objective oldObjective = board.getObjective("practice");
+        if (oldObjective != null) oldObjective.unregister();
+        Objective objective = board.registerNewObjective("practice", Criteria.DUMMY,
+                net.kyori.adventure.text.Component.text("✦ ᴘᴠᴘᴄᴏʀᴇ"));
+        objective.setDisplaySlot(DisplaySlot.SIDEBAR);
+        objective.numberFormat(NumberFormat.blank());
+
         int swings = swordSwings.getOrDefault(id, 0);
         int hits = swordHits.getOrDefault(id, 0);
         int accuracy = swings == 0 ? 0 : Math.min(100, Math.round(hits * 100.0f / swings));
-        String modeName = mode(player) == Mode.SWORD ? "&bSword" : "&dStun Slam";
-        String[] lines = {
-                "&b&l✦ PRACTICE",
-                "&8&m----------------",
-                "&7Mode: " + modeName,
-                "&b&lSWORD",
-                "&7Accuracy: &a" + accuracy + "%",
-                "&7Personal Best: &e" + highScore(player, Mode.SWORD) + "%",
-                "&8 ",
-                "&d&lSTUN SLAM",
-                "&7Current Score: &f" + score(player),
-                "&7Personal Best: &e" + highScore(player, Mode.STUN_SLAM),
-                "&8&m----------------",
-                "&7Keep improving!"
-        };
-        for (int i = 0; i < lines.length; i++) {
+        List<String> lines = new ArrayList<>();
+        lines.add("&8&m----------------");
+        if (scoreboardOption(player, "mode")) {
+            lines.add("&7Mode: " + (mode(player) == Mode.SWORD ? "&bSword" : "&dStun Slam"));
+        }
+        if (scoreboardOption(player, "sword")) {
+            lines.add("&b&lSWORD");
+            lines.add("&7Accuracy: &a" + accuracy + "%");
+            if (scoreboardOption(player, "personal-bests")) lines.add("&7Personal Best: &e" + highScore(player, Mode.SWORD) + "%");
+        }
+        if (scoreboardOption(player, "stun-slam")) {
+            lines.add("&d&lSTUN SLAM");
+            lines.add("&7Current Score: &f" + score(player));
+            if (scoreboardOption(player, "personal-bests")) lines.add("&7Personal Best: &e" + highScore(player, Mode.STUN_SLAM));
+        }
+        if (scoreboardOption(player, "footer")) {
+            lines.add("&8&m----------------");
+            lines.add("&7Keep improving!");
+        }
+        if (lines.size() == 1) lines.add("&7Customize with &f/scoreboard");
+        for (int i = 0; i < lines.size(); i++) {
             String entry = org.bukkit.ChatColor.COLOR_CHAR + Integer.toHexString(i) + org.bukkit.ChatColor.COLOR_CHAR + "r";
             Score lineScore = objective.getScore(entry);
-            if (lineScore.getScore() != lines.length - i) lineScore.setScore(lines.length - i);
-            String rendered = org.bukkit.ChatColor.translateAlternateColorCodes('&', lines[i]);
+            lineScore.setScore(lines.size() - i);
+            String rendered = org.bukkit.ChatColor.translateAlternateColorCodes('&', lines.get(i));
             lineScore.customName(net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacySection().deserialize(rendered));
         }
     }
