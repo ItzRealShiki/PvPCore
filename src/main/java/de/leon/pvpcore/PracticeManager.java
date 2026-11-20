@@ -46,6 +46,7 @@ public final class PracticeManager implements Listener {
     private final Set<UUID> activeAttempts = new HashSet<>();
     private final Set<UUID> resetting = new HashSet<>();
     private final Set<Integer> activeForceFields = new HashSet<>();
+    private final Map<Integer, Integer> forceFieldHeights = new HashMap<>();
     private final Map<Integer, org.bukkit.scheduler.BukkitTask> leafDecayTasks = new HashMap<>();
     private final Map<UUID, Scoreboard> practiceBoards = new HashMap<>();
     private final Map<UUID, Scoreboard> previousBoards = new HashMap<>();
@@ -97,7 +98,17 @@ public final class PracticeManager implements Listener {
                 continue;
             }
             nearbyRooms.add(index);
-            if (activeForceFields.add(index)) buildForceField(cx, cz);
+            int glassHeight = (mode(player) == Mode.SWORD ? 30 : selectedHeight(player)) + 10;
+            Integer previousGlassHeight = forceFieldHeights.get(index);
+            if (!activeForceFields.contains(index)) {
+                buildForceField(cx, cz, glassHeight);
+                activeForceFields.add(index);
+                forceFieldHeights.put(index, glassHeight);
+            } else if (previousGlassHeight == null || previousGlassHeight != glassHeight) {
+                removeForceField(cx, cz, previousGlassHeight == null ? glassHeight : previousGlassHeight);
+                buildForceField(cx, cz, glassHeight);
+                forceFieldHeights.put(index, glassHeight);
+            }
             if (plugin.bots().isAvailable() && !plugin.bots().hasOwnedBot(player)) plugin.bots().spawn(player);
             if (mode(player) == Mode.SWORD) recoverSwordBotAtEdge(player, cx, cz);
             updatePracticeBoard(player);
@@ -105,8 +116,9 @@ public final class PracticeManager implements Listener {
         }
         for (int index : new HashSet<>(activeForceFields)) {
             if (nearbyRooms.contains(index)) continue;
-            removeForceField(roomCenterX(index), 128);
+            removeForceField(roomCenterX(index), 128, forceFieldHeights.getOrDefault(index, 40));
             activeForceFields.remove(index);
+            forceFieldHeights.remove(index);
         }
     }
 
@@ -546,9 +558,9 @@ public final class PracticeManager implements Listener {
         timedLeaves.add(block);
     }
 
-    private void buildForceField(int cx, int cz) {
+    private void buildForceField(int cx, int cz, int glassHeight) {
         if (world == null) return;
-        int roofY = world.getMaxHeight() - 1;
+        int roofY = 80 + glassHeight;
         for (int offset = -24; offset <= 24; offset++) {
             for (int y = 81; y <= roofY; y++) {
                 world.getBlockAt(cx - 24, y, cz + offset).setType(forceFieldMaterial(), false);
@@ -558,7 +570,7 @@ public final class PracticeManager implements Listener {
             }
         }
 
-        // Close the arena with a complete glass roof at the world's maximum build height.
+        // Close the arena with a complete glass roof at the calculated mode-specific height.
         for (int x = -24; x <= 24; x++) {
             for (int z = -24; z <= 24; z++) {
                 world.getBlockAt(cx + x, roofY, cz + z).setType(forceFieldMaterial(), false);
@@ -578,13 +590,13 @@ public final class PracticeManager implements Listener {
         plugin.saveConfig();
         for (int index : activeForceFields) {
             int cx = roomCenterX(index), cz = 128;
-            buildForceField(cx, cz);
+            buildForceField(cx, cz, forceFieldHeights.getOrDefault(index, 40));
         }
     }
 
-    private void removeForceField(int cx, int cz) {
+    private void removeForceField(int cx, int cz, int glassHeight) {
         if (world == null) return;
-        int roofY = world.getMaxHeight() - 1;
+        int roofY = 80 + glassHeight;
         for (int offset = -24; offset <= 24; offset++) {
             for (int y = 81; y <= roofY; y++) {
                 world.getBlockAt(cx - 24, y, cz + offset).setType(Material.AIR, false);
