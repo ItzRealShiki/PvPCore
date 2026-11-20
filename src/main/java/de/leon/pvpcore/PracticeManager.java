@@ -98,14 +98,16 @@ public final class PracticeManager implements Listener {
                 continue;
             }
             nearbyRooms.add(index);
-            int glassHeight = (mode(player) == Mode.SWORD ? 30 : selectedHeight(player)) + 10;
+            int glassHeight = mode(player) == Mode.SWORD ? 30 : selectedHeight(player) + 10;
             Integer previousGlassHeight = forceFieldHeights.get(index);
             if (!activeForceFields.contains(index)) {
+                // Clear the previous full-height forcefield from older plugin versions.
+                removeForceField(cx, cz, world.getMaxHeight() - 81);
                 buildForceField(cx, cz, glassHeight);
                 activeForceFields.add(index);
                 forceFieldHeights.put(index, glassHeight);
             } else if (previousGlassHeight == null || previousGlassHeight != glassHeight) {
-                removeForceField(cx, cz, previousGlassHeight == null ? glassHeight : previousGlassHeight);
+                removeForceField(cx, cz, previousGlassHeight == null ? world.getMaxHeight() - 81 : previousGlassHeight);
                 buildForceField(cx, cz, glassHeight);
                 forceFieldHeights.put(index, glassHeight);
             }
