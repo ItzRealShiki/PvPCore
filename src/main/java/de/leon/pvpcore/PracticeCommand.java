@@ -62,7 +62,7 @@ public final class PracticeCommand implements CommandExecutor, Listener {
             if(e.getClickedInventory()==e.getView().getTopInventory()){
                 int s=e.getSlot();
                 if(s==53){e.setCancelled(true);plugin.practice().saveKit(p,e.getView().getTopInventory());p.closeInventory();plugin.message(p,"&aKit saved.");return;}
-                if(s>=36 && s<=44 || s==49){e.setCancelled(true);return;}
+                if(s>=36 && s<=44 || s>=49 && s<=52){e.setCancelled(true);return;}
                 e.setCancelled(false);
             } else e.setCancelled(true);
             return;
