@@ -7,6 +7,9 @@ import org.bukkit.Registry;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.command.*;
 import org.bukkit.entity.Player;
+import org.bukkit.World;
+import org.bukkit.GameRule;
+import org.bukkit.event.world.WorldLoadEvent;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -26,6 +29,7 @@ public final class PvPCore extends JavaPlugin implements Listener {
         saveDefaultConfig();
         worlds = new WorldManager(this);
         worlds.initializeWorldsOnce();
+        for (World world : Bukkit.getWorlds()) worlds.applyPermanentDay(world);
         worlds.startRegenerationCycle();
         menus = new Menus(this);
         bots = new BotManager(this);
@@ -45,6 +49,11 @@ public final class PvPCore extends JavaPlugin implements Listener {
         getLogger().info("PvPCore enabled.");
     }
 
+
+    @org.bukkit.event.EventHandler
+    public void onWorldLoad(WorldLoadEvent event) {
+        worlds.applyPermanentDay(event.getWorld());
+    }
 
     private void logCompatibilityDiagnostics() {
         String serverName = Bukkit.getName();
