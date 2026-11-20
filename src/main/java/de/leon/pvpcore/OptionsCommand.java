@@ -65,6 +65,38 @@ public final class OptionsCommand implements CommandExecutor, Listener {
             item.setItemMeta(meta);
             inventory.setItem(index, item);
         }
+        inventory.setItem(22, arenaItem());
+        player.openInventory(inventory);
+    }
+
+    private ItemStack arenaItem() {
+        ItemStack item = new ItemStack(Material.GRASS_BLOCK);
+        ItemMeta meta = item.getItemMeta();
+        meta.setDisplayName(plugin.color("&aArena Ground"));
+        meta.setLore(List.of(plugin.color("&7Current: &f" + plugin.practice().arenaTheme().replace('_', ' ')),
+                plugin.color("&eClick to change the arena theme")));
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    private void openArenaThemes(Player player) {
+        Holder holder = new Holder();
+        Inventory inventory = Bukkit.createInventory(holder, 27, plugin.color("&8✦ ᴀʀᴇɴᴀ ɢʀᴏᴜɴᴅ"));
+        holder.inventory = inventory;
+        Material[] icons = {Material.SAND, Material.GRASS_BLOCK, Material.END_STONE, Material.NETHERRACK,
+                Material.RED_SAND, Material.PALE_MOSS_BLOCK, Material.CHERRY_LEAVES,
+                Material.WARPED_NYLIUM, Material.CRIMSON_NYLIUM, Material.POPPY};
+        String[] themes = {"DESERT", "PLAINS", "END", "NETHER", "BADLANDS", "PALE_GARDEN",
+                "CHERRY_BLOSSOM", "WARPED", "CRIMSON", "FLOWER_PLAINS"};
+        for (int i = 0; i < themes.length; i++) {
+            ItemStack item = new ItemStack(icons[i]);
+            ItemMeta meta = item.getItemMeta();
+            boolean active = plugin.practice().arenaTheme().equals(themes[i]);
+            meta.setDisplayName(plugin.color((active ? "&a✔ " : "&e") + themes[i].replace('_', ' ')));
+            meta.setLore(List.of(plugin.color(active ? "&7Currently selected" : "&eClick to select")));
+            item.setItemMeta(meta);
+            inventory.setItem(i, item);
+        }
         player.openInventory(inventory);
     }
 
@@ -74,7 +106,19 @@ public final class OptionsCommand implements CommandExecutor, Listener {
                 || !(event.getView().getTopInventory().getHolder() instanceof Holder)) return;
         event.setCancelled(true);
         if (event.getClickedInventory() != event.getView().getTopInventory()) return;
+        if (event.getView().getTitle().equals(plugin.color("&8✦ ᴀʀᴇɴᴀ ɢʀᴏᴜɴᴅ"))) {
+            int themeSlot = event.getSlot();
+            String[] themes = {"DESERT", "PLAINS", "END", "NETHER", "BADLANDS", "PALE_GARDEN",
+                    "CHERRY_BLOSSOM", "WARPED", "CRIMSON", "FLOWER_PLAINS"};
+            if (themeSlot >= 0 && themeSlot < themes.length) {
+                plugin.practice().setArenaTheme(themes[themeSlot]);
+                plugin.message(player, "&aArena ground set to &e" + themes[themeSlot].replace('_', ' ') + "&a.");
+                open(player);
+            }
+            return;
+        }
         int slot = event.getSlot();
+        if (slot == 22) { openArenaThemes(player); return; }
         if (slot < 0 || slot >= COLORS.size()) return;
         Material selected = COLORS.get(slot);
         plugin.practice().setForceFieldMaterial(selected);
