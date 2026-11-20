@@ -69,6 +69,7 @@ public final class PracticeManager {
             p.getInventory().setItem(1, mace);
             p.getInventory().setItem(2, enchanted(Material.SPEAR, "lunge", 3));
         }
+        loadSavedKit(p, p.getInventory());
         p.getInventory().setHeldItemSlot(0);
         p.setHealth(20); p.setFoodLevel(20); p.setSaturation(20); p.setFireTicks(0);
     }
@@ -82,6 +83,31 @@ public final class PracticeManager {
             bot.getInventory().setItem(1, mace);
             bot.getInventory().setItem(2, enchanted(Material.SPEAR, "lunge", 3));
         }
+        loadSavedKit(owner, bot.getInventory());
+    }
+    public void saveKit(Player player, Inventory editor) {
+        String path = "practice.players." + player.getUniqueId() + ".kits." + mode(player).name();
+        java.util.List<ItemStack> contents = new java.util.ArrayList<>();
+        for (int slot=0; slot<36; slot++) contents.add(editor.getItem(slot));
+        plugin.getConfig().set(path + ".contents", contents);
+        plugin.getConfig().set(path + ".helmet", editor.getItem(45));
+        plugin.getConfig().set(path + ".chestplate", editor.getItem(46));
+        plugin.getConfig().set(path + ".leggings", editor.getItem(47));
+        plugin.getConfig().set(path + ".boots", editor.getItem(48));
+        plugin.saveConfig();
+    }
+    private void loadSavedKit(Player player, PlayerInventory inventory) {
+        String path = "practice.players." + player.getUniqueId() + ".kits." + mode(player).name();
+        if (!plugin.getConfig().contains(path + ".contents")) return;
+        java.util.List<?> contents = plugin.getConfig().getList(path + ".contents");
+        if (contents != null) for (int slot=0; slot<Math.min(36, contents.size()); slot++) {
+            Object value = contents.get(slot);
+            if (value instanceof ItemStack item) inventory.setItem(slot, item.clone());
+        }
+        inventory.setHelmet(plugin.getConfig().getItemStack(path + ".helmet"));
+        inventory.setChestplate(plugin.getConfig().getItemStack(path + ".chestplate"));
+        inventory.setLeggings(plugin.getConfig().getItemStack(path + ".leggings"));
+        inventory.setBoots(plugin.getConfig().getItemStack(path + ".boots"));
     }
     private ItemStack gear(Material type) {
         ItemStack item = new ItemStack(type); ItemMeta meta = item.getItemMeta(); meta.setUnbreakable(true); item.setItemMeta(meta); return item;
