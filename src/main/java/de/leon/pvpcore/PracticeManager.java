@@ -21,7 +21,7 @@ public final class PracticeManager {
         plugin.saveConfig();
     }
     public void enter(Player p) {
-        if (world == null || !world.isLoaded()) {
+        if (world == null) {
             world = Bukkit.getWorld("prac_rooms");
             if (world == null) world = new WorldCreator("prac_rooms").type(WorldType.FLAT).createWorld();
         }
@@ -67,7 +67,7 @@ public final class PracticeManager {
             p.getInventory().setItem(0, enchanted(Material.NETHERITE_AXE, "sharpness", 5));
             ItemStack mace = enchanted(Material.MACE, "density", 5); enchant(mace, "wind_burst", 3);
             p.getInventory().setItem(1, mace);
-            p.getInventory().setItem(2, enchanted(Material.SPEAR, "lunge", 3));
+            p.getInventory().setItem(2, enchanted(spearMaterial(), "lunge", 3));
         }
         loadSavedKit(p, p.getInventory());
         p.getInventory().setHeldItemSlot(0);
@@ -81,7 +81,7 @@ public final class PracticeManager {
             bot.getInventory().setItem(0, enchanted(Material.NETHERITE_AXE, "sharpness", 5));
             ItemStack mace = enchanted(Material.MACE, "density", 5); enchant(mace, "wind_burst", 3);
             bot.getInventory().setItem(1, mace);
-            bot.getInventory().setItem(2, enchanted(Material.SPEAR, "lunge", 3));
+            bot.getInventory().setItem(2, enchanted(spearMaterial(), "lunge", 3));
         }
         loadSavedKit(owner, bot.getInventory());
     }
@@ -92,7 +92,7 @@ public final class PracticeManager {
             editor.setItem(0, enchanted(Material.NETHERITE_AXE, "sharpness", 5));
             ItemStack mace = enchanted(Material.MACE, "density", 5); enchant(mace, "wind_burst", 3);
             editor.setItem(1, mace);
-            editor.setItem(2, enchanted(Material.SPEAR, "lunge", 3));
+            editor.setItem(2, enchanted(spearMaterial(), "lunge", 3));
         }
         editor.setItem(45, gear(Material.DIAMOND_HELMET));
         editor.setItem(46, gear(Material.DIAMOND_CHESTPLATE));
@@ -133,6 +133,12 @@ public final class PracticeManager {
         inventory.setChestplate(plugin.getConfig().getItemStack(path + ".chestplate"));
         inventory.setLeggings(plugin.getConfig().getItemStack(path + ".leggings"));
         inventory.setBoots(plugin.getConfig().getItemStack(path + ".boots"));
+    }
+    private Material spearMaterial() {
+        Material spear = Material.matchMaterial("SPEAR");
+        if (spear != null) return spear;
+        plugin.getLogger().warning("SPEAR is not present in this Paper API; using TRIDENT as a compatibility fallback.");
+        return Material.TRIDENT;
     }
     private ItemStack gear(Material type) {
         ItemStack item = new ItemStack(type); ItemMeta meta = item.getItemMeta(); meta.setUnbreakable(true); item.setItemMeta(meta); return item;
