@@ -1078,7 +1078,9 @@ public final class PracticeManager implements Listener {
         if (isFighting(event.getPlayer())) endFight(event.getPlayer(), "&cA player left.");
         adminBoxVisits.remove(id);
         fightReturnLocations.remove(id);
-        scores.remove(id); selectedHeights.remove(id); swordSwings.remove(id); swordHits.remove(id);
+        stunCombos.remove(id); swordCombos.remove(id); lastSwordHitTicks.remove(id);
+        swordSwingSequence.remove(id); swordHitSwingSequence.remove(id);
+        selectedHeights.remove(id); swordSwings.remove(id); swordHits.remove(id);
         activeAttempts.remove(id); resetting.remove(id);
     }
 
