@@ -28,6 +28,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: PvPCore
-          path: build/libs/PvPCore-1.0.0.jar
+          path: build/libs/*.jar
           if-no-files-found: error
           retention-days: 14
