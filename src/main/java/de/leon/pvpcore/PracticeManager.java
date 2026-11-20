@@ -111,6 +111,7 @@ public final class PracticeManager implements Listener {
             plugin.getConfig().set(base + ".built", true);
             plugin.saveConfig();
         }
+        buildForceField(cx, cz);
         plugin.bots().removeOwned(p);
         p.setGameMode(GameMode.SURVIVAL);
         p.setFallDistance(0);
@@ -155,6 +156,18 @@ public final class PracticeManager implements Listener {
             world.getBlockAt(cx+x, 80, cz+z).setType(Material.SMOOTH_STONE, false);
             if (Math.abs(x) == 24 || Math.abs(z) == 24)
                 for (int y=81; y<=86; y++) world.getBlockAt(cx+x,y,cz+z).setType(Material.GLASS,false);
+        }
+    }
+
+    private void buildForceField(int cx, int cz) {
+        // Keep every practice room enclosed by a tall, visible glass perimeter.
+        for (int offset = -24; offset <= 24; offset++) {
+            for (int y = 81; y <= 110; y++) {
+                world.getBlockAt(cx - 24, y, cz + offset).setType(Material.GLASS, false);
+                world.getBlockAt(cx + 24, y, cz + offset).setType(Material.GLASS, false);
+                world.getBlockAt(cx + offset, y, cz - 24).setType(Material.GLASS, false);
+                world.getBlockAt(cx + offset, y, cz + 24).setType(Material.GLASS, false);
+            }
         }
     }
 
@@ -218,8 +231,27 @@ public final class PracticeManager implements Listener {
     @EventHandler
     public void onMove(PlayerMoveEvent event) {
         Player p = event.getPlayer();
-        if (!p.getWorld().getName().equals("prac_rooms") || !activeAttempts.contains(p.getUniqueId())) return;
-        if (event.getTo() == null || event.getTo().getY() >= event.getFrom().getY()) return;
+        if (!p.getWorld().getName().equals("prac_rooms") || event.getTo() == null) return;
+
+        int roomIndex = plugin.getConfig().getInt("practice.players." + p.getUniqueId() + ".room", -1);
+        if (roomIndex >= 0) {
+            int cx = 128 + roomIndex * 96;
+            int cz = 128;
+            Location to = event.getTo();
+            // The glass wall is at +/-24; teleport anyone who bypasses it back inside.
+            if (to.getX() < cx - 23.5 || to.getX() > cx + 23.5
+                    || to.getZ() < cz - 23.5 || to.getZ() > cz + 23.5) {
+                int height = mode(p) == Mode.STUN_SLAM && activeAttempts.contains(p.getUniqueId())
+                        ? selectedHeight(p) : 0;
+                p.setFallDistance(0);
+                p.setVelocity(new org.bukkit.util.Vector(0, 0, 0));
+                p.teleport(startLocation(p, height));
+                return;
+            }
+        }
+
+        if (!activeAttempts.contains(p.getUniqueId())) return;
+        if (event.getTo().getY() >= event.getFrom().getY()) return;
         if (event.getTo().getY() <= 81.0) retry(p, false);
     }
 
