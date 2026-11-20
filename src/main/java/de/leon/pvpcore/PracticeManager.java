@@ -47,6 +47,9 @@ public final class PracticeManager implements Listener {
     private final Set<UUID> resetting = new HashSet<>();
     private final Set<Integer> activeForceFields = new HashSet<>();
     private final Map<Integer, Integer> forceFieldHeights = new HashMap<>();
+    private final Map<UUID, Integer> fightRooms = new HashMap<>();
+    private final Map<UUID, Integer> fightSpawnOffsets = new HashMap<>();
+    private final Map<UUID, Mode> fightModes = new HashMap<>();
     private final Map<Integer, org.bukkit.scheduler.BukkitTask> leafDecayTasks = new HashMap<>();
     private final Map<UUID, Scoreboard> practiceBoards = new HashMap<>();
     private final Map<UUID, Scoreboard> previousBoards = new HashMap<>();
@@ -74,7 +77,7 @@ public final class PracticeManager implements Listener {
         Player ownBot = plugin.bots().ownedBot(player);
         for (Player other : Bukkit.getOnlinePlayers()) {
             if (other.equals(player)) continue;
-            if (other.equals(ownBot)) player.showPlayer(plugin, other);
+            if (other.equals(ownBot) || isFightOpponent(player, other)) player.showPlayer(plugin, other);
             else player.hidePlayer(plugin, other);
         }
     }
@@ -111,7 +114,7 @@ public final class PracticeManager implements Listener {
                 buildForceField(cx, cz, glassHeight);
                 forceFieldHeights.put(index, glassHeight);
             }
-            if (plugin.bots().isAvailable() && !plugin.bots().hasOwnedBot(player)) plugin.bots().spawn(player);
+            if (!isFighting(player) && plugin.bots().isAvailable() && !plugin.bots().hasOwnedBot(player)) plugin.bots().spawn(player);
             if (mode(player) == Mode.SWORD) recoverSwordBotAtEdge(player, cx, cz);
             updatePracticeBoard(player);
             updatePlayerVisibility(player);
@@ -125,8 +128,102 @@ public final class PracticeManager implements Listener {
     }
 
     public Mode mode(Player p) {
+        Mode fightMode = fightModes.get(p.getUniqueId());
+        if (fightMode != null) return fightMode;
         try { return Mode.valueOf(plugin.getConfig().getString("practice.players." + p.getUniqueId() + ".mode", "STUN_SLAM")); }
         catch (IllegalArgumentException ex) { return Mode.STUN_SLAM; }
+    }
+
+    public boolean isFighting(Player player) { return fightRooms.containsKey(player.getUniqueId()); }
+
+    private boolean isFightOpponent(Player player, Player other) {
+        return isFighting(player) && Objects.equals(fightRooms.get(player.getUniqueId()), fightRooms.get(other.getUniqueId()))
+                && isFighting(other);
+    }
+
+    public void startFight(Player challenger, Player opponent) {
+        if (world == null) {
+            world = Bukkit.getWorld(PRACTICE_WORLD);
+            if (world == null) world = createVoidWorld();
+        }
+        if (world == null) {
+            plugin.message(challenger, "&cPractice world could not be loaded.");
+            plugin.message(opponent, "&cPractice world could not be loaded.");
+            return;
+        }
+        String base = "practice.players." + challenger.getUniqueId();
+        int index;
+        if (plugin.getConfig().contains(base + ".room")) index = plugin.getConfig().getInt(base + ".room");
+        else {
+            index = plugin.getConfig().getInt("practice.next-room", 0);
+            plugin.getConfig().set("practice.next-room", index + 1);
+            plugin.getConfig().set(base + ".room", index);
+            plugin.saveConfig();
+        }
+        int cx = roomCenterX(index), cz = 128;
+        if (!plugin.getConfig().getBoolean(base + ".built", false)) {
+            buildRoom(cx, cz);
+            plugin.getConfig().set(base + ".built", true);
+            plugin.saveConfig();
+        }
+        clearPlatform(cx, cz);
+        plugin.bots().removeOwned(challenger);
+        plugin.bots().removeOwned(opponent);
+        activeAttempts.remove(challenger.getUniqueId());
+        activeAttempts.remove(opponent.getUniqueId());
+        resetting.remove(challenger.getUniqueId());
+        resetting.remove(opponent.getUniqueId());
+        Mode selected = mode(challenger);
+        fightRooms.put(challenger.getUniqueId(), index);
+        fightRooms.put(opponent.getUniqueId(), index);
+        fightSpawnOffsets.put(challenger.getUniqueId(), -3);
+        fightSpawnOffsets.put(opponent.getUniqueId(), 3);
+        fightModes.put(challenger.getUniqueId(), selected);
+        fightModes.put(opponent.getUniqueId(), selected);
+        world.setGameRule(GameRule.DO_MOB_SPAWNING, false);
+        world.setGameRule(GameRule.DO_DAYLIGHT_CYCLE, false);
+        world.setTime(1000L);
+        for (Player fighter : List.of(challenger, opponent)) {
+            fighter.setGameMode(GameMode.SURVIVAL);
+            fighter.setFallDistance(0);
+            fighter.setVelocity(new org.bukkit.util.Vector(0, 0, 0));
+            fighter.teleport(fightSpawnLocation(index, fightSpawnOffsets.get(fighter.getUniqueId())));
+            applyFightKit(fighter, selected);
+            fighter.setHealth(20.0);
+            fighter.setFoodLevel(20);
+            fighter.setSaturation(20);
+            Bukkit.getScheduler().runTask(plugin, () -> updatePlayerVisibility(fighter));
+        }
+        plugin.message(challenger, "&a1v1 started against &f" + opponent.getName() + "&a. Kit: &e" + selected.name() + "&a.");
+        plugin.message(opponent, "&a1v1 started against &f" + challenger.getName() + "&a. Kit: &e" + selected.name() + "&a.");
+    }
+
+    private Location fightSpawnLocation(int room, int offset) {
+        return new Location(world, roomCenterX(room) + 0.5 + offset, 81.0, 128.5, offset < 0 ? -90.0f : 90.0f, 0.0f);
+    }
+
+    public void endFight(Player player, String reason) {
+        Integer room = fightRooms.remove(player.getUniqueId());
+        if (room == null) return;
+        List<UUID> participants = new ArrayList<>();
+        for (Map.Entry<UUID, Integer> entry : fightRooms.entrySet()) {
+            if (entry.getValue().equals(room)) participants.add(entry.getKey());
+        }
+        fightSpawnOffsets.remove(player.getUniqueId());
+        fightModes.remove(player.getUniqueId());
+        for (UUID id : participants) {
+            fightRooms.remove(id);
+            fightSpawnOffsets.remove(id);
+            fightModes.remove(id);
+            Player other = Bukkit.getPlayer(id);
+            if (other != null) plugin.message(other, "&eThe 1v1 has ended. " + reason);
+        }
+        plugin.message(player, "&eThe 1v1 has ended. " + reason);
+        restorePlayerVisibility(player);
+        for (UUID id : participants) {
+            Player other = Bukkit.getPlayer(id);
+            if (other != null) restorePlayerVisibility(other);
+        }
     }
 
     public void setMode(Player p, Mode mode) {
@@ -358,29 +455,37 @@ public final class PracticeManager implements Listener {
         buildArenaPlatform(cx, cz);
     }
 
-    public String arenaTheme() {
-        return plugin.getConfig().getString("practice.arena-theme", "PLAINS").toUpperCase(Locale.ROOT);
+    public String arenaTheme(Player player) {
+        return plugin.getConfig().getString("practice.players." + player.getUniqueId() + ".box-theme", "PLAINS").toUpperCase(Locale.ROOT);
     }
 
-    public void setArenaTheme(String theme) {
+    private String arenaTheme(int roomIndex) {
+        var players = plugin.getConfig().getConfigurationSection("practice.players");
+        if (players != null) {
+            for (String uuid : players.getKeys(false)) {
+                if (plugin.getConfig().getInt("practice.players." + uuid + ".room", -1) == roomIndex) {
+                    return plugin.getConfig().getString("practice.players." + uuid + ".box-theme", "PLAINS").toUpperCase(Locale.ROOT);
+                }
+            }
+        }
+        return "PLAINS";
+    }
+
+    public void setArenaTheme(Player player, String theme) {
         String normalized = theme.toUpperCase(Locale.ROOT);
         if (!List.of("DESERT", "PLAINS", "END", "NETHER", "BADLANDS", "PALE_GARDEN",
                 "CHERRY_BLOSSOM", "WARPED", "CRIMSON", "FLOWER_PLAINS").contains(normalized)) return;
-        plugin.getConfig().set("practice.arena-theme", normalized);
+        String base = "practice.players." + player.getUniqueId();
+        plugin.getConfig().set(base + ".box-theme", normalized);
         plugin.saveConfig();
-
-        // Update every allocated private room immediately, including rooms whose owners are offline.
         if (world == null) world = Bukkit.getWorld(PRACTICE_WORLD);
-        if (world != null) {
-            int rooms = plugin.getConfig().getInt("practice.next-room", 0);
-            for (int index = 0; index < rooms; index++) {
-                buildArenaPlatform(roomCenterX(index), 128);
-            }
-        }
+        int room = plugin.getConfig().getInt(base + ".room", -1);
+        if (world != null && room >= 0) buildArenaPlatform(roomCenterX(room), 128);
+        plugin.message(player, "&aYour box design is now &e" + normalized.replace('_', ' ') + "&a.");
     }
 
-    private Material[] arenaPalette() {
-        return switch (arenaTheme()) {
+    private Material[] arenaPalette(int roomIndex) {
+        return switch (arenaTheme(roomIndex)) {
             case "DESERT" -> new Material[]{Material.SAND, Material.SANDSTONE, Material.SMOOTH_SANDSTONE, Material.CUT_SANDSTONE, Material.DEAD_BUSH};
             case "END" -> new Material[]{Material.END_STONE, Material.END_STONE, Material.PURPUR_BLOCK, Material.END_STONE_BRICKS, Material.CHORUS_FLOWER};
             case "NETHER" -> new Material[]{Material.NETHERRACK, Material.NETHERRACK, Material.BASALT, Material.BLACKSTONE, Material.FIRE};
@@ -396,8 +501,10 @@ public final class PracticeManager implements Listener {
 
     private void buildArenaPlatform(int cx, int cz) {
         if (world == null) return;
-        Material[] palette = arenaPalette();
         int roomIndex = Math.floorDiv(cx - 128, ROOM_SPACING);
+        String theme = arenaTheme(roomIndex);
+        Material[] palette = arenaPalette(roomIndex);
+        Random decorationRandom = new Random();
         List<Block> timedLeaves = new ArrayList<>();
 
         // Cancel the previous timer when a room is rebuilt or its theme changes.
@@ -437,9 +544,9 @@ public final class PracticeManager implements Listener {
                 // Add varied ground cover from the mid-ring outward. The central
                 // combat zone stays clear, while plants are scattered in small clusters.
                 if (radius >= 8.0 && radius <= 22.0) {
-                    int plantRoll = Math.floorMod(x * 73 + z * 151 + x * z * 19, 17);
+                    int plantRoll = decorationRandom.nextInt(17);
                     Material groundDetail = null;
-                    switch (arenaTheme()) {
+                    switch (theme) {
                         case "CHERRY_BLOSSOM" -> {
                             if (plantRoll <= 3) groundDetail = Material.PINK_PETALS;
                             else if (plantRoll == 4) groundDetail = Material.SHORT_GRASS;
@@ -496,7 +603,7 @@ public final class PracticeManager implements Listener {
                     }
 
                     // A few subtle ground patches add texture between the plants.
-                    if ((arenaTheme().equals("PLAINS") || arenaTheme().equals("FLOWER_PLAINS")
+                    if ((theme.equals("PLAINS") || arenaTheme().equals("FLOWER_PLAINS")
                             || arenaTheme().equals("CHERRY_BLOSSOM"))
                             && Math.floorMod(x * 43 + z * 67, 31) == 0) {
                         world.getBlockAt(cx + x, topY + 1, cz + z).setType(Material.MOSS_CARPET, false);
@@ -507,7 +614,7 @@ public final class PracticeManager implements Listener {
                 // They stay near the perimeter and their leaves are temporary accents.
                 if (arenaTheme().equals("CHERRY_BLOSSOM")
                         && edge >= 18 && edge <= 21
-                        && Math.floorMod(x * 47 + z * 31 + x * z, 173) == 0) {
+                        && decorationRandom.nextInt(173) == 0) {
                     int trunkBase = topY + 1;
                     for (int trunkY = 0; trunkY < 3; trunkY++) {
                         world.getBlockAt(cx + x, trunkBase + trunkY, cz + z)
@@ -681,7 +788,8 @@ public final class PracticeManager implements Listener {
         Player p = event.getPlayer();
         if (!p.getWorld().equals(world) || event.getTo() == null) return;
 
-        int roomIndex = plugin.getConfig().getInt("practice.players." + p.getUniqueId() + ".room", -1);
+        int roomIndex = fightRooms.getOrDefault(p.getUniqueId(),
+                plugin.getConfig().getInt("practice.players." + p.getUniqueId() + ".room", -1));
         if (roomIndex >= 0) {
             int cx = roomCenterX(roomIndex);
             int cz = 128;
@@ -690,11 +798,14 @@ public final class PracticeManager implements Listener {
             // of the glass wall (at +/-24), not while approaching or touching its inner face.
             if (to.getX() < cx - 24.5 || to.getX() > cx + 24.5
                     || to.getZ() < cz - 24.5 || to.getZ() > cz + 24.5) {
-                int height = mode(p) == Mode.STUN_SLAM && activeAttempts.contains(p.getUniqueId())
-                        ? selectedHeight(p) : 0;
                 p.setFallDistance(0);
                 p.setVelocity(new org.bukkit.util.Vector(0, 0, 0));
-                p.teleport(startLocation(p, height));
+                if (isFighting(p)) p.teleport(fightSpawnLocation(roomIndex, fightSpawnOffsets.getOrDefault(p.getUniqueId(), 0)));
+                else {
+                    int height = mode(p) == Mode.STUN_SLAM && activeAttempts.contains(p.getUniqueId())
+                            ? selectedHeight(p) : 0;
+                    p.teleport(startLocation(p, height));
+                }
                 return;
             }
         }
@@ -707,8 +818,8 @@ public final class PracticeManager implements Listener {
     @EventHandler
     public void onDamage(EntityDamageEvent event) {
         if (!(event.getEntity() instanceof Player p) || !p.getWorld().equals(world)) return;
-        // Fake-player bots must remain damageable; only the human practice player is protected.
-        if (plugin.bots().isPracticeBot(p)) return;
+        // Human-vs-human damage is enabled only for participants in an accepted 1v1.
+        if (isFighting(p) || plugin.bots().isPracticeBot(p)) return;
         event.setCancelled(true);
     }
 
@@ -724,6 +835,7 @@ public final class PracticeManager implements Listener {
         UUID id = event.getPlayer().getUniqueId();
         restorePracticeBoard(event.getPlayer());
         restorePlayerVisibility(event.getPlayer());
+        if (isFighting(event.getPlayer())) endFight(event.getPlayer(), "&cA player left.");
         scores.remove(id); selectedHeights.remove(id); swordSwings.remove(id); swordHits.remove(id);
         activeAttempts.remove(id); resetting.remove(id);
     }
@@ -731,6 +843,9 @@ public final class PracticeManager implements Listener {
     @EventHandler public void onWorldChange(PlayerChangedWorldEvent event) {
         UUID id = event.getPlayer().getUniqueId();
         activeAttempts.remove(id); resetting.remove(id);
+        if (isFighting(event.getPlayer()) && !event.getPlayer().getWorld().equals(world)) {
+            endFight(event.getPlayer(), "&cA player left the arena.");
+        }
         if (!event.getPlayer().getWorld().equals(world)) {
             restorePracticeBoard(event.getPlayer());
             restorePlayerVisibility(event.getPlayer());
@@ -813,6 +928,76 @@ public final class PracticeManager implements Listener {
         plugin.getConfig().set(path + ".leggings", editor.getItem(47));
         plugin.getConfig().set(path + ".boots", editor.getItem(48));
         plugin.saveConfig();
+    }
+
+    private void applyFightKit(Player player, Mode mode) {
+        player.getInventory().clear();
+        if (mode == Mode.SWORD) {
+            player.getInventory().setArmorContents(new ItemStack[]{gear(Material.DIAMOND_BOOTS), gear(Material.DIAMOND_LEGGINGS), gear(Material.DIAMOND_CHESTPLATE), gear(Material.DIAMOND_HELMET)});
+            player.getInventory().setItem(0, gear(Material.DIAMOND_SWORD));
+        } else {
+            player.getInventory().setArmorContents(new ItemStack[]{gear(Material.DIAMOND_BOOTS), gear(Material.DIAMOND_LEGGINGS), gear(Material.DIAMOND_CHESTPLATE), gear(Material.DIAMOND_HELMET)});
+            player.getInventory().setItem(0, enchanted(Material.NETHERITE_AXE, "sharpness", 5));
+            ItemStack mace = enchanted(Material.MACE, "density", 5);
+            enchant(mace, "wind_burst", 3);
+            player.getInventory().setItem(1, mace);
+            player.getInventory().setItem(2, enchanted(spearMaterial(), "lunge", 3));
+        }
+        loadAdminKit(mode, player.getInventory());
+        player.getInventory().setHeldItemSlot(0);
+    }
+
+    public void applyAdminKitToInventory(Mode mode, Inventory editor) {
+        editor.clear();
+        if (mode == Mode.SWORD) {
+            editor.setItem(0, gear(Material.DIAMOND_SWORD));
+        } else {
+            editor.setItem(0, enchanted(Material.NETHERITE_AXE, "sharpness", 5));
+            ItemStack mace = enchanted(Material.MACE, "density", 5);
+            enchant(mace, "wind_burst", 3);
+            editor.setItem(1, mace);
+            editor.setItem(2, enchanted(spearMaterial(), "lunge", 3));
+        }
+        editor.setItem(45, gear(Material.DIAMOND_HELMET));
+        editor.setItem(46, gear(Material.DIAMOND_CHESTPLATE));
+        editor.setItem(47, gear(Material.DIAMOND_LEGGINGS));
+        editor.setItem(48, gear(Material.DIAMOND_BOOTS));
+        String path = "practice.admin-kits." + mode.name();
+        if (!plugin.getConfig().contains(path + ".contents")) return;
+        for (int slot = 0; slot < 36; slot++) {
+            ItemStack item = plugin.getConfig().getItemStack(path + ".contents." + slot);
+            editor.setItem(slot, item == null ? null : item.clone());
+        }
+        editor.setItem(45, plugin.getConfig().getItemStack(path + ".helmet"));
+        editor.setItem(46, plugin.getConfig().getItemStack(path + ".chestplate"));
+        editor.setItem(47, plugin.getConfig().getItemStack(path + ".leggings"));
+        editor.setItem(48, plugin.getConfig().getItemStack(path + ".boots"));
+    }
+
+    public void saveAdminKit(Mode mode, Inventory editor) {
+        String path = "practice.admin-kits." + mode.name();
+        for (int slot = 0; slot < 36; slot++) {
+            ItemStack item = editor.getItem(slot);
+            plugin.getConfig().set(path + ".contents." + slot, item == null || item.getType().isAir() ? null : item.clone());
+        }
+        plugin.getConfig().set(path + ".helmet", editor.getItem(45));
+        plugin.getConfig().set(path + ".chestplate", editor.getItem(46));
+        plugin.getConfig().set(path + ".leggings", editor.getItem(47));
+        plugin.getConfig().set(path + ".boots", editor.getItem(48));
+        plugin.saveConfig();
+    }
+
+    private void loadAdminKit(Mode mode, PlayerInventory inventory) {
+        String path = "practice.admin-kits." + mode.name();
+        if (!plugin.getConfig().contains(path + ".contents")) return;
+        for (int slot = 0; slot < 36; slot++) {
+            ItemStack item = plugin.getConfig().getItemStack(path + ".contents." + slot);
+            inventory.setItem(slot, item == null ? null : item.clone());
+        }
+        inventory.setHelmet(plugin.getConfig().getItemStack(path + ".helmet"));
+        inventory.setChestplate(plugin.getConfig().getItemStack(path + ".chestplate"));
+        inventory.setLeggings(plugin.getConfig().getItemStack(path + ".leggings"));
+        inventory.setBoots(plugin.getConfig().getItemStack(path + ".boots"));
     }
 
     private void loadSavedKit(Player player, PlayerInventory inventory) {
