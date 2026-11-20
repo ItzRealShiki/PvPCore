@@ -1,3 +1,9 @@
+duels:
+  foundation:
+    enabled: true
+    depth: 64
+  block-breaking:
+    enabled: false
 # PvPCore settings
 style:
   prefix: "&8[&aᴘᴠᴘᴄᴏʀᴇ&8] "

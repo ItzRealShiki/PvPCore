@@ -206,6 +206,7 @@ public final class PracticeManager implements Listener {
             plugin.saveConfig();
         }
         clearPlatform(cx, cz);
+        buildDuelFoundation(cx, cz);
         plugin.bots().removeOwned(challenger);
         plugin.bots().removeOwned(opponent);
         activeAttempts.remove(challenger.getUniqueId());
@@ -507,6 +508,15 @@ public final class PracticeManager implements Listener {
     private void clearPlatform(int cx, int cz) {
         // Restore the selected arena theme while keeping the surrounding glass box intact.
         buildArenaPlatform(cx, cz);
+    }
+
+    private void buildDuelFoundation(int cx, int cz) {
+        if (world == null || !plugin.getConfig().getBoolean("duels.foundation.enabled", true)) return;
+        int depth = Math.max(1, Math.min(128, plugin.getConfig().getInt("duels.foundation.depth", 64)));
+        for (int x = -24; x <= 24; x++) for (int z = -24; z <= 24; z++) {
+            for (int y = 80 - depth; y < 80; y++)
+                world.getBlockAt(cx + x, y, cz + z).setType(y == 80 - depth ? Material.BEDROCK : Material.STONE, false);
+        }
     }
 
     public String arenaTheme(Player player) {
@@ -901,7 +911,10 @@ public final class PracticeManager implements Listener {
     }
 
     @EventHandler public void onBreak(BlockBreakEvent event) {
-        if (event.getBlock().getWorld().equals(world)) event.setCancelled(true);
+        if (!event.getBlock().getWorld().equals(world)) return;
+        boolean duelBreaking = isFighting(event.getPlayer())
+                && plugin.getConfig().getBoolean("duels.block-breaking.enabled", false);
+        if (!duelBreaking) event.setCancelled(true);
     }
 
     @EventHandler public void onPlace(BlockPlaceEvent event) {

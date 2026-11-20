@@ -149,6 +149,10 @@ public final class Menus implements Listener {
         inv.setItem(12, item(Material.ZOMBIE_HEAD, "&eBot Management", "&7Remove all training NPCs."));
         inv.setItem(14, item(Material.COMMAND_BLOCK, "&6Gamemode Management", "&7Open gamemode selector."));
         inv.setItem(16, item(Material.ANVIL, "&bKit Management", "&7Edit Sword and Spear Mace 1v1 kits."));
+        boolean duelBreaking = plugin.getConfig().getBoolean("duels.block-breaking.enabled", false);
+        inv.setItem(18, item(duelBreaking ? Material.IRON_PICKAXE : Material.WOODEN_PICKAXE,
+                (duelBreaking ? "&a" : "&c") + "Duel Block Breaking: " + (duelBreaking ? "ON" : "OFF"),
+                "&7Allow duel players to break arena blocks.", "&7Default: OFF", "&eClick to toggle"));
         inv.setItem(20, item(Material.COMPARATOR, "&dPlugin Settings", "&7Reload PvPCore configuration."));
         inv.setItem(22, item(Material.BARRIER, "&cClose", "&7Close this menu."));
         p.openInventory(inv);
@@ -227,6 +231,12 @@ public final class Menus implements Listener {
                     case 12 -> { plugin.bots().removeAll(); plugin.message(p, "&aAll training NPCs removed."); }
                     case 14 -> openGamemode(p);
                     case 16 -> openAdminKits(p);
+                    case 18 -> {
+                        boolean enabled = plugin.getConfig().getBoolean("duels.block-breaking.enabled", false);
+                        plugin.getConfig().set("duels.block-breaking.enabled", !enabled);
+                        plugin.saveConfig();
+                        openAdmin(p);
+                    }
                     case 20 -> { plugin.reloadConfig(); plugin.message(p, "&aConfiguration reloaded."); p.closeInventory(); }
                     case 22 -> p.closeInventory();
                     default -> { }
