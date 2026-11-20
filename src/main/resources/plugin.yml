@@ -24,6 +24,9 @@ commands:
   admin:
     description: Opens the administration dashboard.
     usage: /admin
+  fight:
+    description: Challenges a player to a private-box 1v1.
+    usage: /fight <player|accept|deny>
   gm:
     description: Changes your game mode.
     usage: /gm [survival|creative|adventure|spectator] [player]

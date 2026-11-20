@@ -36,6 +36,7 @@ public final class PracticeCommand implements CommandExecutor, Listener {
     private void main(Player p){
         Inventory i=create("&8✦ ᴘʀᴀᴄᴛɪᴄᴇ","main",27);
         i.setItem(11,item(Material.MACE,"&6Stun Slam","&7Choose a difficulty before entering.","&eClick to select"));
+        i.setItem(13,item(Material.GRASS_BLOCK,"&aBox Design","&7Choose your own arena theme."));
         i.setItem(15,item(Material.DIAMOND_SWORD,"&bSword","&7Diamond sword vs diamond sword.","&eClick to enter"));
         i.setItem(22,item(Material.ANVIL,"&aKit Editor","&7Swap items and edit your loadout."));
         p.openInventory(i);
@@ -81,6 +82,7 @@ public final class PracticeCommand implements CommandExecutor, Listener {
         int s=e.getSlot();
         if(h.kind.equals("main")){
             if(s==11){difficulty(p);}
+            else if(s==13)plugin.menus().openBoxThemes(p);
             else if(s==15){plugin.practice().setMode(p,PracticeManager.Mode.SWORD);p.closeInventory();plugin.practice().enter(p);}
             else if(s==22)kit(p);
         }else if(h.kind.equals("difficulty")){

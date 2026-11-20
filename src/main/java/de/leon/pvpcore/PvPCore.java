@@ -47,6 +47,7 @@ public final class PvPCore extends JavaPlugin implements Listener {
         register("spawn", new SpawnCommand(this));
         register("setspawn", new SetSpawnCommand(this));
         register("admin", new AdminCommand(this));
+        register("fight", new FightCommand(this));
         register("gm", new GamemodeCommand(this));
         itemEdit = new ItemEditCommand(this);
         register("it", itemEdit);
