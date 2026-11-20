@@ -147,6 +147,12 @@ public final class BotManager implements Listener {
         return ownerOf(entity) != null;
     }
 
+    /** Returns this owner's active practice bot, if one exists. */
+    public Player ownedBot(Player owner) {
+        FakePlayer fake = owned.get(owner.getUniqueId());
+        return fake != null && fake.isValid() ? fake.bukkit() : null;
+    }
+
     private UUID ownerOf(Entity entity) {
         for (Map.Entry<UUID, FakePlayer> entry : owned.entrySet()) {
             if (entry.getValue().isValid() && entry.getValue().bukkit().equals(entity)) return entry.getKey();
