@@ -177,15 +177,16 @@ public final class PracticeManager implements Listener {
     }
 
     private void buildRoom(int cx, int cz) {
+        // Keep a solid, normal arena platform beneath the practice area.
         for (int x = -24; x <= 24; x++) for (int z = -24; z <= 24; z++) {
-            // No launch platform: the arena floor stays empty so players fall straight down.
-            world.getBlockAt(cx + x, 80, cz + z).setType(Material.AIR, false);
+            world.getBlockAt(cx + x, 80, cz + z).setType(Material.STONE, false);
         }
     }
 
     private void clearPlatform(int cx, int cz) {
+        // Rebuild the platform when a player enters so it remains intact.
         for (int x = -24; x <= 24; x++) for (int z = -24; z <= 24; z++) {
-            world.getBlockAt(cx + x, 80, cz + z).setType(Material.AIR, false);
+            world.getBlockAt(cx + x, 80, cz + z).setType(Material.STONE, false);
         }
     }
 
