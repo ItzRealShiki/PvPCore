@@ -269,16 +269,45 @@ public final class PracticeManager implements Listener {
     }
 
     private void buildRoom(int cx, int cz) {
-        // Keep a solid, normal arena platform beneath the practice area.
-        for (int x = -24; x <= 24; x++) for (int z = -24; z <= 24; z++) {
-            world.getBlockAt(cx + x, 80, cz + z).setType(Material.STONE, false);
-        }
+        buildPlainsPlatform(cx, cz);
     }
 
     private void clearPlatform(int cx, int cz) {
-        // Rebuild the platform when a player enters so it remains intact.
-        for (int x = -24; x <= 24; x++) for (int z = -24; z <= 24; z++) {
-            world.getBlockAt(cx + x, 80, cz + z).setType(Material.STONE, false);
+        // Restore the arena surface on entry without changing the surrounding glass box.
+        buildPlainsPlatform(cx, cz);
+    }
+
+    private void buildPlainsPlatform(int cx, int cz) {
+        // A clean plains-style arena: grass surface, natural dirt layers and a solid stone base.
+        for (int x = -24; x <= 24; x++) {
+            for (int z = -24; z <= 24; z++) {
+                world.getBlockAt(cx + x, 80, cz + z).setType(Material.GRASS_BLOCK, false);
+                world.getBlockAt(cx + x, 79, cz + z).setType(Material.DIRT, false);
+                world.getBlockAt(cx + x, 78, cz + z).setType(Material.DIRT, false);
+                world.getBlockAt(cx + x, 77, cz + z).setType(Material.STONE, false);
+
+                // Keep the fighting area completely open; add subtle plains details only around the outer edge.
+                int edge = Math.max(Math.abs(x), Math.abs(z));
+                if (edge >= 19 && edge <= 22) {
+                    int pattern = Math.floorMod((x * 31) + (z * 17), 23);
+                    Location decoration = new Location(world, cx + x, 81, cz + z);
+                    if (pattern == 0) {
+                        world.getBlockAt(cx + x, 81, cz + z).setType(Material.SHORT_GRASS, false);
+                    } else if (pattern == 1) {
+                        Material flower = Math.floorMod(x - z, 2) == 0
+                                ? Material.POPPY : Material.OXEYE_DAISY;
+                        world.getBlockAt(cx + x, 81, cz + z).setType(flower, false);
+                    }
+                }
+            }
+        }
+
+        // A neat natural-looking border makes the grass platform feel framed inside its glass box.
+        for (int offset = -23; offset <= 23; offset++) {
+            world.getBlockAt(cx - 23, 80, cz + offset).setType(Material.MOSS_BLOCK, false);
+            world.getBlockAt(cx + 23, 80, cz + offset).setType(Material.MOSS_BLOCK, false);
+            world.getBlockAt(cx + offset, 80, cz - 23).setType(Material.MOSS_BLOCK, false);
+            world.getBlockAt(cx + offset, 80, cz + 23).setType(Material.MOSS_BLOCK, false);
         }
     }
 
