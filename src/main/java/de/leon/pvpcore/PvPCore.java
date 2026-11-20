@@ -34,6 +34,7 @@ public final class PvPCore extends JavaPlugin implements Listener {
         bots = new BotManager(this);
         practice = new PracticeManager(this);
         Bukkit.getPluginManager().registerEvents(practice, this);
+        Bukkit.getScheduler().runTaskTimer(this, practice::enforceStunSlamFood, 1L, 1L);
         PracticeCommand practiceCommand = new PracticeCommand(this);
         register("prac", practiceCommand);
         Bukkit.getPluginManager().registerEvents(practiceCommand, this);
