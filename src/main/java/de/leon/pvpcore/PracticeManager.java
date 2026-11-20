@@ -126,6 +126,7 @@ public final class PracticeManager {
         if (!plugin.getConfig().contains(path + ".contents")) return;
         java.util.List<?> contents = plugin.getConfig().getList(path + ".contents");
         if (contents != null) for (int slot=0; slot<Math.min(36, contents.size()); slot++) {
+            inventory.setItem(slot, null);
             Object value = contents.get(slot);
             if (value instanceof ItemStack item) inventory.setItem(slot, item.clone());
         }
