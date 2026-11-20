@@ -164,9 +164,10 @@ public final class BotManager implements Listener {
                         && bot.getInventory().getItemInOffHand().getType().isAir()) {
                     bot.getInventory().setItemInOffHand(new ItemStack(Material.TOTEM_OF_UNDYING));
                 }
-                boolean practiceBot = owner.getWorld().getName().equals("prac_rooms");
-                boolean shieldEnabled = practiceBot || option(owner, "shield", false);
-                boolean shieldDisabled = !practiceBot && shieldDisabledUntil.getOrDefault(ownerId, 0L) > System.currentTimeMillis();
+                boolean practiceStunSlam = owner.getWorld().getName().equals("prac_rooms")
+                        && plugin.practice().mode(owner) == PracticeManager.Mode.STUN_SLAM;
+                boolean shieldEnabled = practiceStunSlam || option(owner, "shield", false);
+                boolean shieldDisabled = !practiceStunSlam && shieldDisabledUntil.getOrDefault(ownerId, 0L) > System.currentTimeMillis();
                 fake.setShieldRaised(shieldEnabled && !shieldDisabled);
                 fake.tick();
             }
@@ -203,7 +204,8 @@ public final class BotManager implements Listener {
         FakePlayer fake = owned.get(ownerId);
         if (fake == null) return;
 
-        if (owner.getWorld().getName().equals("prac_rooms") || !option(owner, "knockback", true)) {
+        if ((owner.getWorld().getName().equals("prac_rooms") && plugin.practice().mode(owner) == PracticeManager.Mode.STUN_SLAM)
+                || !option(owner, "knockback", true)) {
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (fake.isValid()) fake.bukkit().setVelocity(new Vector(0, 0, 0));
             });
