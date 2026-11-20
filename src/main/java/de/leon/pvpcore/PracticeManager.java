@@ -269,45 +269,76 @@ public final class PracticeManager implements Listener {
     }
 
     private void buildRoom(int cx, int cz) {
-        buildPlainsPlatform(cx, cz);
+        buildArenaPlatform(cx, cz);
     }
 
     private void clearPlatform(int cx, int cz) {
-        // Restore the arena surface on entry without changing the surrounding glass box.
-        buildPlainsPlatform(cx, cz);
+        // Restore the selected arena theme while keeping the surrounding glass box intact.
+        buildArenaPlatform(cx, cz);
     }
 
-    private void buildPlainsPlatform(int cx, int cz) {
-        // A clean plains-style arena: grass surface, natural dirt layers and a solid stone base.
+    public String arenaTheme() {
+        return plugin.getConfig().getString("practice.arena-theme", "PLAINS").toUpperCase(Locale.ROOT);
+    }
+
+    public void setArenaTheme(String theme) {
+        String normalized = theme.toUpperCase(Locale.ROOT);
+        if (!List.of("DESERT", "PLAINS", "END", "NETHER", "BADLANDS", "PALE_GARDEN",
+                "CHERRY_BLOSSOM", "WARPED", "CRIMSON", "FLOWER_PLAINS").contains(normalized)) return;
+        plugin.getConfig().set("practice.arena-theme", normalized);
+        plugin.saveConfig();
+
+        // Update every allocated private room immediately, including rooms whose owners are offline.
+        if (world == null) world = Bukkit.getWorld("prac_rooms");
+        if (world != null) {
+            int rooms = plugin.getConfig().getInt("practice.next-room", 0);
+            for (int index = 0; index < rooms; index++) {
+                buildArenaPlatform(128 + index * 96, 128);
+            }
+        }
+    }
+
+    private Material[] arenaPalette() {
+        return switch (arenaTheme()) {
+            case "DESERT" -> new Material[]{Material.SAND, Material.SANDSTONE, Material.SMOOTH_SANDSTONE, Material.CUT_SANDSTONE, Material.DEAD_BUSH};
+            case "END" -> new Material[]{Material.END_STONE, Material.END_STONE, Material.PURPUR_BLOCK, Material.END_STONE_BRICKS, Material.CHORUS_FLOWER};
+            case "NETHER" -> new Material[]{Material.NETHERRACK, Material.NETHERRACK, Material.BASALT, Material.BLACKSTONE, Material.FIRE};
+            case "BADLANDS" -> new Material[]{Material.RED_SAND, Material.RED_SANDSTONE, Material.TERRACOTTA, Material.ORANGE_TERRACOTTA, Material.DEAD_BUSH};
+            case "PALE_GARDEN" -> new Material[]{Material.PALE_MOSS_BLOCK, Material.PALE_MOSS_BLOCK, Material.PALE_OAK_PLANKS, Material.PALE_OAK_LOG, Material.PALE_HANGING_MOSS};
+            case "CHERRY_BLOSSOM" -> new Material[]{Material.CHERRY_LEAVES, Material.DIRT, Material.CHERRY_LOG, Material.CHERRY_PLANKS, Material.PINK_PETALS};
+            case "WARPED" -> new Material[]{Material.WARPED_NYLIUM, Material.NETHERRACK, Material.WARPED_STEM, Material.WARPED_WART_BLOCK, Material.WARPED_FUNGUS};
+            case "CRIMSON" -> new Material[]{Material.CRIMSON_NYLIUM, Material.NETHERRACK, Material.CRIMSON_STEM, Material.NETHER_WART_BLOCK, Material.CRIMSON_FUNGUS};
+            case "FLOWER_PLAINS" -> new Material[]{Material.GRASS_BLOCK, Material.DIRT, Material.ROOTED_DIRT, Material.MOSS_BLOCK, Material.PINK_PETALS};
+            default -> new Material[]{Material.GRASS_BLOCK, Material.DIRT, Material.DIRT, Material.STONE, Material.SHORT_GRASS};
+        };
+    }
+
+    private void buildArenaPlatform(int cx, int cz) {
+        Material[] palette = arenaPalette();
         for (int x = -24; x <= 24; x++) {
             for (int z = -24; z <= 24; z++) {
-                world.getBlockAt(cx + x, 80, cz + z).setType(Material.GRASS_BLOCK, false);
-                world.getBlockAt(cx + x, 79, cz + z).setType(Material.DIRT, false);
-                world.getBlockAt(cx + x, 78, cz + z).setType(Material.DIRT, false);
-                world.getBlockAt(cx + x, 77, cz + z).setType(Material.STONE, false);
-
-                // Keep the fighting area completely open; add subtle plains details only around the outer edge.
                 int edge = Math.max(Math.abs(x), Math.abs(z));
-                if (edge >= 19 && edge <= 22) {
-                    int pattern = Math.floorMod((x * 31) + (z * 17), 23);
-                    Location decoration = new Location(world, cx + x, 81, cz + z);
-                    if (pattern == 0) {
-                        world.getBlockAt(cx + x, 81, cz + z).setType(Material.SHORT_GRASS, false);
-                    } else if (pattern == 1) {
-                        Material flower = Math.floorMod(x - z, 2) == 0
-                                ? Material.POPPY : Material.OXEYE_DAISY;
-                        world.getBlockAt(cx + x, 81, cz + z).setType(flower, false);
+                world.getBlockAt(cx + x, 80, cz + z).setType(palette[0], false);
+                world.getBlockAt(cx + x, 79, cz + z).setType(palette[1], false);
+                world.getBlockAt(cx + x, 78, cz + z).setType(palette[2], false);
+                world.getBlockAt(cx + x, 77, cz + z).setType(palette[3], false);
+
+                if (edge >= 19 && edge <= 22 && Math.floorMod(x * 31 + z * 17, 23) == 0) {
+                    Material detail = palette[4];
+                    if (detail.isBlock() && detail != Material.FIRE) {
+                        world.getBlockAt(cx + x, 81, cz + z).setType(detail, false);
                     }
                 }
             }
         }
 
-        // A neat natural-looking border makes the grass platform feel framed inside its glass box.
+        // Decorative frame inside the glass enclosure, using the selected theme's accent block.
+        Material trim = palette[3];
         for (int offset = -23; offset <= 23; offset++) {
-            world.getBlockAt(cx - 23, 80, cz + offset).setType(Material.MOSS_BLOCK, false);
-            world.getBlockAt(cx + 23, 80, cz + offset).setType(Material.MOSS_BLOCK, false);
-            world.getBlockAt(cx + offset, 80, cz - 23).setType(Material.MOSS_BLOCK, false);
-            world.getBlockAt(cx + offset, 80, cz + 23).setType(Material.MOSS_BLOCK, false);
+            world.getBlockAt(cx - 23, 80, cz + offset).setType(trim, false);
+            world.getBlockAt(cx + 23, 80, cz + offset).setType(trim, false);
+            world.getBlockAt(cx + offset, 80, cz - 23).setType(trim, false);
+            world.getBlockAt(cx + offset, 80, cz + 23).setType(trim, false);
         }
     }
 
