@@ -585,7 +585,9 @@ public final class PracticeManager implements Listener {
                 if (edge == 24) continue;
 
                 // Clear old decoration and raised terrain before rebuilding the tile.
-                for (int y = 81; y <= 85; y++) {
+                // Clear the full decoration height, including persistent cherry leaves and logs
+                // from the previous theme. The interior bounds keep the glass forcefield untouched.
+                for (int y = 81; y <= 90; y++) {
                     world.getBlockAt(cx + x, y, cz + z).setType(Material.AIR, false);
                 }
 
@@ -873,6 +875,13 @@ public final class PracticeManager implements Listener {
     @EventHandler
     public void onFightDeath(PlayerDeathEvent event) {
         Player defeated = event.getEntity();
+        if (world != null && defeated.getWorld().equals(world)) {
+            // Practice rooms and duels are kit-based: never leave dropped gear or XP behind.
+            event.getDrops().clear();
+            event.setDroppedExp(0);
+            event.setKeepInventory(true);
+            event.setKeepLevel(true);
+        }
         if (isFighting(defeated)) endFight(defeated, "&a" + defeated.getName() + " was defeated.");
     }
 
