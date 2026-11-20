@@ -21,6 +21,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.util.Vector;
+import net.kyori.adventure.text.minimessage.MiniMessage;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -59,7 +60,7 @@ public final class BotManager implements Listener {
             FakePlayer fake = FakePlayer.spawn(at, botName, owner);
             fake.clearSpawnInvulnerability();
             Player bot = fake.bukkit();
-            bot.setCustomName(plugin.color("&eᴛʀᴀɪɴɪɴɢ ʙᴏᴛ"));
+            bot.customName(MiniMessage.miniMessage().deserialize("<gradient:#ff0000:#ff8c00>ᴛʀᴀɪɴɪɴɢ ʙᴏᴛ</gradient>"));
             bot.setCustomNameVisible(true);
             bot.setInvulnerable(false);
             bot.setGravity(true);
