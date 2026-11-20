@@ -18,6 +18,21 @@ public final class FightCommand implements CommandExecutor {
         this.plugin = plugin;
     }
 
+    public Player incomingFrom(Player player) {
+        UUID challengerId = incomingInvites.get(player.getUniqueId());
+        return challengerId == null ? null : Bukkit.getPlayer(challengerId);
+    }
+
+    public int cancelOutgoingInvites(Player player) {
+        int before = incomingInvites.size();
+        incomingInvites.entrySet().removeIf(entry -> entry.getValue().equals(player.getUniqueId()));
+        return before - incomingInvites.size();
+    }
+
+    public int outgoingInviteCount(Player player) {
+        return (int) incomingInvites.values().stream().filter(id -> id.equals(player.getUniqueId())).count();
+    }
+
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!(sender instanceof Player player)) return plugin.playerOnly(sender);
