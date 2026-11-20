@@ -1,6 +1,9 @@
 package de.leon.pvpcore;
 
 import org.bukkit.*;
+import org.bukkit.generator.ChunkGenerator;
+import org.bukkit.generator.WorldInfo;
+import org.bukkit.generator.ChunkGenerator.ChunkData;
 import org.bukkit.entity.Player;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.event.EventHandler;
@@ -29,6 +32,9 @@ import java.util.*;
 public final class PracticeManager implements Listener {
     public enum Mode { STUN_SLAM, SWORD }
 
+    private static final int ROOM_SPACING = 1024;
+    private static final String PRACTICE_WORLD = "prac_void";
+
     private final PvPCore plugin;
     private World world;
     private final Map<UUID, Integer> scores = new HashMap<>();
@@ -47,13 +53,41 @@ public final class PracticeManager implements Listener {
         Bukkit.getScheduler().runTaskTimer(plugin, this::updateNearbyArenas, 1L, 10L);
     }
 
+    private int roomCenterX(int index) { return 128 + index * ROOM_SPACING; }
+
+    private World createVoidWorld() {
+        ChunkGenerator voidGenerator = new ChunkGenerator() {
+            @Override
+            public void generateNoise(WorldInfo worldInfo, java.util.Random random, int chunkX, int chunkZ, ChunkData chunkData) {
+                // Intentionally leave every generated chunk completely empty.
+            }
+        };
+        return new WorldCreator(PRACTICE_WORLD).generator(voidGenerator).createWorld();
+    }
+
+    private void updatePlayerVisibility(Player player) {
+        if (!player.getWorld().equals(world)) return;
+        Player ownBot = plugin.bots().ownedBot(player);
+        for (Player other : Bukkit.getOnlinePlayers()) {
+            if (other.equals(player)) continue;
+            if (other.equals(ownBot)) player.showPlayer(plugin, other);
+            else player.hidePlayer(plugin, other);
+        }
+    }
+
+    private void restorePlayerVisibility(Player player) {
+        for (Player other : Bukkit.getOnlinePlayers()) {
+            if (!other.equals(player)) player.showPlayer(plugin, other);
+        }
+    }
+
     private void updateNearbyArenas() {
         Set<Integer> nearbyRooms = new HashSet<>();
         for (Player player : Bukkit.getOnlinePlayers()) {
-            if (!player.getWorld().getName().equals("prac_rooms")) continue;
+            if (!player.getWorld().equals(world)) continue;
             int index = plugin.getConfig().getInt("practice.players." + player.getUniqueId() + ".room", -1);
             if (index < 0) continue;
-            int cx = 128 + index * 96, cz = 128;
+            int cx = roomCenterX(index), cz = 128;
             boolean nearby = player.getLocation().distanceSquared(new Location(world == null ? player.getWorld() : world, cx + 0.5, player.getLocation().getY(), cz + 0.5)) <= 36.0 * 36.0;
             if (!nearby) {
                 plugin.bots().removeOwned(player);
@@ -64,10 +98,11 @@ public final class PracticeManager implements Listener {
             if (plugin.bots().isAvailable() && !plugin.bots().hasOwnedBot(player)) plugin.bots().spawn(player);
             if (mode(player) == Mode.SWORD) recoverSwordBotAtEdge(player, cx, cz);
             updatePracticeBoard(player);
+            updatePlayerVisibility(player);
         }
         for (int index : new HashSet<>(activeForceFields)) {
             if (nearbyRooms.contains(index)) continue;
-            removeForceField(128 + index * 96, 128);
+            removeForceField(roomCenterX(index), 128);
             activeForceFields.remove(index);
         }
     }
@@ -205,8 +240,8 @@ public final class PracticeManager implements Listener {
         int challengeHeight = mode(p) == Mode.STUN_SLAM ? height : 0;
         if (challengeHeight > 0) setSelectedHeight(p, challengeHeight);
         if (world == null) {
-            world = Bukkit.getWorld("prac_rooms");
-            if (world == null) world = new WorldCreator("prac_rooms").type(WorldType.FLAT).createWorld();
+            world = Bukkit.getWorld(PRACTICE_WORLD);
+            if (world == null) world = createVoidWorld();
         }
         if (world == null) { plugin.message(p, "&cPractice world could not be loaded."); return; }
 
@@ -224,7 +259,7 @@ public final class PracticeManager implements Listener {
             plugin.saveConfig();
         }
 
-        int cx = 128 + index * 96, cz = 128;
+        int cx = roomCenterX(index), cz = 128;
         if (!plugin.getConfig().getBoolean(base + ".built", false)) {
             buildRoom(cx, cz);
             plugin.getConfig().set(base + ".built", true);
@@ -235,6 +270,7 @@ public final class PracticeManager implements Listener {
         p.setGameMode(GameMode.SURVIVAL);
         p.setFallDistance(0);
         p.teleport(startLocation(p, challengeHeight));
+        Bukkit.getScheduler().runTask(plugin, () -> updatePlayerVisibility(p));
         applyKit(p);
         scores.putIfAbsent(p.getUniqueId(), 0);
         if (mode(p) == Mode.SWORD) {
@@ -256,7 +292,7 @@ public final class PracticeManager implements Listener {
 
     private Location startLocation(Player p, int height) {
         int index = plugin.getConfig().getInt("practice.players." + p.getUniqueId() + ".room", 0);
-        int cx = 128 + index * 96, cz = 128;
+        int cx = roomCenterX(index), cz = 128;
         // Sword practice starts directly on the arena floor; only Stun Slam uses an elevated spawn.
         int spawnHeight = height > 0 ? height : 0;
         return new Location(world, cx + 0.5, 81 + spawnHeight, cz + 0.5, 0.0f, height > 0 ? 90.0f : 0.0f);
@@ -264,7 +300,7 @@ public final class PracticeManager implements Listener {
 
     public Location botSpawnLocation(Player owner) {
         int index = plugin.getConfig().getInt("practice.players." + owner.getUniqueId() + ".room", 0);
-        int cx = 128 + index * 96, cz = 128;
+        int cx = roomCenterX(index), cz = 128;
         return new Location(world, cx + 0.5, 81, cz + 0.5);
     }
 
@@ -447,11 +483,11 @@ public final class PracticeManager implements Listener {
     @EventHandler
     public void onMove(PlayerMoveEvent event) {
         Player p = event.getPlayer();
-        if (!p.getWorld().getName().equals("prac_rooms") || event.getTo() == null) return;
+        if (!p.getWorld().equals(world) || event.getTo() == null) return;
 
         int roomIndex = plugin.getConfig().getInt("practice.players." + p.getUniqueId() + ".room", -1);
         if (roomIndex >= 0) {
-            int cx = 128 + roomIndex * 96;
+            int cx = roomCenterX(roomIndex);
             int cz = 128;
             Location to = event.getTo();
             // Only teleport after the player's position has passed beyond the outer edge
@@ -491,6 +527,7 @@ public final class PracticeManager implements Listener {
     @EventHandler public void onQuit(PlayerQuitEvent event) {
         UUID id = event.getPlayer().getUniqueId();
         restorePracticeBoard(event.getPlayer());
+        restorePlayerVisibility(event.getPlayer());
         scores.remove(id); selectedHeights.remove(id); swordSwings.remove(id); swordHits.remove(id);
         activeAttempts.remove(id); resetting.remove(id);
     }
@@ -498,7 +535,10 @@ public final class PracticeManager implements Listener {
     @EventHandler public void onWorldChange(PlayerChangedWorldEvent event) {
         UUID id = event.getPlayer().getUniqueId();
         activeAttempts.remove(id); resetting.remove(id);
-        if (!event.getPlayer().getWorld().getName().equals("prac_rooms")) restorePracticeBoard(event.getPlayer());
+        if (!event.getPlayer().getWorld().equals(world)) {
+            restorePracticeBoard(event.getPlayer());
+            restorePlayerVisibility(event.getPlayer());
+        } else Bukkit.getScheduler().runTask(plugin, () -> updatePlayerVisibility(event.getPlayer()));
     }
 
     public void applyKit(Player p) {
