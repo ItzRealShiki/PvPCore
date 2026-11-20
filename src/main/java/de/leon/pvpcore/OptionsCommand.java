@@ -73,7 +73,7 @@ public final class OptionsCommand implements CommandExecutor, Listener {
         ItemStack item = new ItemStack(Material.GRASS_BLOCK);
         ItemMeta meta = item.getItemMeta();
         meta.setDisplayName(plugin.color("&aArena Ground"));
-        meta.setLore(List.of(plugin.color("&7Current: &f" + plugin.practice().arenaTheme().replace('_', ' ')),
+        meta.setLore(List.of(plugin.color("&7Current: &f" + plugin.practice().arenaTheme(player).replace('_', ' ')),
                 plugin.color("&eClick to change the arena theme")));
         item.setItemMeta(meta);
         return item;
@@ -91,7 +91,7 @@ public final class OptionsCommand implements CommandExecutor, Listener {
         for (int i = 0; i < themes.length; i++) {
             ItemStack item = new ItemStack(icons[i]);
             ItemMeta meta = item.getItemMeta();
-            boolean active = plugin.practice().arenaTheme().equals(themes[i]);
+            boolean active = plugin.practice().arenaTheme(player).equals(themes[i]);
             meta.setDisplayName(plugin.color((active ? "&a✔ " : "&e") + themes[i].replace('_', ' ')));
             meta.setLore(List.of(plugin.color(active ? "&7Currently selected" : "&eClick to select")));
             item.setItemMeta(meta);
@@ -111,7 +111,7 @@ public final class OptionsCommand implements CommandExecutor, Listener {
             String[] themes = {"DESERT", "PLAINS", "END", "NETHER", "BADLANDS", "PALE_GARDEN",
                     "CHERRY_BLOSSOM", "WARPED", "CRIMSON", "FLOWER_PLAINS"};
             if (themeSlot >= 0 && themeSlot < themes.length) {
-                plugin.practice().setArenaTheme(themes[themeSlot]);
+                plugin.practice().setArenaTheme(player, themes[themeSlot]);
                 plugin.message(player, "&aArena ground set to &e" + themes[themeSlot].replace('_', ' ') + "&a.");
                 open(player);
             }

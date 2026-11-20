@@ -640,8 +640,8 @@ public final class PracticeManager implements Listener {
                     }
 
                     // A few subtle ground patches add texture between the plants.
-                    if ((theme.equals("PLAINS") || arenaTheme().equals("FLOWER_PLAINS")
-                            || arenaTheme().equals("CHERRY_BLOSSOM"))
+                    if ((theme.equals("PLAINS") || theme.equals("FLOWER_PLAINS")
+                            || theme.equals("CHERRY_BLOSSOM"))
                             && Math.floorMod(x * 43 + z * 67, 31) == 0) {
                         world.getBlockAt(cx + x, topY + 1, cz + z).setType(Material.MOSS_CARPET, false);
                     }
@@ -649,7 +649,7 @@ public final class PracticeManager implements Listener {
 
                 // Compact ornamental cherry trees with a tapered, rounded canopy.
                 // They stay near the perimeter and their leaves are temporary accents.
-                if (arenaTheme().equals("CHERRY_BLOSSOM")
+                if (theme.equals("CHERRY_BLOSSOM")
                         && edge >= 18 && edge <= 21
                         && decorationRandom.nextInt(173) == 0) {
                     int trunkBase = topY + 1;
