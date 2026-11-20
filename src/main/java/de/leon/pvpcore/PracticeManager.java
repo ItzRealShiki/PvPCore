@@ -3,32 +3,70 @@ package de.leon.pvpcore;
 import org.bukkit.*;
 import org.bukkit.entity.Player;
 import org.bukkit.enchantments.Enchantment;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.*;
 import org.bukkit.inventory.meta.ItemMeta;
 
-public final class PracticeManager {
+import java.util.*;
+
+public final class PracticeManager implements Listener {
     public enum Mode { STUN_SLAM, SWORD }
+
     private final PvPCore plugin;
     private World world;
+    private final Map<UUID, Integer> scores = new HashMap<>();
+    private final Map<UUID, Integer> selectedHeights = new HashMap<>();
+    private final Set<UUID> activeAttempts = new HashSet<>();
+    private final Set<UUID> resetting = new HashSet<>();
+
     public PracticeManager(PvPCore plugin) { this.plugin = plugin; }
 
     public Mode mode(Player p) {
         try { return Mode.valueOf(plugin.getConfig().getString("practice.players." + p.getUniqueId() + ".mode", "STUN_SLAM")); }
         catch (IllegalArgumentException ex) { return Mode.STUN_SLAM; }
     }
+
     public void setMode(Player p, Mode mode) {
         plugin.getConfig().set("practice.players." + p.getUniqueId() + ".mode", mode.name());
         plugin.saveConfig();
     }
-    public void enter(Player p) {
+
+    public int selectedHeight(Player p) {
+        return selectedHeights.getOrDefault(p.getUniqueId(),
+                plugin.getConfig().getInt("practice.players." + p.getUniqueId() + ".stun-slam-height", 7));
+    }
+
+    public void setSelectedHeight(Player p, int height) {
+        if (height != 7 && height != 20 && height != 30) return;
+        selectedHeights.put(p.getUniqueId(), height);
+        plugin.getConfig().set("practice.players." + p.getUniqueId() + ".stun-slam-height", height);
+        plugin.saveConfig();
+    }
+
+    public int score(Player p) { return scores.getOrDefault(p.getUniqueId(), 0); }
+
+    public void enter(Player p) { enter(p, selectedHeight(p)); }
+
+    public void enter(Player p, int height) {
+        setSelectedHeight(p, height);
         if (world == null) {
             world = Bukkit.getWorld("prac_rooms");
             if (world == null) world = new WorldCreator("prac_rooms").type(WorldType.FLAT).createWorld();
         }
         if (world == null) { plugin.message(p, "&cPractice world could not be loaded."); return; }
+
         world.setGameRule(GameRule.DO_MOB_SPAWNING, false);
         world.setGameRule(GameRule.DO_DAYLIGHT_CYCLE, false);
         world.setTime(1000L);
+
         String base = "practice.players." + p.getUniqueId();
         int index;
         if (plugin.getConfig().contains(base + ".room")) index = plugin.getConfig().getInt(base + ".room");
@@ -38,20 +76,46 @@ public final class PracticeManager {
             plugin.getConfig().set(base + ".room", index);
             plugin.saveConfig();
         }
+
         int cx = 128 + index * 96, cz = 128;
         if (!plugin.getConfig().getBoolean(base + ".built", false)) {
             buildRoom(cx, cz);
             plugin.getConfig().set(base + ".built", true);
             plugin.saveConfig();
         }
+        buildStartPlatform(cx, cz, height);
         plugin.bots().removeOwned(p);
-        p.teleport(new Location(world, cx + 0.5, 81, cz + 0.5));
+        p.setGameMode(GameMode.SURVIVAL);
+        p.setFallDistance(0);
+        p.teleport(startLocation(p, height));
         applyKit(p);
+        scores.putIfAbsent(p.getUniqueId(), 0);
+        activeAttempts.add(p.getUniqueId());
+
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (p.isOnline() && p.getWorld() == world) plugin.bots().spawn(p);
         }, 2L);
-        plugin.message(p, "&aEntered your private " + (mode(p) == Mode.SWORD ? "&bSword" : "&6Stun Slam") + " room.");
+
+        plugin.message(p, "&aStun Slam &7- &e" + difficultyName(height) + " &7(" + height + " blocks).");
+        plugin.message(p, "&7Score: &a" + score(p) + " &8| &7Land a hit on the bot to earn a point.");
     }
+
+    private String difficultyName(int height) {
+        return switch (height) { case 7 -> "Easy"; case 20 -> "Normal"; default -> "Hard"; };
+    }
+
+    private Location startLocation(Player p, int height) {
+        int index = plugin.getConfig().getInt("practice.players." + p.getUniqueId() + ".room", 0);
+        int cx = 128 + index * 96, cz = 128;
+        return new Location(world, cx + 0.5, 81 + height, cz + 0.5);
+    }
+
+    public Location botSpawnLocation(Player owner) {
+        int index = plugin.getConfig().getInt("practice.players." + owner.getUniqueId() + ".room", 0);
+        int cx = 128 + index * 96, cz = 128;
+        return new Location(world, cx + 0.5, 81, cz + 5.5);
+    }
+
     private void buildRoom(int cx, int cz) {
         for (int x = -24; x <= 24; x++) for (int z = -24; z <= 24; z++) {
             world.getBlockAt(cx+x, 80, cz+z).setType(Material.SMOOTH_STONE, false);
@@ -59,6 +123,78 @@ public final class PracticeManager {
                 for (int y=81; y<=86; y++) world.getBlockAt(cx+x,y,cz+z).setType(Material.GLASS,false);
         }
     }
+
+    private void buildStartPlatform(int cx, int cz, int height) {
+        int y = 80 + height;
+        for (int x = -2; x <= 2; x++) for (int z = -2; z <= 2; z++)
+            world.getBlockAt(cx + x, y, cz + z).setType(Material.SMOOTH_STONE, false);
+    }
+
+    private void retry(Player p, boolean success) {
+        UUID id = p.getUniqueId();
+        if (!resetting.add(id)) return;
+        activeAttempts.remove(id);
+        if (success) {
+            scores.merge(id, 1, Integer::sum);
+            plugin.message(p, "&a+1 point! &7Score: &e" + score(p));
+        } else {
+            plugin.message(p, "&cMissed! &7Try again. Score: &e" + score(p));
+        }
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            resetting.remove(id);
+            if (!p.isOnline() || p.getWorld() != world) return;
+            p.setFallDistance(0);
+            p.setVelocity(new org.bukkit.util.Vector(0, 0, 0));
+            p.teleport(startLocation(p, selectedHeight(p)));
+            activeAttempts.add(id);
+        }, 10L);
+    }
+
+    @EventHandler
+    public void onBotHit(EntityDamageByEntityEvent event) {
+        if (!(event.getDamager() instanceof Player player)) return;
+        if (!player.getWorld().getName().equals("prac_rooms")) return;
+        if (!activeAttempts.contains(player.getUniqueId())) return;
+        if (!plugin.bots().isOwnedBot(player, event.getEntity())) return;
+        event.setCancelled(true);
+        retry(player, true);
+    }
+
+    @EventHandler
+    public void onMove(PlayerMoveEvent event) {
+        Player p = event.getPlayer();
+        if (!p.getWorld().getName().equals("prac_rooms") || !activeAttempts.contains(p.getUniqueId())) return;
+        if (event.getTo() == null || event.getTo().getY() >= event.getFrom().getY()) return;
+        if (event.getTo().getY() <= 81.0) retry(p, false);
+    }
+
+    @EventHandler
+    public void onDamage(EntityDamageEvent event) {
+        if (!(event.getEntity() instanceof Player p) || !p.getWorld().getName().equals("prac_rooms")) return;
+        if (event.getCause() == EntityDamageEvent.DamageCause.FALL && activeAttempts.contains(p.getUniqueId())) {
+            event.setCancelled(true);
+            retry(p, false);
+        }
+    }
+
+    @EventHandler public void onBreak(BlockBreakEvent event) {
+        if (event.getBlock().getWorld().getName().equals("prac_rooms")) event.setCancelled(true);
+    }
+
+    @EventHandler public void onPlace(BlockPlaceEvent event) {
+        if (event.getBlock().getWorld().getName().equals("prac_rooms")) event.setCancelled(true);
+    }
+
+    @EventHandler public void onQuit(PlayerQuitEvent event) {
+        UUID id = event.getPlayer().getUniqueId();
+        scores.remove(id); selectedHeights.remove(id); activeAttempts.remove(id); resetting.remove(id);
+    }
+
+    @EventHandler public void onWorldChange(PlayerChangedWorldEvent event) {
+        UUID id = event.getPlayer().getUniqueId();
+        activeAttempts.remove(id); resetting.remove(id);
+    }
+
     public void applyKit(Player p) {
         p.getInventory().clear();
         p.getInventory().setArmorContents(new ItemStack[]{gear(Material.DIAMOND_BOOTS),gear(Material.DIAMOND_LEGGINGS),gear(Material.DIAMOND_CHESTPLATE),gear(Material.DIAMOND_HELMET)});
@@ -73,18 +209,28 @@ public final class PracticeManager {
         p.getInventory().setHeldItemSlot(0);
         p.setHealth(20); p.setFoodLevel(20); p.setSaturation(20); p.setFireTicks(0);
     }
+
     public void applyBotKit(Player bot, Player owner) {
         bot.getInventory().clear();
-        bot.getInventory().setArmorContents(new ItemStack[]{gear(Material.DIAMOND_BOOTS),gear(Material.DIAMOND_LEGGINGS),gear(Material.DIAMOND_CHESTPLATE),gear(Material.DIAMOND_HELMET)});
-        if (mode(owner) == Mode.SWORD) bot.getInventory().setItem(0, gear(Material.DIAMOND_SWORD));
-        else {
-            bot.getInventory().setItem(0, enchanted(Material.NETHERITE_AXE, "sharpness", 5));
-            ItemStack mace = enchanted(Material.MACE, "density", 5); enchant(mace, "wind_burst", 3);
-            bot.getInventory().setItem(1, mace);
-            bot.getInventory().setItem(2, enchanted(spearMaterial(), "lunge", 3));
-        }
-        loadSavedKit(owner, bot.getInventory());
+        bot.getInventory().setArmorContents(new ItemStack[]{
+                botArmor(Material.NETHERITE_BOOTS), botArmor(Material.NETHERITE_LEGGINGS),
+                botArmor(Material.NETHERITE_CHESTPLATE), botArmor(Material.NETHERITE_HELMET)});
+        ItemStack shield = gear(Material.SHIELD);
+        bot.getInventory().setItemInMainHand(shield);
+        bot.getInventory().setItemInOffHand(new ItemStack(Material.TOTEM_OF_UNDYING));
+        bot.setVelocity(new org.bukkit.util.Vector(0, 0, 0));
     }
+
+    private ItemStack botArmor(Material type) {
+        ItemStack item = gear(type);
+        ItemMeta meta = item.getItemMeta();
+        meta.addEnchant(Enchantment.PROTECTION, 4, true);
+        meta.addEnchant(Enchantment.UNBREAKING, 3, true);
+        meta.addEnchant(Enchantment.MENDING, 1, true);
+        item.setItemMeta(meta);
+        return item;
+    }
+
     public void applyKitToInventory(Player player, Inventory editor) {
         editor.clear();
         if (mode(player) == Mode.SWORD) editor.setItem(0, gear(Material.DIAMOND_SWORD));
@@ -110,6 +256,7 @@ public final class PracticeManager {
         editor.setItem(47, plugin.getConfig().getItemStack(path + ".leggings"));
         editor.setItem(48, plugin.getConfig().getItemStack(path + ".boots"));
     }
+
     public void saveKit(Player player, Inventory editor) {
         String path = "practice.players." + player.getUniqueId() + ".kits." + mode(player).name();
         java.util.List<ItemStack> contents = new java.util.ArrayList<>();
@@ -121,6 +268,7 @@ public final class PracticeManager {
         plugin.getConfig().set(path + ".boots", editor.getItem(48));
         plugin.saveConfig();
     }
+
     private void loadSavedKit(Player player, PlayerInventory inventory) {
         String path = "practice.players." + player.getUniqueId() + ".kits." + mode(player).name();
         if (!plugin.getConfig().contains(path + ".contents")) return;
@@ -135,12 +283,14 @@ public final class PracticeManager {
         inventory.setLeggings(plugin.getConfig().getItemStack(path + ".leggings"));
         inventory.setBoots(plugin.getConfig().getItemStack(path + ".boots"));
     }
+
     private Material spearMaterial() {
         Material spear = Material.matchMaterial("SPEAR");
         if (spear != null) return spear;
         plugin.getLogger().warning("SPEAR is not present in this Paper API; using TRIDENT as a compatibility fallback.");
         return Material.TRIDENT;
     }
+
     private ItemStack gear(Material type) {
         ItemStack item = new ItemStack(type); ItemMeta meta = item.getItemMeta(); meta.setUnbreakable(true); item.setItemMeta(meta); return item;
     }
