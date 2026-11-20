@@ -10,11 +10,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-public final class FightCommand implements CommandExecutor {
+public final class DuelCommand implements CommandExecutor {
     private final PvPCore plugin;
     private final Map<UUID, UUID> incomingInvites = new HashMap<>();
 
-    public FightCommand(PvPCore plugin) {
+    public DuelCommand(PvPCore plugin) {
         this.plugin = plugin;
     }
 
@@ -44,28 +44,28 @@ public final class FightCommand implements CommandExecutor {
             UUID challengerId = incomingInvites.remove(player.getUniqueId());
             Player challenger = challengerId == null ? null : Bukkit.getPlayer(challengerId);
             if (challenger == null || !challenger.isOnline()) {
-                plugin.message(player, "&cYou do not have a pending fight invitation.");
+                plugin.message(player, "&cYou do not have a pending duel invitation.");
                 return true;
             }
-            if (plugin.practice().isFighting(player) || plugin.practice().isFighting(challenger)) {
-                plugin.message(player, "&cOne of you is already in a fight.");
+            if (plugin.practice().isDueling(player) || plugin.practice().isDueling(challenger)) {
+                plugin.message(player, "&cOne of you is already in a duel.");
                 return true;
             }
-            plugin.practice().startFight(challenger, player);
+            plugin.practice().startDuel(challenger, player);
             return true;
         }
         if (args.length == 1 && args[0].equalsIgnoreCase("deny")) {
             UUID challengerId = incomingInvites.remove(player.getUniqueId());
             Player challenger = challengerId == null ? null : Bukkit.getPlayer(challengerId);
-            if (challenger == null) plugin.message(player, "&cYou do not have a pending fight invitation.");
+            if (challenger == null) plugin.message(player, "&cYou do not have a pending duel invitation.");
             else {
-                plugin.message(player, "&7Fight invitation declined.");
-                plugin.message(challenger, "&c" + player.getName() + " declined your fight invitation.");
+                plugin.message(player, "&7Duel invitation declined.");
+                plugin.message(challenger, "&c" + player.getName() + " declined your duel invitation.");
             }
             return true;
         }
         if (args.length != 1) {
-            plugin.message(player, "&eUsage: /fight <player> &7| &e/fight accept &7| &e/fight deny");
+            plugin.message(player, "&eUsage: /duel <player> &7| &e/duel accept &7| &e/duel deny");
             return true;
         }
         Player target = Bukkit.getPlayerExact(args[0]);
@@ -74,21 +74,21 @@ public final class FightCommand implements CommandExecutor {
             return true;
         }
         if (target.equals(player)) {
-            plugin.message(player, "&cYou cannot fight yourself.");
+            plugin.message(player, "&cYou cannot duel yourself.");
             return true;
         }
-        if (plugin.practice().isFighting(player) || plugin.practice().isFighting(target)) {
-            plugin.message(player, "&cOne of you is already in a fight.");
+        if (plugin.practice().isDueling(player) || plugin.practice().isDueling(target)) {
+            plugin.message(player, "&cOne of you is already in a duel.");
             return true;
         }
         incomingInvites.put(target.getUniqueId(), player.getUniqueId());
-        plugin.message(player, "&aFight invitation sent to &f" + target.getName() + "&a.");
+        plugin.message(player, "&aDuel invitation sent to &f" + target.getName() + "&a.");
         plugin.message(target, "&e" + player.getName() + " challenged you to a 1v1.");
-        plugin.message(target, "&7Use &a/fight accept &7or &c/fight deny&7.");
+        plugin.message(target, "&7Use &a/duel accept &7or &c/duel deny&7.");
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (incomingInvites.remove(target.getUniqueId(), player.getUniqueId())) {
-                if (player.isOnline()) plugin.message(player, "&7Your fight invitation to " + target.getName() + " expired.");
-                if (target.isOnline()) plugin.message(target, "&7The fight invitation expired.");
+                if (player.isOnline()) plugin.message(player, "&7Your duel invitation to " + target.getName() + " expired.");
+                if (target.isOnline()) plugin.message(target, "&7The duel invitation expired.");
             }
         }, 600L);
         return true;
