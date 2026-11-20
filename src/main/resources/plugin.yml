@@ -9,6 +9,9 @@ commands:
     description: Opens private PvP practice rooms and kit editor.
     usage: /prac [kit|join]
     aliases: [practise]
+  options:
+    description: Opens PvPCore visual options.
+    usage: /options
   spawn:
     description: Teleports you or an admin-selected player to spawn.
     usage: /spawn [player]
