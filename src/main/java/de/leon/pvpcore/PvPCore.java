@@ -23,7 +23,8 @@ public final class PvPCore extends JavaPlugin implements Listener {
     private BotManager bots;
     private WorldManager worlds;
     private ItemEditCommand itemEdit;
-    private PracticeManager practice;\n    private FightCommand fights;
+    private PracticeManager practice;
+    private FightCommand fights;
     private final Set<UUID> rtpLoading = ConcurrentHashMap.newKeySet();
 
     @Override public void onEnable() {
@@ -48,7 +49,9 @@ public final class PvPCore extends JavaPlugin implements Listener {
         register("spawn", new SpawnCommand(this));
         register("setspawn", new SetSpawnCommand(this));
         register("admin", new AdminCommand(this));
-        fights = new FightCommand(this);\n        register("fight", fights);\n        register("duels", new DuelsCommand(this));
+        fights = new FightCommand(this);
+        register("fight", fights);
+        register("duels", new DuelsCommand(this));
         register("gm", new GamemodeCommand(this));
         itemEdit = new ItemEditCommand(this);
         register("it", itemEdit);
@@ -107,7 +110,8 @@ public final class PvPCore extends JavaPlugin implements Listener {
     public Menus menus() { return menus; }
     public BotManager bots() { return bots; }
     public WorldManager worlds() { return worlds; }
-    public PracticeManager practice() { return practice; }\n    public FightCommand fights() { return fights; }
+    public PracticeManager practice() { return practice; }
+    public FightCommand fights() { return fights; }
     public String color(String text) {
         return ChatColor.translateAlternateColorCodes('&', SmallCaps.of(text));
     }
