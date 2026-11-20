@@ -36,6 +36,7 @@ public final class PracticeManager implements Listener {
     public enum Mode { STUN_SLAM, SWORD }
 
     private static final int ROOM_SPACING = 1024;
+    private static final int ARENA_RADIUS = 48;
     private static final String PRACTICE_WORLD = "prac_void";
 
     private final PvPCore plugin;
@@ -54,6 +55,7 @@ public final class PracticeManager implements Listener {
     private final Map<UUID, Location> fightReturnLocations = new HashMap<>();
     private final Map<UUID, Integer> adminBoxVisits = new HashMap<>();
     private final Map<Integer, org.bukkit.scheduler.BukkitTask> leafDecayTasks = new HashMap<>();
+    private final Set<Integer> foundationBuildingRooms = new HashSet<>();
     private final Map<UUID, Scoreboard> practiceBoards = new HashMap<>();
     private final Map<UUID, Scoreboard> previousBoards = new HashMap<>();
     private boolean warnedSpearFallback;
@@ -99,7 +101,7 @@ public final class PracticeManager implements Listener {
                     plugin.getConfig().getInt("practice.players." + player.getUniqueId() + ".room", -1)));
             if (index < 0) continue;
             int cx = roomCenterX(index), cz = 128;
-            boolean nearby = player.getLocation().distanceSquared(new Location(world == null ? player.getWorld() : world, cx + 0.5, player.getLocation().getY(), cz + 0.5)) <= 36.0 * 36.0;
+            boolean nearby = player.getLocation().distanceSquared(new Location(world == null ? player.getWorld() : world, cx + 0.5, player.getLocation().getY(), cz + 0.5)) <= 60.0 * 60.0;
             if (!nearby) {
                 plugin.bots().removeOwned(player);
                 continue;
@@ -206,7 +208,8 @@ public final class PracticeManager implements Listener {
             plugin.saveConfig();
         }
         clearPlatform(cx, cz);
-        buildDuelFoundation(cx, cz);
+        buildDuelFoundation(cx, cz, index);
+        buildBackgroundLandscape(cx, cz, index);
         plugin.bots().removeOwned(challenger);
         plugin.bots().removeOwned(opponent);
         activeAttempts.remove(challenger.getUniqueId());
@@ -510,13 +513,63 @@ public final class PracticeManager implements Listener {
         buildArenaPlatform(cx, cz);
     }
 
-    private void buildDuelFoundation(int cx, int cz) {
+    private void buildDuelFoundation(int cx, int cz, int roomIndex) {
         if (world == null || !plugin.getConfig().getBoolean("duels.foundation.enabled", true)) return;
-        int depth = Math.max(1, Math.min(128, plugin.getConfig().getInt("duels.foundation.depth", 64)));
-        for (int x = -24; x <= 24; x++) for (int z = -24; z <= 24; z++) {
-            for (int y = 80 - depth; y < 80; y++)
-                world.getBlockAt(cx + x, y, cz + z).setType(y == 80 - depth ? Material.BEDROCK : Material.STONE, false);
+        String path = "duels.rooms." + roomIndex + ".foundation-built";
+        if (plugin.getConfig().getBoolean(path, false) || !foundationBuildingRooms.add(roomIndex)) return;
+        int stoneDepth = Math.max(1, Math.min(64, plugin.getConfig().getInt("duels.foundation.stone-depth", 64)));
+        int deepslateDepth = Math.max(1, Math.min(128, plugin.getConfig().getInt("duels.foundation.deepslate-depth", 64)));
+        List<int[]> columns = new ArrayList<>((ARENA_RADIUS * 2 + 1) * (ARENA_RADIUS * 2 + 1));
+        for (int x = -ARENA_RADIUS; x <= ARENA_RADIUS; x++) for (int z = -ARENA_RADIUS; z <= ARENA_RADIUS; z++) columns.add(new int[]{cx + x, cz + z});
+        int[] cursor = {0};
+        Bukkit.getScheduler().runTaskTimer(plugin, task -> {
+            int processed = 0;
+            while (cursor[0] < columns.size() && processed++ < 24) {
+                int[] col = columns.get(cursor[0]++);
+                for (int y = 80 - stoneDepth; y < 80; y++) world.getBlockAt(col[0], y, col[1]).setType(Material.STONE, false);
+                for (int y = 80 - stoneDepth - deepslateDepth; y < 80 - stoneDepth; y++) world.getBlockAt(col[0], y, col[1]).setType(Material.DEEPSLATE, false);
+                world.getBlockAt(col[0], 80 - stoneDepth - deepslateDepth - 1, col[1]).setType(Material.BEDROCK, false);
+            }
+            if (cursor[0] >= columns.size()) {
+                plugin.getConfig().set(path, true); plugin.saveConfig();
+                foundationBuildingRooms.remove(roomIndex); task.cancel();
+            }
+        }, 1L, 1L);
+    }
+
+    private void buildBackgroundLandscape(int cx, int cz, int roomIndex) {
+        if (world == null || !plugin.getConfig().getBoolean("duels.landscape.enabled", true)) return;
+        String path = "duels.rooms." + roomIndex + ".landscape-built";
+        if (plugin.getConfig().getBoolean(path, false)) return;
+        Random random = new Random(731942L + roomIndex * 7919L);
+        for (int hill = 0; hill < 22; hill++) {
+            double angle = Math.PI * 2.0 * hill / 22.0 + random.nextDouble() * 0.18;
+            int distance = 78 + random.nextInt(52);
+            int hx = cx + (int) Math.round(Math.cos(angle) * distance);
+            int hz = cz + (int) Math.round(Math.sin(angle) * distance);
+            int radius = 8 + random.nextInt(10), peak = 4 + random.nextInt(9);
+            for (int dx = -radius; dx <= radius; dx++) for (int dz = -radius; dz <= radius; dz++) {
+                double norm = Math.sqrt(dx * dx + dz * dz) / radius;
+                if (norm > 1.0) continue;
+                int surface = 77 + Math.max(1, (int) Math.round(peak * (1.0 - norm * norm)));
+                for (int y = 76; y < surface - 1; y++) world.getBlockAt(hx + dx, y, hz + dz).setType(Material.STONE, false);
+                world.getBlockAt(hx + dx, surface - 1, hz + dz).setType(Material.DIRT, false);
+                world.getBlockAt(hx + dx, surface, hz + dz).setType(Material.GRASS_BLOCK, false);
+            }
+            if (hill % 2 == 0) {
+                int tx = hx + random.nextInt(Math.max(1, radius / 2)) - radius / 4;
+                int tz = hz + random.nextInt(Math.max(1, radius / 2)) - radius / 4;
+                int ground = 77 + peak, trunk = 5 + random.nextInt(3);
+                for (int y = 1; y <= trunk; y++) world.getBlockAt(tx, ground + y, tz).setType(Material.SPRUCE_LOG, false);
+                for (int layer = 0; layer < 4; layer++) {
+                    int spread = 3 - layer / 2;
+                    for (int dx = -spread; dx <= spread; dx++) for (int dz = -spread; dz <= spread; dz++)
+                        if (Math.abs(dx) + Math.abs(dz) <= spread + 1)
+                            world.getBlockAt(tx + dx, ground + trunk - 2 + layer, tz + dz).setType(Material.SPRUCE_LEAVES, false);
+                }
+            }
         }
+        plugin.getConfig().set(path, true); plugin.saveConfig();
     }
 
     public String arenaTheme(Player player) {
@@ -575,8 +628,8 @@ public final class PracticeManager implements Listener {
         org.bukkit.scheduler.BukkitTask oldDecay = leafDecayTasks.remove(roomIndex);
         if (oldDecay != null) oldDecay.cancel();
 
-        for (int x = -24; x <= 24; x++) {
-            for (int z = -24; z <= 24; z++) {
+        for (int x = -ARENA_RADIUS; x <= ARENA_RADIUS; x++) {
+            for (int z = -ARENA_RADIUS; z <= ARENA_RADIUS; z++) {
                 int edge = Math.max(Math.abs(x), Math.abs(z));
                 double radius = Math.hypot(x, z);
 
@@ -585,14 +638,14 @@ public final class PracticeManager implements Listener {
                 double terrainNoise = Math.sin(x * 0.37) + Math.cos(z * 0.33)
                         + Math.sin((x + z) * 0.21) * 0.8;
                 int height = 0;
-                if (radius >= 13.0 && radius <= 21.5) {
+                if (radius >= 26.0 && radius <= 43.0) {
                     if (terrainNoise > 2.05) height = 2;
                     else if (terrainNoise > 1.15) height = 1;
                 }
 
                 // Never touch the outermost ring: it contains the forcefield wall.
                 // Clearing y=81..85 there would remove the bottom glass rows.
-                if (edge == 24) continue;
+                if (edge == ARENA_RADIUS) continue;
 
                 // Clear old decoration and raised terrain before rebuilding the tile.
                 // Clear the full decoration height, including persistent cherry leaves and logs
@@ -609,7 +662,7 @@ public final class PracticeManager implements Listener {
 
                 // Add varied ground cover from the mid-ring outward. The central
                 // combat zone stays clear, while plants are scattered in small clusters.
-                if (radius >= 8.0 && radius <= 22.0) {
+                if (radius >= 16.0 && radius <= 45.0) {
                     int plantRoll = decorationRandom.nextInt(17);
                     Material groundDetail = null;
                     switch (theme) {
@@ -679,7 +732,7 @@ public final class PracticeManager implements Listener {
                 // Compact ornamental cherry trees with a tapered, rounded canopy.
                 // They stay near the perimeter and their leaves are temporary accents.
                 if (theme.equals("CHERRY_BLOSSOM")
-                        && edge >= 18 && edge <= 21
+                        && edge >= 36 && edge <= 44
                         && decorationRandom.nextInt(173) == 0) {
                     int trunkBase = topY + 1;
                     for (int trunkY = 0; trunkY < 3; trunkY++) {
@@ -707,11 +760,11 @@ public final class PracticeManager implements Listener {
 
         // Decorative frame inside the glass enclosure, using the selected theme's accent block.
         Material trim = palette[3];
-        for (int offset = -23; offset <= 23; offset++) {
-            world.getBlockAt(cx - 23, 80, cz + offset).setType(trim, false);
-            world.getBlockAt(cx + 23, 80, cz + offset).setType(trim, false);
-            world.getBlockAt(cx + offset, 80, cz - 23).setType(trim, false);
-            world.getBlockAt(cx + offset, 80, cz + 23).setType(trim, false);
+        for (int offset = -47; offset <= 47; offset++) {
+            world.getBlockAt(cx - 47, 80, cz + offset).setType(trim, false);
+            world.getBlockAt(cx + 47, 80, cz + offset).setType(trim, false);
+            world.getBlockAt(cx + offset, 80, cz - 47).setType(trim, false);
+            world.getBlockAt(cx + offset, 80, cz + 47).setType(trim, false);
         }
 
         if (!timedLeaves.isEmpty()) {
@@ -736,12 +789,12 @@ public final class PracticeManager implements Listener {
     private void buildForceField(int cx, int cz, int glassHeight) {
         if (world == null) return;
         int roofY = 80 + glassHeight;
-        for (int offset = -24; offset <= 24; offset++) {
+        for (int offset = -ARENA_RADIUS; offset <= ARENA_RADIUS; offset++) {
             for (int y = 81; y <= roofY; y++) {
-                world.getBlockAt(cx - 24, y, cz + offset).setType(forceFieldMaterial(), false);
-                world.getBlockAt(cx + 24, y, cz + offset).setType(forceFieldMaterial(), false);
-                world.getBlockAt(cx + offset, y, cz - 24).setType(forceFieldMaterial(), false);
-                world.getBlockAt(cx + offset, y, cz + 24).setType(forceFieldMaterial(), false);
+                world.getBlockAt(cx - ARENA_RADIUS, y, cz + offset).setType(forceFieldMaterial(), false);
+                world.getBlockAt(cx + ARENA_RADIUS, y, cz + offset).setType(forceFieldMaterial(), false);
+                world.getBlockAt(cx + offset, y, cz - ARENA_RADIUS).setType(forceFieldMaterial(), false);
+                world.getBlockAt(cx + offset, y, cz + ARENA_RADIUS).setType(forceFieldMaterial(), false);
             }
         }
 
@@ -862,8 +915,8 @@ public final class PracticeManager implements Listener {
             Location to = event.getTo();
             // Only teleport after the player's position has passed beyond the outer edge
             // of the glass wall (at +/-24), not while approaching or touching its inner face.
-            if (to.getX() < cx - 24.5 || to.getX() > cx + 24.5
-                    || to.getZ() < cz - 24.5 || to.getZ() > cz + 24.5) {
+            if (to.getX() < cx - ARENA_RADIUS - 0.5 || to.getX() > cx + ARENA_RADIUS + 0.5
+                    || to.getZ() < cz - ARENA_RADIUS - 0.5 || to.getZ() > cz + ARENA_RADIUS + 0.5) {
                 p.setFallDistance(0);
                 p.setVelocity(new org.bukkit.util.Vector(0, 0, 0));
                 if (isFighting(p)) p.teleport(fightSpawnLocation(roomIndex, fightSpawnOffsets.getOrDefault(p.getUniqueId(), 0)));

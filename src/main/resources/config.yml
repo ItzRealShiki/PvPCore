@@ -1,7 +1,10 @@
 duels:
   foundation:
     enabled: true
-    depth: 64
+    stone-depth: 64
+    deepslate-depth: 64
+  landscape:
+    enabled: true
   block-breaking:
     enabled: false
 # PvPCore settings
