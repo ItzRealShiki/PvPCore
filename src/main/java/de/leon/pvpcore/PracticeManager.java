@@ -19,6 +19,8 @@ import org.bukkit.event.player.PlayerAnimationType;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.*;
+import org.bukkit.block.Block;
+import org.bukkit.block.data.type.Leaves;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.scoreboard.Criteria;
 import org.bukkit.scoreboard.DisplaySlot;
@@ -44,6 +46,7 @@ public final class PracticeManager implements Listener {
     private final Set<UUID> activeAttempts = new HashSet<>();
     private final Set<UUID> resetting = new HashSet<>();
     private final Set<Integer> activeForceFields = new HashSet<>();
+    private final Map<Integer, org.bukkit.scheduler.BukkitTask> leafDecayTasks = new HashMap<>();
     private final Map<UUID, Scoreboard> practiceBoards = new HashMap<>();
     private final Map<UUID, Scoreboard> previousBoards = new HashMap<>();
     private boolean warnedSpearFallback;
@@ -369,7 +372,7 @@ public final class PracticeManager implements Listener {
             case "NETHER" -> new Material[]{Material.NETHERRACK, Material.NETHERRACK, Material.BASALT, Material.BLACKSTONE, Material.FIRE};
             case "BADLANDS" -> new Material[]{Material.RED_SAND, Material.RED_SANDSTONE, Material.TERRACOTTA, Material.ORANGE_TERRACOTTA, Material.DEAD_BUSH};
             case "PALE_GARDEN" -> new Material[]{Material.PALE_MOSS_BLOCK, Material.PALE_MOSS_BLOCK, Material.PALE_OAK_PLANKS, Material.PALE_OAK_LOG, Material.PALE_HANGING_MOSS};
-            case "CHERRY_BLOSSOM" -> new Material[]{Material.CHERRY_LEAVES, Material.DIRT, Material.CHERRY_LOG, Material.CHERRY_PLANKS, Material.PINK_PETALS};
+            case "CHERRY_BLOSSOM" -> new Material[]{Material.GRASS_BLOCK, Material.DIRT, Material.CHERRY_LOG, Material.CHERRY_PLANKS, Material.PINK_PETALS};
             case "WARPED" -> new Material[]{Material.WARPED_NYLIUM, Material.NETHERRACK, Material.WARPED_STEM, Material.WARPED_WART_BLOCK, Material.WARPED_FUNGUS};
             case "CRIMSON" -> new Material[]{Material.CRIMSON_NYLIUM, Material.NETHERRACK, Material.CRIMSON_STEM, Material.NETHER_WART_BLOCK, Material.CRIMSON_FUNGUS};
             case "FLOWER_PLAINS" -> new Material[]{Material.GRASS_BLOCK, Material.DIRT, Material.ROOTED_DIRT, Material.MOSS_BLOCK, Material.PINK_PETALS};
@@ -378,20 +381,64 @@ public final class PracticeManager implements Listener {
     }
 
     private void buildArenaPlatform(int cx, int cz) {
+        if (world == null) return;
         Material[] palette = arenaPalette();
+        int roomIndex = Math.floorDiv(cx - 128, ROOM_SPACING);
+        List<Block> timedLeaves = new ArrayList<>();
+
+        // Cancel the previous timer when a room is rebuilt or its theme changes.
+        org.bukkit.scheduler.BukkitTask oldDecay = leafDecayTasks.remove(roomIndex);
+        if (oldDecay != null) oldDecay.cancel();
+
         for (int x = -24; x <= 24; x++) {
             for (int z = -24; z <= 24; z++) {
                 int edge = Math.max(Math.abs(x), Math.abs(z));
-                world.getBlockAt(cx + x, 80, cz + z).setType(palette[0], false);
-                world.getBlockAt(cx + x, 79, cz + z).setType(palette[1], false);
-                world.getBlockAt(cx + x, 78, cz + z).setType(palette[2], false);
-                world.getBlockAt(cx + x, 77, cz + z).setType(palette[3], false);
+                double radius = Math.hypot(x, z);
 
-                if (edge >= 19 && edge <= 22 && Math.floorMod(x * 31 + z * 17, 23) == 0) {
+                // Keep the central PvP zone level. Small, clustered height changes
+                // are restricted to the outer ring so movement and combos stay fair.
+                double terrainNoise = Math.sin(x * 0.37) + Math.cos(z * 0.33)
+                        + Math.sin((x + z) * 0.21) * 0.8;
+                int height = 0;
+                if (radius >= 13.0 && radius <= 21.5) {
+                    if (terrainNoise > 2.05) height = 2;
+                    else if (terrainNoise > 1.15) height = 1;
+                }
+
+                // Clear old decoration and raised terrain before rebuilding the tile.
+                for (int y = 81; y <= 85; y++) {
+                    world.getBlockAt(cx + x, y, cz + z).setType(Material.AIR, false);
+                }
+
+                int topY = 80 + height;
+                world.getBlockAt(cx + x, topY, cz + z).setType(palette[0], false);
+                world.getBlockAt(cx + x, topY - 1, cz + z).setType(palette[1], false);
+                world.getBlockAt(cx + x, topY - 2, cz + z).setType(palette[2], false);
+                world.getBlockAt(cx + x, topY - 3, cz + z).setType(palette[3], false);
+
+                // Sparse theme details only along the outside edge, never across the
+                // central fighting area. Cherry petals are accents, not ground cover.
+                if (edge >= 18 && edge <= 22 && Math.floorMod(x * 31 + z * 17, 29) == 0) {
                     Material detail = palette[4];
-                    if (detail.isBlock() && detail != Material.FIRE) {
-                        world.getBlockAt(cx + x, 81, cz + z).setType(detail, false);
+                    if (detail.isBlock() && detail != Material.FIRE && !detail.name().endsWith("_LEAVES")) {
+                        world.getBlockAt(cx + x, topY + 1, cz + z).setType(detail, false);
                     }
+                }
+
+                // A few small cherry trees add life to the perimeter. Their leaves
+                // are intentionally sparse and are removed automatically after 60s.
+                if (arenaTheme().equals("CHERRY_BLOSSOM")
+                        && edge >= 17 && edge <= 21
+                        && Math.floorMod(x * 47 + z * 31 + x * z, 113) == 0) {
+                    int trunkBase = topY + 1;
+                    world.getBlockAt(cx + x, trunkBase, cz + z).setType(Material.CHERRY_LOG, false);
+                    world.getBlockAt(cx + x, trunkBase + 1, cz + z).setType(Material.CHERRY_LOG, false);
+                    addTimedCherryLeaves(cx + x, trunkBase + 2, cz + z, timedLeaves);
+                    addTimedCherryLeaves(cx + x, trunkBase + 3, cz + z, timedLeaves);
+                    addTimedCherryLeaves(cx + x + 1, trunkBase + 2, cz + z, timedLeaves);
+                    addTimedCherryLeaves(cx + x - 1, trunkBase + 2, cz + z, timedLeaves);
+                    addTimedCherryLeaves(cx + x, trunkBase + 2, cz + z + 1, timedLeaves);
+                    addTimedCherryLeaves(cx + x, trunkBase + 2, cz + z - 1, timedLeaves);
                 }
             }
         }
@@ -404,6 +451,24 @@ public final class PracticeManager implements Listener {
             world.getBlockAt(cx + offset, 80, cz - 23).setType(trim, false);
             world.getBlockAt(cx + offset, 80, cz + 23).setType(trim, false);
         }
+
+        if (!timedLeaves.isEmpty()) {
+            leafDecayTasks.put(roomIndex, Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                for (Block leaf : timedLeaves) {
+                    if (leaf.getType() == Material.CHERRY_LEAVES) leaf.setType(Material.AIR, false);
+                }
+                leafDecayTasks.remove(roomIndex);
+            }, 1200L));
+        }
+    }
+
+    private void addTimedCherryLeaves(int x, int y, int z, List<Block> timedLeaves) {
+        Block block = world.getBlockAt(x, y, z);
+        block.setType(Material.CHERRY_LEAVES, false);
+        Leaves leaves = (Leaves) block.getBlockData();
+        leaves.setPersistent(true);
+        block.setBlockData(leaves, false);
+        timedLeaves.add(block);
     }
 
     private void buildForceField(int cx, int cz) {
