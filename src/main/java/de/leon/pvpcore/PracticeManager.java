@@ -1,0 +1,85 @@
+package de.leon.pvpcore;
+
+import org.bukkit.*;
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
+
+public final class PracticeManager {
+    public enum Mode { STUN_SLAM, SWORD }
+    private final PvPCore plugin;
+    private World world;
+    public PracticeManager(PvPCore plugin) { this.plugin = plugin; }
+
+    public Mode mode(Player p) {
+        try { return Mode.valueOf(plugin.getConfig().getString("practice.players." + p.getUniqueId() + ".mode", "STUN_SLAM")); }
+        catch (IllegalArgumentException ex) { return Mode.STUN_SLAM; }
+    }
+    public void setMode(Player p, Mode mode) {
+        plugin.getConfig().set("practice.players." + p.getUniqueId() + ".mode", mode.name());
+        plugin.saveConfig();
+    }
+    public void enter(Player p) {
+        if (world == null || !world.isLoaded()) {
+            world = Bukkit.getWorld("prac_rooms");
+            if (world == null) world = new WorldCreator("prac_rooms").type(WorldType.FLAT).createWorld();
+        }
+        if (world == null) { plugin.message(p, "&cPractice world could not be loaded."); return; }
+        world.setGameRule(GameRule.DO_MOB_SPAWNING, false);
+        world.setGameRule(GameRule.DO_DAYLIGHT_CYCLE, false);
+        world.setTime(1000L);
+        String base = "practice.players." + p.getUniqueId();
+        int index;
+        if (plugin.getConfig().contains(base + ".room")) index = plugin.getConfig().getInt(base + ".room");
+        else {
+            index = plugin.getConfig().getInt("practice.next-room", 0);
+            plugin.getConfig().set("practice.next-room", index + 1);
+            plugin.getConfig().set(base + ".room", index);
+            plugin.saveConfig();
+        }
+        int cx = 128 + index * 96, cz = 128;
+        if (!plugin.getConfig().getBoolean(base + ".built", false)) {
+            buildRoom(cx, cz);
+            plugin.getConfig().set(base + ".built", true);
+            plugin.saveConfig();
+        }
+        plugin.bots().removeOwned(p);
+        p.teleport(new Location(world, cx + 0.5, 81, cz + 0.5));
+        applyKit(p);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (p.isOnline() && p.getWorld() == world) plugin.bots().spawn(p);
+        }, 2L);
+        plugin.message(p, "&aEntered your private " + (mode(p) == Mode.SWORD ? "&bSword" : "&6Stun Slam") + " room.");
+    }
+    private void buildRoom(int cx, int cz) {
+        for (int x = -24; x <= 24; x++) for (int z = -24; z <= 24; z++) {
+            world.getBlockAt(cx+x, 80, cz+z).setType(Material.SMOOTH_STONE, false);
+            if (Math.abs(x) == 24 || Math.abs(z) == 24)
+                for (int y=81; y<=86; y++) world.getBlockAt(cx+x,y,cz+z).setType(Material.GLASS,false);
+        }
+    }
+    public void applyKit(Player p) {
+        p.getInventory().clear();
+        p.getInventory().setArmorContents(new ItemStack[]{gear(Material.DIAMOND_BOOTS),gear(Material.DIAMOND_LEGGINGS),gear(Material.DIAMOND_CHESTPLATE),gear(Material.DIAMOND_HELMET)});
+        if (mode(p) == Mode.SWORD) p.getInventory().setItem(0, gear(Material.DIAMOND_SWORD));
+        else {
+            p.getInventory().setItem(0, enchanted(Material.NETHERITE_AXE, "sharpness", 5));
+            ItemStack mace = enchanted(Material.MACE, "density", 5); enchant(mace, "wind_burst", 3);
+            p.getInventory().setItem(1, mace);
+            p.getInventory().setItem(2, enchanted(Material.SPEAR, "lunge", 3));
+        }
+        p.getInventory().setHeldItemSlot(0);
+        p.setHealth(20); p.setFoodLevel(20); p.setSaturation(20); p.setFireTicks(0);
+    }
+    private ItemStack gear(Material type) {
+        ItemStack item = new ItemStack(type); ItemMeta meta = item.getItemMeta(); meta.setUnbreakable(true); item.setItemMeta(meta); return item;
+    }
+    private ItemStack enchanted(Material type, String key, int level) {
+        ItemStack item = gear(type); enchant(item,key,level); return item;
+    }
+    private void enchant(ItemStack item, String key, int level) {
+        Enchantment e = Registry.ENCHANTMENT.get(NamespacedKey.minecraft(key));
+        if (e == null) { plugin.getLogger().warning("Missing enchantment: " + key); return; }
+        ItemMeta meta = item.getItemMeta(); meta.addEnchant(e,level,true); item.setItemMeta(meta);
+    }
+}
