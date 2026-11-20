@@ -24,6 +24,7 @@ public final class WorldManager {
     private final File rtpCacheFile;
     private final Deque<PregenChunk> pregenQueue = new ArrayDeque<>();
     private boolean pregenBusy;
+    private boolean regeneratingArenas;
     private record PregenChunk(String worldKey, int x, int z) {}
 
     public WorldManager(PvPCore plugin) {
@@ -497,7 +498,15 @@ public final class WorldManager {
                                  boolean allowFlight, boolean flying) {}
     private record ChunkTarget(World world, int x, int z) {}
 
+    public boolean resetArenas() {
+        if (regeneratingArenas) return false;
+        regenerateSharedWorlds();
+        return true;
+    }
+
     private void regenerateSharedWorlds() {
+        if (regeneratingArenas) return;
+        regeneratingArenas = true;
         List<PlayerReturn> players = new ArrayList<>();
         for (Player player : Bukkit.getOnlinePlayers()) {
             if (!isManagedWorldName(player.getWorld().getName())) continue;
@@ -550,6 +559,7 @@ public final class WorldManager {
 
         if (total == 0) {
             finishRegeneration(players);
+            regeneratingArenas = false;
             return;
         }
 
@@ -576,6 +586,7 @@ public final class WorldManager {
             if (queue.isEmpty()) {
                 task.cancel();
                 finishRegeneration(players);
+                regeneratingArenas = false;
             }
         }, 1L, 1L);
     }
