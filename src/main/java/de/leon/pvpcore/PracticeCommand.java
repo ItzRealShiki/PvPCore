@@ -23,6 +23,7 @@ public final class PracticeCommand implements CommandExecutor, Listener {
         if(!(sender instanceof Player p)) return plugin.playerOnly(sender);
         if(!plugin.hasCore(p,"Member.Core")){plugin.message(p,"&cYou do not have permission.");return true;}
         if(plugin.practice().isFighting(p)){plugin.message(p,"&cYou cannot open practice while a 1v1 is active.");return true;}
+        if(command.getName().equalsIgnoreCase("kits")){kit(p);return true;}
         if(args.length==0){main(p);return true;}
         if(args[0].equalsIgnoreCase("kit")){kit(p);return true;}
         if(args[0].equalsIgnoreCase("join")){plugin.practice().enter(p);return true;}
