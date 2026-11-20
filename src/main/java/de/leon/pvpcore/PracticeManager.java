@@ -279,11 +279,6 @@ public final class PracticeManager implements Listener {
         fightReturnLocations.remove(fighter.getUniqueId());
     }
 
-    @EventHandler
-    public void onFightRespawn(org.bukkit.event.player.PlayerRespawnEvent event) {
-        Location destination = fightReturnLocations.remove(event.getPlayer().getUniqueId());
-        if (destination != null) event.setRespawnLocation(destination);
-    }
 
     public void setMode(Player p, Mode mode) {
         activeAttempts.remove(p.getUniqueId());
@@ -880,6 +875,7 @@ public final class PracticeManager implements Listener {
         Player defeated = event.getEntity();
         if (isFighting(defeated)) endFight(defeated, "&a" + defeated.getName() + " was defeated.");
     }
+
 
     @EventHandler
     public void onFightRespawn(org.bukkit.event.player.PlayerRespawnEvent event) {
