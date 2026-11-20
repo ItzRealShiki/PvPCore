@@ -188,7 +188,7 @@ public final class PracticeManager implements Listener {
         updateSwordAccuracy(player);
     }
 
-    @EventHandler(ignoreCancelled = true)
+    @EventHandler
     public void onBotHit(EntityDamageByEntityEvent event) {
         if (!(event.getDamager() instanceof Player player)) return;
         if (!player.getWorld().getName().equals("prac_rooms")) return;
