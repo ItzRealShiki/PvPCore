@@ -320,7 +320,8 @@ public final class PracticeManager implements Listener {
     @EventHandler
     public void onDamage(EntityDamageEvent event) {
         if (!(event.getEntity() instanceof Player p) || !p.getWorld().getName().equals("prac_rooms")) return;
-        // Practice players are invulnerable; falling still ends an attempt through onMove().
+        // Fake-player bots must remain damageable; only the human practice player is protected.
+        if (plugin.bots().isPracticeBot(p)) return;
         event.setCancelled(true);
     }
 
