@@ -8,6 +8,7 @@ import org.bukkit.generator.ChunkGenerator;
 
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.CompletableFuture;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.*;
@@ -458,10 +459,10 @@ public final class WorldManager {
         Bukkit.getScheduler().runTaskLater(plugin, () -> showRegenerationCountdown(seconds - 1), 20L);
     }
 
+    private record PlayerReturn(Player player, String worldKey, int x, int z, float yaw, float pitch) {}
+
     private void regenerateSharedWorlds() {
-        World holding = Bukkit.getWorlds().stream()
-                .filter(world -> !isManagedWorldName(world.getName()))
-                .findFirst().orElse(null);
+        World holding = Bukkit.getWorld("pvpcore_regeneration_holding");
         if (holding == null) {
             holding = new WorldCreator("pvpcore_regeneration_holding").environment(World.Environment.NORMAL)
                     .type(WorldType.NORMAL).createWorld();
@@ -471,18 +472,101 @@ public final class WorldManager {
             return;
         }
 
-        Location safeHoldingLocation = highestSafeLocation(holding);
-        if (safeHoldingLocation == null) {
-            plugin.getLogger().severe("Could not find a safe highest block in the holding world; arena regeneration was cancelled.");
-            return;
-        }
+        final World holdingWorld = holding;
+        List<PlayerReturn> returnTargets = new ArrayList<>();
+        List<CompletableFuture<?>> chunkLoads = new ArrayList<>();
+        Map<Player, Location> holdingDestinations = new LinkedHashMap<>();
+
         for (Player player : Bukkit.getOnlinePlayers()) {
-            if (isManagedWorldName(player.getWorld().getName())) {
-                player.teleport(safeHoldingLocation);
-                plugin.message(player, "&eYour arena was regenerated. You were moved to a safe high location.");
-            }
+            String key = keyForWorldName(player.getWorld().getName());
+            if (key == null) continue;
+
+            Location original = player.getLocation();
+            returnTargets.add(new PlayerReturn(player, key, original.getBlockX(), original.getBlockZ(),
+                    original.getYaw(), original.getPitch()));
+
+            int platformY = Math.max(holdingWorld.getMinHeight() + 1,
+                    Math.min(holdingWorld.getMaxHeight() - 3, original.getBlockY()));
+            int chunkX = original.getBlockX() >> 4;
+            int chunkZ = original.getBlockZ() >> 4;
+            chunkLoads.add(holdingWorld.getChunkAtAsync(chunkX, chunkZ, true));
+            holdingDestinations.put(player, new Location(holdingWorld,
+                    original.getBlockX() + 0.5, platformY + 1.0, original.getBlockZ() + 0.5,
+                    original.getYaw(), original.getPitch()));
         }
 
+        CompletableFuture.allOf(chunkLoads.toArray(new CompletableFuture<?>[0])).whenComplete((ignored, loadError) ->
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    if (loadError != null) {
+                        plugin.getLogger().severe("Could not prepare temporary holding locations; arena regeneration was cancelled.");
+                        return;
+                    }
+
+                    List<CompletableFuture<Boolean>> teleports = new ArrayList<>();
+                    for (Map.Entry<Player, Location> entry : holdingDestinations.entrySet()) {
+                        Player player = entry.getKey();
+                        if (!player.isOnline()) continue;
+                        Location destination = entry.getValue();
+                        int platformY = destination.getBlockY() - 1;
+                        int bx = destination.getBlockX();
+                        int bz = destination.getBlockZ();
+
+                        // A small temporary platform keeps each player at the same X/Z,
+                        // just one block above their original block position.
+                        for (int dx = -1; dx <= 1; dx++) {
+                            for (int dz = -1; dz <= 1; dz++) {
+                                holdingWorld.getBlockAt(bx + dx, platformY, bz + dz).setType(Material.GLASS, false);
+                            }
+                        }
+                        holdingWorld.getBlockAt(bx, platformY + 1, bz).setType(Material.AIR, false);
+                        holdingWorld.getBlockAt(bx, platformY + 2, bz).setType(Material.AIR, false);
+                        teleports.add(player.teleportAsync(destination));
+                    }
+
+                    CompletableFuture.allOf(teleports.toArray(new CompletableFuture<?>[0])).whenComplete((done, teleportError) ->
+                            Bukkit.getScheduler().runTask(plugin, () -> {
+                                if (teleportError != null) {
+                                    plugin.getLogger().severe("A player could not be moved to the temporary holding world; arena regeneration was cancelled.");
+                                    return;
+                                }
+                                for (PlayerReturn target : returnTargets) {
+                                    if (target.player().isOnline() && isManagedWorldName(target.player().getWorld().getName())) {
+                                        plugin.getLogger().warning("Player remained in an arena world; skipping regeneration to avoid unloading a world with players.");
+                                        return;
+                                    }
+                                }
+
+                                regenerateArenaFolders();
+
+                                for (PlayerReturn target : returnTargets) {
+                                    Player player = target.player();
+                                    if (!player.isOnline()) continue;
+                                    World fresh = Bukkit.getWorld(plugin.getConfig().getString(
+                                            "worlds." + target.worldKey() + ".name", "pvp_" + target.worldKey() + "_arena"));
+                                    if (fresh == null) {
+                                        plugin.message(player, "&cYour arena was regenerated, but your return location is unavailable.");
+                                        continue;
+                                    }
+                                    fresh.getChunkAtAsync(target.x() >> 4, target.z() >> 4, true).whenComplete((chunk, error) ->
+                                            Bukkit.getScheduler().runTask(plugin, () -> {
+                                                if (!player.isOnline() || error != null || chunk == null) return;
+                                                Location safe = highestSafeLocationAt(fresh, target.x(), target.z());
+                                                if (safe == null) safe = highestSafeLocation(fresh);
+                                                if (safe == null) {
+                                                    plugin.message(player, "&cYour arena was regenerated, but no safe return location was found.");
+                                                    return;
+                                                }
+                                                safe.setYaw(target.yaw());
+                                                safe.setPitch(target.pitch());
+                                                player.teleportAsync(safe);
+                                            }));
+                                }
+                                Bukkit.broadcastMessage(plugin.color("&8[&aPvPCore&8] &aAll shared arena worlds have been regenerated!"));
+                            }));
+                }));
+    }
+
+    private void regenerateArenaFolders() {
         for (String key : WORLD_KEYS) {
             String name = plugin.getConfig().getString("worlds." + key + ".name", "pvp_" + key + "_arena");
             rtpLocationCache.get(key).clear();
@@ -509,9 +593,6 @@ public final class WorldManager {
                 applyPermanentDay(fresh);
             }
         }
-
-        Bukkit.broadcastMessage(plugin.color("&8[&aPvPCore&8] &aAll shared arena worlds have been regenerated!"));
-        // The cache task will immediately begin preparing fresh destinations in the new worlds.
     }
 
     private Location highestSafeLocation(World world) {
