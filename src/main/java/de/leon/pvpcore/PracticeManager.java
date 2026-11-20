@@ -833,8 +833,8 @@ public final class PracticeManager implements Listener {
                 world.getBlockAt(cx + offset, y, cz + ARENA_RADIUS).setType(Material.AIR, false);
             }
         }
-        for (int x = -24; x <= 24; x++) {
-            for (int z = -24; z <= 24; z++) {
+        for (int x = -ARENA_RADIUS; x <= ARENA_RADIUS; x++) {
+            for (int z = -ARENA_RADIUS; z <= ARENA_RADIUS; z++) {
                 world.getBlockAt(cx + x, roofY, cz + z).setType(Material.AIR, false);
             }
         }
