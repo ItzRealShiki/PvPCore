@@ -405,6 +405,10 @@ public final class PracticeManager implements Listener {
                     else if (terrainNoise > 1.15) height = 1;
                 }
 
+                // Never touch the outermost ring: it contains the forcefield wall.
+                // Clearing y=81..85 there would remove the bottom glass rows.
+                if (edge == 24) continue;
+
                 // Clear old decoration and raised terrain before rebuilding the tile.
                 for (int y = 81; y <= 85; y++) {
                     world.getBlockAt(cx + x, y, cz + z).setType(Material.AIR, false);
@@ -485,20 +489,31 @@ public final class PracticeManager implements Listener {
                     }
                 }
 
-                // A few small cherry trees add life to the perimeter. Their leaves
-                // are intentionally sparse and are removed automatically after 60s.
+                // Compact ornamental cherry trees with a tapered, rounded canopy.
+                // They stay near the perimeter and their leaves are temporary accents.
                 if (arenaTheme().equals("CHERRY_BLOSSOM")
-                        && edge >= 17 && edge <= 21
-                        && Math.floorMod(x * 47 + z * 31 + x * z, 113) == 0) {
+                        && edge >= 18 && edge <= 21
+                        && Math.floorMod(x * 47 + z * 31 + x * z, 173) == 0) {
                     int trunkBase = topY + 1;
-                    world.getBlockAt(cx + x, trunkBase, cz + z).setType(Material.CHERRY_LOG, false);
-                    world.getBlockAt(cx + x, trunkBase + 1, cz + z).setType(Material.CHERRY_LOG, false);
-                    addTimedCherryLeaves(cx + x, trunkBase + 2, cz + z, timedLeaves);
-                    addTimedCherryLeaves(cx + x, trunkBase + 3, cz + z, timedLeaves);
-                    addTimedCherryLeaves(cx + x + 1, trunkBase + 2, cz + z, timedLeaves);
-                    addTimedCherryLeaves(cx + x - 1, trunkBase + 2, cz + z, timedLeaves);
-                    addTimedCherryLeaves(cx + x, trunkBase + 2, cz + z + 1, timedLeaves);
-                    addTimedCherryLeaves(cx + x, trunkBase + 2, cz + z - 1, timedLeaves);
+                    for (int trunkY = 0; trunkY < 3; trunkY++) {
+                        world.getBlockAt(cx + x, trunkBase + trunkY, cz + z)
+                                .setType(Material.CHERRY_LOG, false);
+                    }
+
+                    // Broad lower canopy with clipped corners.
+                    for (int dx = -2; dx <= 2; dx++) {
+                        for (int dz = -2; dz <= 2; dz++) {
+                            if (Math.abs(dx) == 2 && Math.abs(dz) == 2) continue;
+                            addTimedCherryLeaves(cx + x + dx, trunkBase + 3, cz + z + dz, timedLeaves);
+                        }
+                    }
+                    // Smaller upper canopy creates a soft, rounded crown.
+                    for (int dx = -1; dx <= 1; dx++) {
+                        for (int dz = -1; dz <= 1; dz++) {
+                            addTimedCherryLeaves(cx + x + dx, trunkBase + 4, cz + z + dz, timedLeaves);
+                        }
+                    }
+                    addTimedCherryLeaves(cx + x, trunkBase + 5, cz + z, timedLeaves);
                 }
             }
         }
