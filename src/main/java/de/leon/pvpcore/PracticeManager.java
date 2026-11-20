@@ -1085,6 +1085,53 @@ public final class PracticeManager implements Listener {
         plugin.saveConfig();
     }
 
+    public void applyDuelKitToInventory(Player player, Mode mode, Inventory editor) {
+        editor.clear();
+        if (mode == Mode.SWORD) {
+            editor.setItem(0, gear(Material.DIAMOND_SWORD));
+        } else {
+            editor.setItem(0, enchanted(Material.NETHERITE_AXE, "sharpness", 5));
+            ItemStack mace = enchanted(Material.MACE, "density", 5);
+            enchant(mace, "wind_burst", 3);
+            editor.setItem(1, mace);
+            editor.setItem(2, enchanted(spearMaterial(), "lunge", 3));
+        }
+        editor.setItem(45, gear(Material.DIAMOND_HELMET));
+        editor.setItem(46, gear(Material.DIAMOND_CHESTPLATE));
+        editor.setItem(47, gear(Material.DIAMOND_LEGGINGS));
+        editor.setItem(48, gear(Material.DIAMOND_BOOTS));
+        loadDuelKit(player, mode, editor);
+    }
+
+    public void saveDuelKit(Player player, Mode mode, Inventory editor) {
+        String path = "practice.players." + player.getUniqueId() + ".duel-kits." + mode.name();
+        for (int slot = 0; slot < 36; slot++) {
+            ItemStack item = editor.getItem(slot);
+            plugin.getConfig().set(path + ".contents." + slot,
+                    item == null || item.getType().isAir() ? null : item.clone());
+        }
+        plugin.getConfig().set(path + ".helmet", editor.getItem(45));
+        plugin.getConfig().set(path + ".chestplate", editor.getItem(46));
+        plugin.getConfig().set(path + ".leggings", editor.getItem(47));
+        plugin.getConfig().set(path + ".boots", editor.getItem(48));
+        plugin.saveConfig();
+    }
+
+    private void loadDuelKit(Player player, Mode mode, Inventory inventory) {
+        String personalPath = "practice.players." + player.getUniqueId() + ".duel-kits." + mode.name();
+        String path = plugin.getConfig().contains(personalPath + ".contents")
+                ? personalPath : "practice.admin-kits." + mode.name();
+        if (!plugin.getConfig().contains(path + ".contents")) return;
+        for (int slot = 0; slot < 36; slot++) {
+            ItemStack item = plugin.getConfig().getItemStack(path + ".contents." + slot);
+            inventory.setItem(slot, item == null ? null : item.clone());
+        }
+        inventory.setItem(45, plugin.getConfig().getItemStack(path + ".helmet"));
+        inventory.setItem(46, plugin.getConfig().getItemStack(path + ".chestplate"));
+        inventory.setItem(47, plugin.getConfig().getItemStack(path + ".leggings"));
+        inventory.setItem(48, plugin.getConfig().getItemStack(path + ".boots"));
+    }
+
     private void applyFightKit(Player player, Mode mode) {
         player.getInventory().clear();
         if (mode == Mode.SWORD) {
@@ -1098,7 +1145,7 @@ public final class PracticeManager implements Listener {
             player.getInventory().setItem(1, mace);
             player.getInventory().setItem(2, enchanted(spearMaterial(), "lunge", 3));
         }
-        loadAdminKit(mode, player.getInventory());
+        loadDuelKit(player, mode, player.getInventory());
         player.getInventory().setHeldItemSlot(0);
     }
 
