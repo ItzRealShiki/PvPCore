@@ -8,6 +8,9 @@ import org.bukkit.inventory.*;
 import org.bukkit.inventory.meta.ItemMeta;
 
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.List;
 
 public final class Menus implements Listener {
     private final PvPCore plugin;
@@ -15,6 +18,7 @@ public final class Menus implements Listener {
     private static final class MenuHolder implements InventoryHolder {
         private final String key;
         private Inventory inventory;
+        private final Map<Integer, java.util.UUID> targets = new HashMap<>();
         private MenuHolder(String key) { this.key = key; }
         @Override public Inventory getInventory() { return inventory; }
     }
@@ -87,12 +91,65 @@ public final class Menus implements Listener {
         p.openInventory(inv);
     }
 
+    public void openBoxThemes(Player p) {
+        Inventory inv = create("box-themes", "&8ᴘʀɪᴠᴀᴛᴇ ʙᴏx ᴅᴇꜱɪɢɴ", 54);
+        String[] themes = {"PLAINS", "FLOWER_PLAINS", "CHERRY_BLOSSOM", "DESERT", "BADLANDS",
+                "PALE_GARDEN", "END", "NETHER", "WARPED", "CRIMSON"};
+        Material[] icons = {Material.GRASS_BLOCK, Material.POPPY, Material.CHERRY_SAPLING, Material.SAND,
+                Material.RED_SAND, Material.PALE_MOSS_BLOCK, Material.END_STONE, Material.NETHERRACK,
+                Material.WARPED_NYLIUM, Material.CRIMSON_NYLIUM};
+        int[] slots = {10, 12, 14, 16, 19, 21, 23, 25, 30, 32};
+        String selected = plugin.practice().arenaTheme(p);
+        for (int i = 0; i < themes.length; i++) {
+            String name = themes[i].replace('_', ' ');
+            inv.setItem(slots[i], item(icons[i], (themes[i].equals(selected) ? "&a✓ " : "&e") + name,
+                    "&7Personal box theme.", "&eClick to select"));
+        }
+        inv.setItem(49, item(Material.ARROW, "&cBack", "&7Return to practice menu."));
+        p.openInventory(inv);
+    }
+
+    public void openAdminBoxes(Player p) {
+        Inventory inv = create("admin-boxes", "&8ᴀᴅᴍɪɴ · ᴘʟᴀʏᴇʀ ʙᴏxᴇꜱ", 54);
+        MenuHolder holder = (MenuHolder) inv.getHolder();
+        int slot = 0;
+        for (Player target : Bukkit.getOnlinePlayers()) {
+            if (slot >= 45) break;
+            inv.setItem(slot, item(Material.PLAYER_HEAD, "&e" + target.getName(),
+                    "&7Teleport to this player's private box.", "&eClick to teleport"));
+            holder.targets.put(slot, target.getUniqueId());
+            slot++;
+        }
+        if (slot == 0) inv.setItem(22, item(Material.BARRIER, "&cNo players online"));
+        inv.setItem(49, item(Material.ARROW, "&cBack"));
+        p.openInventory(inv);
+    }
+
+    public void openAdminKits(Player p) {
+        Inventory inv = create("admin-kits", "&8ᴀᴅᴍɪɴ · ᴋɪᴛꜱ", 27);
+        inv.setItem(10, item(Material.DIAMOND_SWORD, "&bSword Kit", "&7Edit the global 1v1 Sword kit."));
+        inv.setItem(16, item(Material.MACE, "&6Spear Mace Kit", "&7Edit the global 1v1 Spear Mace kit."));
+        inv.setItem(22, item(Material.ARROW, "&cBack"));
+        p.openInventory(inv);
+    }
+
+    private void openAdminKitEditor(Player p, PracticeManager.Mode mode) {
+        String key = "admin-kit-editor-" + mode.name();
+        Inventory inv = create(key, "&8ᴀᴅᴍɪɴ · " + mode.name() + " ᴋɪᴛ", 54);
+        plugin.practice().applyAdminKitToInventory(mode, inv);
+        for (int slot = 36; slot <= 44; slot++) inv.setItem(slot, item(Material.GRAY_STAINED_GLASS_PANE, "&8 "));
+        inv.setItem(49, item(Material.BOOK, "&eKit Editor", "&7Changes apply to future 1v1 fights.", "&7Armor slots: 45–48.", "&7Close to save."));
+        inv.setItem(53, item(Material.EMERALD, "&aSave & Close"));
+        p.openInventory(inv);
+    }
+
     public void openAdmin(Player p) {
         Inventory inv = create("admin", plugin.getConfig().getString("menus.title-admin", "&8ᴘᴠᴘᴄᴏʀᴇ ᴀᴅᴍɪɴ"), 27);
-        inv.setItem(10, item(Material.PLAYER_HEAD, "&aPlayer Management", "&7Open player tools."));
+        inv.setItem(10, item(Material.PLAYER_HEAD, "&aPlayer Boxes", "&7Teleport to an online player's box."));
         inv.setItem(12, item(Material.ZOMBIE_HEAD, "&eBot Management", "&7Remove all training NPCs."));
         inv.setItem(14, item(Material.COMMAND_BLOCK, "&6Gamemode Management", "&7Open gamemode selector."));
-        inv.setItem(16, item(Material.COMPARATOR, "&bPlugin Settings", "&7Reload PvPCore configuration."));
+        inv.setItem(16, item(Material.ANVIL, "&bKit Management", "&7Edit Sword and Spear Mace 1v1 kits."));
+        inv.setItem(20, item(Material.COMPARATOR, "&dPlugin Settings", "&7Reload PvPCore configuration."));
         inv.setItem(22, item(Material.BARRIER, "&cClose", "&7Close this menu."));
         p.openInventory(inv);
     }
@@ -111,6 +168,19 @@ public final class Menus implements Listener {
         if (!(e.getWhoClicked() instanceof Player p)) return;
         Inventory top = e.getView().getTopInventory();
         if (!(top.getHolder() instanceof MenuHolder holder)) return;
+        if (holder.key.startsWith("admin-kit-editor-")) {
+            if (e.isShiftClick()) { e.setCancelled(true); return; }
+            if (e.getClickedInventory() != top) { e.setCancelled(true); return; }
+            int editorSlot = e.getSlot();
+            e.setCancelled(editorSlot >= 36 && editorSlot <= 44 || editorSlot >= 49);
+            if (editorSlot == 53) {
+                String modeName = holder.key.substring("admin-kit-editor-".length());
+                plugin.practice().saveAdminKit(PracticeManager.Mode.valueOf(modeName), top);
+                p.closeInventory();
+                plugin.message(p, "&aGlobal 1v1 kit saved.");
+            }
+            return;
+        }
         e.setCancelled(true);
         if (e.getClickedInventory() != top) return;
 
@@ -153,13 +223,42 @@ public final class Menus implements Listener {
             case "admin" -> {
                 if (!plugin.hasCore(p, "Admin.Core")) return;
                 switch (slot) {
-                    case 10 -> plugin.message(p, "&6Player tools are planned for the next module.");
+                    case 10 -> openAdminBoxes(p);
                     case 12 -> { plugin.bots().removeAll(); plugin.message(p, "&aAll training NPCs removed."); }
-                    case 14 -> { openGamemode(p); return; }
-                    case 16 -> { plugin.reloadConfig(); plugin.message(p, "&aConfiguration reloaded."); }
-                    case 22 -> { p.closeInventory(); return; }
-                    default -> { return; }
+                    case 14 -> openGamemode(p);
+                    case 16 -> openAdminKits(p);
+                    case 20 -> { plugin.reloadConfig(); plugin.message(p, "&aConfiguration reloaded."); p.closeInventory(); }
+                    case 22 -> p.closeInventory();
+                    default -> { }
                 }
+            }
+            case "box-themes" -> {
+                String[] themes = {"PLAINS", "FLOWER_PLAINS", "CHERRY_BLOSSOM", "DESERT", "BADLANDS",
+                        "PALE_GARDEN", "END", "NETHER", "WARPED", "CRIMSON"};
+                int[] slots = {10, 12, 14, 16, 19, 21, 23, 25, 30, 32};
+                for (int i = 0; i < slots.length; i++) {
+                    if (slot == slots[i]) {
+                        plugin.practice().setArenaTheme(p, themes[i]);
+                        openBoxThemes(p);
+                        return;
+                    }
+                }
+                if (slot == 49) p.closeInventory();
+            }
+            case "admin-boxes" -> {
+                if (!plugin.hasCore(p, "Admin.Core")) return;
+                java.util.UUID targetId = holder.targets.get(slot);
+                if (targetId != null) {
+                    Player target = Bukkit.getPlayer(targetId);
+                    if (target == null) plugin.message(p, "&cThat player is no longer online.");
+                    else { plugin.practice().teleportToBox(p, target); p.closeInventory(); }
+                } else if (slot == 49) openAdmin(p);
+            }
+            case "admin-kits" -> {
+                if (!plugin.hasCore(p, "Admin.Core")) return;
+                if (slot == 10) openAdminKitEditor(p, PracticeManager.Mode.SWORD);
+                else if (slot == 16) openAdminKitEditor(p, PracticeManager.Mode.STUN_SLAM);
+                else if (slot == 22) openAdmin(p);
             }
             case "gm" -> {
                 if (!plugin.hasCore(p, "Admin.Core")) return;
@@ -173,6 +272,20 @@ public final class Menus implements Listener {
                 plugin.message(p, "&aGamemode changed to &f" + p.getGameMode().name() + "&a.");
                 p.closeInventory();
             }
+        }
+    }
+
+    @EventHandler
+    public void onAdminKitClose(InventoryCloseEvent event) {
+        if (!(event.getPlayer() instanceof Player player)) return;
+        if (!(event.getInventory().getHolder() instanceof MenuHolder holder)
+                || !holder.key.startsWith("admin-kit-editor-")) return;
+        try {
+            PracticeManager.Mode mode = PracticeManager.Mode.valueOf(
+                    holder.key.substring("admin-kit-editor-".length()));
+            plugin.practice().saveAdminKit(mode, event.getInventory());
+        } catch (IllegalArgumentException ignored) {
+            plugin.getLogger().warning("Could not save an admin kit with an invalid mode name.");
         }
     }
 }
