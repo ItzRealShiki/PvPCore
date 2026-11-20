@@ -50,6 +50,7 @@ public final class PracticeManager implements Listener {
     private final Map<UUID, Integer> fightRooms = new HashMap<>();
     private final Map<UUID, Integer> fightSpawnOffsets = new HashMap<>();
     private final Map<UUID, Mode> fightModes = new HashMap<>();
+    private final Map<UUID, Integer> adminBoxVisits = new HashMap<>();
     private final Map<Integer, org.bukkit.scheduler.BukkitTask> leafDecayTasks = new HashMap<>();
     private final Map<UUID, Scoreboard> practiceBoards = new HashMap<>();
     private final Map<UUID, Scoreboard> previousBoards = new HashMap<>();
@@ -77,7 +78,7 @@ public final class PracticeManager implements Listener {
         Player ownBot = plugin.bots().ownedBot(player);
         for (Player other : Bukkit.getOnlinePlayers()) {
             if (other.equals(player)) continue;
-            if (other.equals(ownBot) || isFightOpponent(player, other)) player.showPlayer(plugin, other);
+            if (other.equals(ownBot) || isFightOpponent(player, other) || adminBoxVisits.containsKey(player.getUniqueId())) player.showPlayer(plugin, other);
             else player.hidePlayer(plugin, other);
         }
     }
@@ -92,7 +93,8 @@ public final class PracticeManager implements Listener {
         Set<Integer> nearbyRooms = new HashSet<>();
         for (Player player : Bukkit.getOnlinePlayers()) {
             if (!player.getWorld().equals(world)) continue;
-            int index = plugin.getConfig().getInt("practice.players." + player.getUniqueId() + ".room", -1);
+            int index = fightRooms.getOrDefault(player.getUniqueId(), adminBoxVisits.getOrDefault(player.getUniqueId(),
+                    plugin.getConfig().getInt("practice.players." + player.getUniqueId() + ".room", -1)));
             if (index < 0) continue;
             int cx = roomCenterX(index), cz = 128;
             boolean nearby = player.getLocation().distanceSquared(new Location(world == null ? player.getWorld() : world, cx + 0.5, player.getLocation().getY(), cz + 0.5)) <= 36.0 * 36.0;
@@ -114,7 +116,8 @@ public final class PracticeManager implements Listener {
                 buildForceField(cx, cz, glassHeight);
                 forceFieldHeights.put(index, glassHeight);
             }
-            if (!isFighting(player) && plugin.bots().isAvailable() && !plugin.bots().hasOwnedBot(player)) plugin.bots().spawn(player);
+            if (!isFighting(player) && !adminBoxVisits.containsKey(player.getUniqueId())
+                    && plugin.bots().isAvailable() && !plugin.bots().hasOwnedBot(player)) plugin.bots().spawn(player);
             if (mode(player) == Mode.SWORD) recoverSwordBotAtEdge(player, cx, cz);
             updatePracticeBoard(player);
             updatePlayerVisibility(player);
@@ -135,6 +138,40 @@ public final class PracticeManager implements Listener {
     }
 
     public boolean isFighting(Player player) { return fightRooms.containsKey(player.getUniqueId()); }
+
+    public void teleportToBox(Player admin, Player owner) {
+        if (world == null) {
+            world = Bukkit.getWorld(PRACTICE_WORLD);
+            if (world == null) world = createVoidWorld();
+        }
+        if (world == null) {
+            plugin.message(admin, "&cPractice world could not be loaded.");
+            return;
+        }
+        String base = "practice.players." + owner.getUniqueId();
+        int index = plugin.getConfig().getInt(base + ".room", -1);
+        if (index < 0) {
+            plugin.message(admin, "&cThat player has not created a practice box yet.");
+            return;
+        }
+        if (!plugin.getConfig().getBoolean(base + ".built", false)) {
+            buildRoom(roomCenterX(index), 128);
+            plugin.getConfig().set(base + ".built", true);
+            plugin.saveConfig();
+        }
+        adminBoxVisits.put(admin.getUniqueId(), index);
+        int height = owner.getGameMode() == GameMode.SPECTATOR ? 0
+                : (mode(owner) == Mode.SWORD ? 30 : selectedHeight(owner) + 10);
+        if (!activeForceFields.contains(index)) {
+            removeForceField(roomCenterX(index), 128, world.getMaxHeight() - 81);
+            buildForceField(roomCenterX(index), 128, height);
+            activeForceFields.add(index);
+            forceFieldHeights.put(index, height);
+        }
+        admin.teleport(new Location(world, roomCenterX(index) + 0.5, 82.0, 128.5));
+        Bukkit.getScheduler().runTask(plugin, () -> updatePlayerVisibility(admin));
+        plugin.message(admin, "&aTeleported to &f" + owner.getName() + "&a's box.");
+    }
 
     private boolean isFightOpponent(Player player, Player other) {
         return isFighting(player) && Objects.equals(fightRooms.get(player.getUniqueId()), fightRooms.get(other.getUniqueId()))
@@ -788,8 +825,8 @@ public final class PracticeManager implements Listener {
         Player p = event.getPlayer();
         if (!p.getWorld().equals(world) || event.getTo() == null) return;
 
-        int roomIndex = fightRooms.getOrDefault(p.getUniqueId(),
-                plugin.getConfig().getInt("practice.players." + p.getUniqueId() + ".room", -1));
+        int roomIndex = fightRooms.getOrDefault(p.getUniqueId(), adminBoxVisits.getOrDefault(p.getUniqueId(),
+                plugin.getConfig().getInt("practice.players." + p.getUniqueId() + ".room", -1)));
         if (roomIndex >= 0) {
             int cx = roomCenterX(roomIndex);
             int cz = 128;
@@ -801,6 +838,7 @@ public final class PracticeManager implements Listener {
                 p.setFallDistance(0);
                 p.setVelocity(new org.bukkit.util.Vector(0, 0, 0));
                 if (isFighting(p)) p.teleport(fightSpawnLocation(roomIndex, fightSpawnOffsets.getOrDefault(p.getUniqueId(), 0)));
+                else if (adminBoxVisits.containsKey(p.getUniqueId())) p.teleport(new Location(world, cx + 0.5, 82.0, cz + 0.5));
                 else {
                     int height = mode(p) == Mode.STUN_SLAM && activeAttempts.contains(p.getUniqueId())
                             ? selectedHeight(p) : 0;
@@ -836,6 +874,7 @@ public final class PracticeManager implements Listener {
         restorePracticeBoard(event.getPlayer());
         restorePlayerVisibility(event.getPlayer());
         if (isFighting(event.getPlayer())) endFight(event.getPlayer(), "&cA player left.");
+        adminBoxVisits.remove(id);
         scores.remove(id); selectedHeights.remove(id); swordSwings.remove(id); swordHits.remove(id);
         activeAttempts.remove(id); resetting.remove(id);
     }
@@ -847,6 +886,7 @@ public final class PracticeManager implements Listener {
             endFight(event.getPlayer(), "&cA player left the arena.");
         }
         if (!event.getPlayer().getWorld().equals(world)) {
+            adminBoxVisits.remove(id);
             restorePracticeBoard(event.getPlayer());
             restorePlayerVisibility(event.getPlayer());
         } else Bukkit.getScheduler().runTask(plugin, () -> updatePlayerVisibility(event.getPlayer()));
