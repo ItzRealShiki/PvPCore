@@ -162,10 +162,10 @@ public final class WorldManager {
         // for worlds created with the restored PvPCore terrain generator.
         if (!plugin.getConfig().getBoolean("worlds.custom-terrain-migrated", false)) {
             String[][] arenas = {
-                    {"plains", "pvp_plains_arena_v4", "pvp_plains_arena_v5"},
-                    {"desert", "pvp_desert_arena_v4", "pvp_desert_arena_v5"},
-                    {"snow", "pvp_snow_arena_v4", "pvp_snow_arena_v5"},
-                    {"badlands", "pvp_badlands_arena_v4", "pvp_badlands_arena_v5"}
+                    {"plains", "pvp_plains_arena_v3", "pvp_plains_arena_v4"},
+                    {"desert", "pvp_desert_arena_v3", "pvp_desert_arena_v4"},
+                    {"snow", "pvp_snow_arena_v3", "pvp_snow_arena_v4"},
+                    {"badlands", "pvp_badlands_arena_v3", "pvp_badlands_arena_v4"}
             };
             for (String[] arena : arenas) {
                 String path = "worlds." + arena[0] + ".name";
