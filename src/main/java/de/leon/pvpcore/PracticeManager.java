@@ -56,7 +56,8 @@ public final class PracticeManager implements Listener {
     public void enter(Player p) { enter(p, selectedHeight(p)); }
 
     public void enter(Player p, int height) {
-        setSelectedHeight(p, height);
+        int challengeHeight = mode(p) == Mode.STUN_SLAM ? height : 0;
+        if (challengeHeight > 0) setSelectedHeight(p, challengeHeight);
         if (world == null) {
             world = Bukkit.getWorld("prac_rooms");
             if (world == null) world = new WorldCreator("prac_rooms").type(WorldType.FLAT).createWorld();
@@ -83,21 +84,23 @@ public final class PracticeManager implements Listener {
             plugin.getConfig().set(base + ".built", true);
             plugin.saveConfig();
         }
-        buildStartPlatform(cx, cz, height);
+        if (challengeHeight > 0) buildStartPlatform(cx, cz, challengeHeight);
         plugin.bots().removeOwned(p);
         p.setGameMode(GameMode.SURVIVAL);
         p.setFallDistance(0);
-        p.teleport(startLocation(p, height));
+        p.teleport(startLocation(p, challengeHeight));
         applyKit(p);
         scores.putIfAbsent(p.getUniqueId(), 0);
-        activeAttempts.add(p.getUniqueId());
+        if (challengeHeight > 0) activeAttempts.add(p.getUniqueId());
 
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (p.isOnline() && p.getWorld() == world) plugin.bots().spawn(p);
         }, 2L);
 
-        plugin.message(p, "&aStun Slam &7- &e" + difficultyName(height) + " &7(" + height + " blocks).");
-        plugin.message(p, "&7Score: &a" + score(p) + " &8| &7Land a hit on the bot to earn a point.");
+        if (challengeHeight > 0) {
+            plugin.message(p, "&aStun Slam &7- &e" + difficultyName(challengeHeight) + " &7(" + challengeHeight + " blocks).");
+            plugin.message(p, "&7Score: &a" + score(p) + " &8| &7Land a hit on the bot to earn a point.");
+        } else plugin.message(p, "&aEntered your private Sword practice room.");
     }
 
     private String difficultyName(int height) {
@@ -107,7 +110,7 @@ public final class PracticeManager implements Listener {
     private Location startLocation(Player p, int height) {
         int index = plugin.getConfig().getInt("practice.players." + p.getUniqueId() + ".room", 0);
         int cx = 128 + index * 96, cz = 128;
-        return new Location(world, cx + 0.5, 81 + height, cz + 0.5);
+        return new Location(world, cx + 0.5, 81 + Math.max(0, height), cz + 0.5);
     }
 
     public Location botSpawnLocation(Player owner) {
@@ -212,11 +215,15 @@ public final class PracticeManager implements Listener {
 
     public void applyBotKit(Player bot, Player owner) {
         bot.getInventory().clear();
+        if (mode(owner) == Mode.SWORD) {
+            bot.getInventory().setArmorContents(new ItemStack[]{gear(Material.DIAMOND_BOOTS), gear(Material.DIAMOND_LEGGINGS), gear(Material.DIAMOND_CHESTPLATE), gear(Material.DIAMOND_HELMET)});
+            bot.getInventory().setItemInMainHand(gear(Material.DIAMOND_SWORD));
+            return;
+        }
         bot.getInventory().setArmorContents(new ItemStack[]{
                 botArmor(Material.NETHERITE_BOOTS), botArmor(Material.NETHERITE_LEGGINGS),
                 botArmor(Material.NETHERITE_CHESTPLATE), botArmor(Material.NETHERITE_HELMET)});
-        ItemStack shield = gear(Material.SHIELD);
-        bot.getInventory().setItemInMainHand(shield);
+        bot.getInventory().setItemInMainHand(gear(Material.SHIELD));
         bot.getInventory().setItemInOffHand(new ItemStack(Material.TOTEM_OF_UNDYING));
         bot.setVelocity(new org.bukkit.util.Vector(0, 0, 0));
     }
