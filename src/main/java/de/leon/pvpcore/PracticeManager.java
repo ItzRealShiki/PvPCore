@@ -536,6 +536,10 @@ public final class PracticeManager implements Listener {
             }
         }
         buildArenaPlatform(cx, cz, radius);
+        int roomIndex = Math.floorDiv(cx - 128, ROOM_SPACING);
+        activeForceFields.remove(roomIndex);
+        forceFieldHeights.remove(roomIndex);
+        forceFieldRadii.remove(roomIndex);
     }
 
     private void buildDuelObstacles(int cx, int cz, int roomIndex) {
@@ -904,9 +908,11 @@ public final class PracticeManager implements Listener {
         if (success) {
             stunCombos.merge(id, 1, Integer::sum);
             updateHighScore(p, Mode.STUN_SLAM, score(p));
-            plugin.message(p, "&a+1 point! &7Score: &e" + score(p));
+            updatePracticeBoard(p);
+            plugin.message(p, "&a+1 combo! &7Combo: &e" + score(p));
         } else {
             stunCombos.put(id, 0);
+            updatePracticeBoard(p);
             plugin.message(p, "&cMissed! &7Combo reset. Current combo: &e" + score(p));
         }
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
