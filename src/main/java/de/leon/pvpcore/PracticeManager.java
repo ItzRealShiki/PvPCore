@@ -21,6 +21,8 @@ import org.bukkit.scoreboard.Criteria;
 import org.bukkit.scoreboard.DisplaySlot;
 import org.bukkit.scoreboard.Objective;
 import org.bukkit.scoreboard.Scoreboard;
+import org.bukkit.scoreboard.Score;
+import io.papermc.paper.scoreboard.numbers.NumberFormat;
 
 import java.util.*;
 
@@ -97,7 +99,7 @@ public final class PracticeManager implements Listener {
     public int score(Player p) { return scores.getOrDefault(p.getUniqueId(), 0); }
 
     private String highScorePath(Player player, Mode mode) {
-        return "practice.highscores." + player.getUniqueId() + "." + (mode == Mode.SWORD ? "sword" : "stun-slam");
+        return "practice.highscores." + player.getUniqueId() + "." + (mode == Mode.SWORD ? "sword-accuracy" : "stun-slam");
     }
 
     private int highScore(Player player, Mode mode) {
@@ -118,35 +120,40 @@ public final class PracticeManager implements Listener {
             if (board == null) previousBoards.put(id, player.getScoreboard());
             board = Bukkit.getScoreboardManager().getNewScoreboard();
             Objective objective = board.registerNewObjective("practice", Criteria.DUMMY,
-                    net.kyori.adventure.text.Component.text("Practice"));
+                    net.kyori.adventure.text.Component.text("✦ PRACTICE"));
             objective.setDisplaySlot(DisplaySlot.SIDEBAR);
+            objective.numberFormat(NumberFormat.blank());
             practiceBoards.put(id, board);
             player.setScoreboard(board);
         }
         Objective objective = board.getObjective("practice");
         if (objective == null) return;
+        int swings = swordSwings.getOrDefault(id, 0);
+        int hits = swordHits.getOrDefault(id, 0);
+        int accuracy = swings == 0 ? 0 : Math.min(100, Math.round(hits * 100.0f / swings));
+        String modeName = mode(player) == Mode.SWORD ? "&bSword" : "&dStun Slam";
         String[] lines = {
-                "&6&lPRACTICE",
-                "&8----------------",
-                "&e&lSWORD",
-                "&7Highscore: &a" + highScore(player, Mode.SWORD),
-                "&r ",
-                "&e&lSTUN SLAM",
-                "&7Highscore: &a" + highScore(player, Mode.STUN_SLAM)
+                "&b&l✦ PRACTICE",
+                "&8&m----------------",
+                "&7Mode: " + modeName,
+                "&b&lSWORD",
+                "&7Accuracy: &a" + accuracy + "%",
+                "&7Personal Best: &e" + highScore(player, Mode.SWORD) + "%",
+                "&8 ",
+                "&d&lSTUN SLAM",
+                "&7Current Score: &f" + score(player),
+                "&7Personal Best: &e" + highScore(player, Mode.STUN_SLAM),
+                "&8&m----------------",
+                "&7Keep improving!"
         };
         for (int i = 0; i < lines.length; i++) {
-            String entry = org.bukkit.ChatColor.values()[i].toString();
-            board.resetScores(entry);
+            String entry = org.bukkit.ChatColor.COLOR_CHAR + Integer.toHexString(i) + org.bukkit.ChatColor.COLOR_CHAR + "r";
+            Score lineScore = objective.getScore(entry);
+            if (lineScore.getScore() != lines.length - i) lineScore.setScore(lines.length - i);
             String rendered = org.bukkit.ChatColor.translateAlternateColorCodes('&', lines[i]);
-            objective.getScore(entry).setScore(lines.length - i);
-            // Scoreboard entries are unique color codes; the visible line is supplied by a team prefix.
-            org.bukkit.scoreboard.Team team = board.getTeam("practice_line_" + i);
-            if (team == null) team = board.registerNewTeam("practice_line_" + i);
-            team.addEntry(entry);
-            team.prefix(net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacySection().deserialize(rendered));
+            lineScore.customName(net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacySection().deserialize(rendered));
         }
     }
-
     private void restorePracticeBoard(Player player) {
         UUID id = player.getUniqueId();
         Scoreboard current = practiceBoards.remove(id);
@@ -356,7 +363,6 @@ public final class PracticeManager implements Listener {
 
         if (mode(player) == Mode.SWORD) {
             swordHits.merge(player.getUniqueId(), 1, Integer::sum);
-            updateHighScore(player, Mode.SWORD, swordHits.get(player.getUniqueId()));
             updateSwordAccuracy(player);
             return;
         }
@@ -372,6 +378,7 @@ public final class PracticeManager implements Listener {
         int swings = swordSwings.getOrDefault(id, 0);
         int hits = swordHits.getOrDefault(id, 0);
         int accuracy = swings == 0 ? 0 : Math.min(100, Math.round(hits * 100.0f / swings));
+        updateHighScore(player, Mode.SWORD, accuracy);
         player.sendActionBar(ChatColor.GREEN + "Accuracy: " + ChatColor.YELLOW + accuracy + "%"
                 + ChatColor.DARK_GRAY + " | " + ChatColor.GRAY + "Hits: "
                 + ChatColor.GREEN + hits + ChatColor.GRAY + "/" + swings);
