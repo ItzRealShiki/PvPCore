@@ -37,6 +37,7 @@ public final class PvPCore extends JavaPlugin implements Listener {
         Bukkit.getScheduler().runTaskTimer(this, practice::enforcePracticeFood, 1L, 1L);
         PracticeCommand practiceCommand = new PracticeCommand(this);
         register("prac", practiceCommand);
+        register("kits", practiceCommand);
         OptionsCommand optionsCommand = new OptionsCommand(this);
         register("options", optionsCommand);
         ScoreboardCommand scoreboardCommand = new ScoreboardCommand(this);
