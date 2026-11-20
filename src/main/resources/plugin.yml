@@ -30,6 +30,9 @@ commands:
   fight:
     description: Challenges a player to a private-box 1v1.
     usage: /fight <player|accept|deny>
+  duels:
+    description: Shows and manages duel invitations.
+    usage: /duels
   gm:
     description: Changes your game mode.
     usage: /gm [survival|creative|adventure|spectator] [player]
