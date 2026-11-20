@@ -98,10 +98,7 @@ public final class PracticeCommand implements CommandExecutor, Listener {
     }
     @EventHandler public void close(InventoryCloseEvent e){
         if(!(e.getPlayer() instanceof Player p) || !(e.getInventory().getHolder() instanceof Holder h) || !h.kind.equals("editor"))return;
+        // Closing the editor only saves changes; it must not equip the kit.
         plugin.practice().saveKit(p,e.getInventory());
-        if (p.getWorld().getName().equals("prac_rooms")) {
-            plugin.practice().applyKit(p);
-            plugin.bots().refreshOwned(p);
-        }
     }
 }
