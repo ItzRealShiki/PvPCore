@@ -56,7 +56,7 @@ public final class BotManager implements Listener {
 
         removeOwned(owner);
         Location at = owner.getLocation().clone();
-        if (owner.getWorld().getName().equals("prac_rooms")) at.add(0, 0, 3);
+        if (owner.getWorld().getName().equals("prac_rooms")) at = plugin.practice().botSpawnLocation(owner);
 
         try {
             String botName = "Training Bot";
@@ -127,6 +127,11 @@ public final class BotManager implements Listener {
         if (fake != null && fake.isValid()) equip(owner, fake);
     }
 
+    public boolean isOwnedBot(Player owner, Entity entity) {
+        FakePlayer fake = owned.get(owner.getUniqueId());
+        return fake != null && fake.isValid() && fake.bukkit().equals(entity);
+    }
+
     private UUID ownerOf(Entity entity) {
         for (Map.Entry<UUID, FakePlayer> entry : owned.entrySet()) {
             if (entry.getValue().isValid() && entry.getValue().bukkit().equals(entity)) return entry.getKey();
@@ -159,8 +164,9 @@ public final class BotManager implements Listener {
                         && bot.getInventory().getItemInOffHand().getType().isAir()) {
                     bot.getInventory().setItemInOffHand(new ItemStack(Material.TOTEM_OF_UNDYING));
                 }
-                boolean shieldEnabled = option(owner, "shield", false);
-                boolean shieldDisabled = shieldDisabledUntil.getOrDefault(ownerId, 0L) > System.currentTimeMillis();
+                boolean practiceBot = owner.getWorld().getName().equals("prac_rooms");
+                boolean shieldEnabled = practiceBot || option(owner, "shield", false);
+                boolean shieldDisabled = !practiceBot && shieldDisabledUntil.getOrDefault(ownerId, 0L) > System.currentTimeMillis();
                 fake.setShieldRaised(shieldEnabled && !shieldDisabled);
                 fake.tick();
             }
@@ -197,7 +203,7 @@ public final class BotManager implements Listener {
         FakePlayer fake = owned.get(ownerId);
         if (fake == null) return;
 
-        if (!option(owner, "knockback", true)) {
+        if (owner.getWorld().getName().equals("prac_rooms") || !option(owner, "knockback", true)) {
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (fake.isValid()) fake.bukkit().setVelocity(new Vector(0, 0, 0));
             });
