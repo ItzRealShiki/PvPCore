@@ -32,6 +32,7 @@ public final class PracticeManager implements Listener {
     private final Set<UUID> activeAttempts = new HashSet<>();
     private final Set<UUID> resetting = new HashSet<>();
     private final Set<Integer> activeForceFields = new HashSet<>();
+    private boolean warnedSpearFallback;
 
     public PracticeManager(PvPCore plugin) {
         this.plugin = plugin;
@@ -442,10 +443,12 @@ public final class PracticeManager implements Listener {
 
     private Material spearMaterial() {
         Material spear = Material.matchMaterial("NETHERITE_SPEAR");
-        if (spear == null) {
-            throw new IllegalStateException("NETHERITE_SPEAR is not available in the configured Paper API.");
+        if (spear != null) return spear;
+        if (!warnedSpearFallback) {
+            warnedSpearFallback = true;
+            plugin.getLogger().warning("NETHERITE_SPEAR is not available in this Paper API; using TRIDENT as a compatibility fallback.");
         }
-        return spear;
+        return Material.TRIDENT;
     }
 
     private ItemStack gear(Material type) {
