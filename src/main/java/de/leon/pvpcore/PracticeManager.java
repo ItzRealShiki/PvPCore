@@ -232,6 +232,7 @@ public final class PracticeManager implements Listener {
             p.getInventory().setItem(2, enchanted(spearMaterial(), "lunge", 3));
         }
         loadSavedKit(p, p.getInventory());
+        if (mode(p) == Mode.STUN_SLAM) p.getInventory().setItem(2, enchanted(spearMaterial(), "lunge", 3));
         p.getInventory().setHeldItemSlot(0);
         p.setHealth(20); p.setFoodLevel(20); p.setSaturation(20); p.setFireTicks(0);
     }
@@ -285,6 +286,7 @@ public final class PracticeManager implements Listener {
         editor.setItem(46, plugin.getConfig().getItemStack(path + ".chestplate"));
         editor.setItem(47, plugin.getConfig().getItemStack(path + ".leggings"));
         editor.setItem(48, plugin.getConfig().getItemStack(path + ".boots"));
+        if (mode(player) == Mode.STUN_SLAM) editor.setItem(2, enchanted(spearMaterial(), "lunge", 3));
     }
 
     public void saveKit(Player player, Inventory editor) {
@@ -315,10 +317,11 @@ public final class PracticeManager implements Listener {
     }
 
     private Material spearMaterial() {
-        Material spear = Material.matchMaterial("SPEAR");
-        if (spear != null) return spear;
-        plugin.getLogger().warning("SPEAR is not present in this Paper API; using TRIDENT as a compatibility fallback.");
-        return Material.TRIDENT;
+        Material spear = Material.matchMaterial("NETHERITE_SPEAR");
+        if (spear == null) {
+            throw new IllegalStateException("NETHERITE_SPEAR is not available in the configured Paper API.");
+        }
+        return spear;
     }
 
     private ItemStack gear(Material type) {
