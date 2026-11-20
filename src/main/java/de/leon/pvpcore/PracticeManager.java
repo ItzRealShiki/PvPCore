@@ -166,7 +166,8 @@ public final class PracticeManager implements Listener {
     private Location startLocation(Player p, int height) {
         int index = plugin.getConfig().getInt("practice.players." + p.getUniqueId() + ".room", 0);
         int cx = 128 + index * 96, cz = 128;
-        int spawnHeight = height > 0 ? height : 20;
+        // Sword practice starts directly on the arena floor; only Stun Slam uses an elevated spawn.
+        int spawnHeight = height > 0 ? height : 0;
         return new Location(world, cx + 0.5, 81 + spawnHeight, cz + 0.5);
     }
 
