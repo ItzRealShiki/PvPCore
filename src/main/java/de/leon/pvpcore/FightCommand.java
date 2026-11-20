@@ -14,7 +14,7 @@ public final class FightCommand implements CommandExecutor {
     private final PvPCore plugin;
     private final Map<UUID, UUID> incomingInvites = new HashMap<>();
 
-    public DuelCommand(PvPCore plugin) {
+    public FightCommand(PvPCore plugin) {
         this.plugin = plugin;
     }
 
