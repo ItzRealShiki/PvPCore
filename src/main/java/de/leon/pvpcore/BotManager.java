@@ -130,6 +130,11 @@ public final class BotManager implements Listener {
         if (fake != null && fake.isValid()) equip(owner, fake);
     }
 
+    public boolean hasOwnedBot(Player owner) {
+        FakePlayer fake = owned.get(owner.getUniqueId());
+        return fake != null && fake.isValid();
+    }
+
     public boolean isOwnedBot(Player owner, Entity entity) {
         FakePlayer fake = owned.get(owner.getUniqueId());
         return fake != null && fake.isValid() && fake.bukkit().equals(entity);
