@@ -60,6 +60,7 @@ public final class PracticeCommand implements CommandExecutor, Listener {
         i.setItem(11, item(Material.MACE, "&6Stun Slam", "&7Choose a difficulty before entering."));
         i.setItem(13, item(Material.GRASS_BLOCK, "&aBox Design", "&7Choose your own arena theme."));
         i.setItem(15, item(Material.DIAMOND_SWORD, "&bSword", "&7Diamond sword vs diamond sword.", "&eClick to enter"));
+        i.setItem(17, item(Material.RESPAWN_ANCHOR, "&6Crystal Anchor", "&7Time from placement until explosion.", "&7Your fastest time is saved.", "&eClick to enter"));
         i.setItem(22, item(Material.ANVIL, "&aKit Editor", "&7Edit your Practice and Duel kits."));
         p.openInventory(i);
     }
@@ -80,6 +81,7 @@ public final class PracticeCommand implements CommandExecutor, Listener {
         i.setItem(12, item(Material.DIAMOND_SWORD, "&bPractice · Sword", "&7Edit your personal practice loadout."));
         i.setItem(14, item(Material.NETHERITE_AXE, "&6Duel · Stun Slam", "&7Edit the kit you receive in /duel."));
         i.setItem(16, item(Material.DIAMOND_SWORD, "&bDuel · Sword", "&7Edit the kit you receive in /duel."));
+        i.setItem(18, item(Material.RESPAWN_ANCHOR, "&6Practice · Crystal Anchor", "&7Edit your Crystal Anchor loadout."));
         i.setItem(31, item(Material.BOOK, "&ePersonal Kits", "&7Duel kits are saved separately from Practice kits.", "&7If no personal Duel kit exists, the Admin kit is used."));
         i.setItem(49, item(Material.ARROW, "&cBack"));
         p.openInventory(i);
@@ -121,6 +123,7 @@ public final class PracticeCommand implements CommandExecutor, Listener {
             if (s == 11) difficulty(p);
             else if (s == 13) plugin.menus().openBoxThemes(p);
             else if (s == 15) { plugin.practice().setMode(p, PracticeManager.Mode.SWORD); p.closeInventory(); plugin.practice().enter(p); }
+            else if (s == 17) { plugin.practice().setMode(p, PracticeManager.Mode.CRYSTAL_ANCHOR); p.closeInventory(); plugin.practice().enter(p); }
             else if (s == 22) kit(p);
         } else if (h.kind.equals("difficulty")) {
             if (s == 10 || s == 12 || s == 14 || s == 16) {
@@ -134,6 +137,7 @@ public final class PracticeCommand implements CommandExecutor, Listener {
             else if (s == 12) edit(p, PracticeManager.Mode.SWORD, false);
             else if (s == 14) edit(p, PracticeManager.Mode.STUN_SLAM, true);
             else if (s == 16) edit(p, PracticeManager.Mode.SWORD, true);
+            else if (s == 18) edit(p, PracticeManager.Mode.CRYSTAL_ANCHOR, false);
             else if (s == 49) main(p);
         }
     }
