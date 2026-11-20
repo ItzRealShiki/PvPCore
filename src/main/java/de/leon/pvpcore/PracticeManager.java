@@ -107,7 +107,6 @@ public final class PracticeManager implements Listener {
             plugin.getConfig().set(base + ".built", true);
             plugin.saveConfig();
         }
-        if (challengeHeight > 0) buildStartPlatform(cx, cz, challengeHeight);
         plugin.bots().removeOwned(p);
         p.setGameMode(GameMode.SURVIVAL);
         p.setFallDistance(0);
@@ -148,12 +147,6 @@ public final class PracticeManager implements Listener {
             if (Math.abs(x) == 24 || Math.abs(z) == 24)
                 for (int y=81; y<=86; y++) world.getBlockAt(cx+x,y,cz+z).setType(Material.GLASS,false);
         }
-    }
-
-    private void buildStartPlatform(int cx, int cz, int height) {
-        int y = 80 + height;
-        for (int x = -2; x <= 2; x++) for (int z = -2; z <= 2; z++)
-            world.getBlockAt(cx + x, y, cz + z).setType(Material.SMOOTH_STONE, false);
     }
 
     private void retry(Player p, boolean success) {
@@ -197,10 +190,8 @@ public final class PracticeManager implements Listener {
     @EventHandler
     public void onDamage(EntityDamageEvent event) {
         if (!(event.getEntity() instanceof Player p) || !p.getWorld().getName().equals("prac_rooms")) return;
-        if (event.getCause() == EntityDamageEvent.DamageCause.FALL && activeAttempts.contains(p.getUniqueId())) {
-            event.setCancelled(true);
-            retry(p, false);
-        }
+        // Practice players are invulnerable; falling still ends an attempt through onMove().
+        event.setCancelled(true);
     }
 
     @EventHandler public void onBreak(BlockBreakEvent event) {
@@ -232,7 +223,7 @@ public final class PracticeManager implements Listener {
             p.getInventory().setItem(2, enchanted(spearMaterial(), "lunge", 3));
         }
         loadSavedKit(p, p.getInventory());
-        if (mode(p) == Mode.STUN_SLAM) p.getInventory().setItem(2, enchanted(spearMaterial(), "lunge", 3));
+        if (mode(p) == Mode.STUN_SLAM) setSingleSpear(p.getInventory());
         p.getInventory().setHeldItemSlot(0);
         p.setHealth(20); p.setFoodLevel(20); p.setSaturation(20); p.setFireTicks(0);
     }
@@ -286,7 +277,7 @@ public final class PracticeManager implements Listener {
         editor.setItem(46, plugin.getConfig().getItemStack(path + ".chestplate"));
         editor.setItem(47, plugin.getConfig().getItemStack(path + ".leggings"));
         editor.setItem(48, plugin.getConfig().getItemStack(path + ".boots"));
-        if (mode(player) == Mode.STUN_SLAM) editor.setItem(2, enchanted(spearMaterial(), "lunge", 3));
+        if (mode(player) == Mode.STUN_SLAM) setSingleSpear(editor);
     }
 
     public void saveKit(Player player, Inventory editor) {
@@ -314,6 +305,15 @@ public final class PracticeManager implements Listener {
         inventory.setChestplate(plugin.getConfig().getItemStack(path + ".chestplate"));
         inventory.setLeggings(plugin.getConfig().getItemStack(path + ".leggings"));
         inventory.setBoots(plugin.getConfig().getItemStack(path + ".boots"));
+    }
+
+    private void setSingleSpear(Inventory inventory) {
+        Material spear = spearMaterial();
+        for (int slot = 0; slot < Math.min(36, inventory.getSize()); slot++) {
+            ItemStack item = inventory.getItem(slot);
+            if (item != null && item.getType() == spear) inventory.setItem(slot, null);
+        }
+        inventory.setItem(2, enchanted(spear, "lunge", 3));
     }
 
     private Material spearMaterial() {
