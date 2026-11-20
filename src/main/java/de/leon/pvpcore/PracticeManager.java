@@ -17,6 +17,10 @@ import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.*;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.scoreboard.Criteria;
+import org.bukkit.scoreboard.DisplaySlot;
+import org.bukkit.scoreboard.Objective;
+import org.bukkit.scoreboard.Scoreboard;
 
 import java.util.*;
 
@@ -32,6 +36,8 @@ public final class PracticeManager implements Listener {
     private final Set<UUID> activeAttempts = new HashSet<>();
     private final Set<UUID> resetting = new HashSet<>();
     private final Set<Integer> activeForceFields = new HashSet<>();
+    private final Map<UUID, Scoreboard> practiceBoards = new HashMap<>();
+    private final Map<UUID, Scoreboard> previousBoards = new HashMap<>();
     private boolean warnedSpearFallback;
 
     public PracticeManager(PvPCore plugin) {
@@ -54,6 +60,8 @@ public final class PracticeManager implements Listener {
             nearbyRooms.add(index);
             if (activeForceFields.add(index)) buildForceField(cx, cz);
             if (plugin.bots().isAvailable() && !plugin.bots().hasOwnedBot(player)) plugin.bots().spawn(player);
+            if (mode(player) == Mode.SWORD) recoverSwordBotAtEdge(player, cx, cz);
+            updatePracticeBoard(player);
         }
         for (int index : new HashSet<>(activeForceFields)) {
             if (nearbyRooms.contains(index)) continue;
@@ -87,6 +95,82 @@ public final class PracticeManager implements Listener {
     }
 
     public int score(Player p) { return scores.getOrDefault(p.getUniqueId(), 0); }
+
+    private String highScorePath(Player player, Mode mode) {
+        return "practice.highscores." + player.getUniqueId() + "." + (mode == Mode.SWORD ? "sword" : "stun-slam");
+    }
+
+    private int highScore(Player player, Mode mode) {
+        return plugin.getConfig().getInt(highScorePath(player, mode), 0);
+    }
+
+    private void updateHighScore(Player player, Mode mode, int value) {
+        String path = highScorePath(player, mode);
+        if (value <= plugin.getConfig().getInt(path, 0)) return;
+        plugin.getConfig().set(path, value);
+        plugin.saveConfig();
+    }
+
+    private void updatePracticeBoard(Player player) {
+        UUID id = player.getUniqueId();
+        Scoreboard board = practiceBoards.get(id);
+        if (board == null || player.getScoreboard() != board) {
+            if (board == null) previousBoards.put(id, player.getScoreboard());
+            board = Bukkit.getScoreboardManager().getNewScoreboard();
+            Objective objective = board.registerNewObjective("practice", Criteria.DUMMY,
+                    net.kyori.adventure.text.Component.text("Practice"));
+            objective.setDisplaySlot(DisplaySlot.SIDEBAR);
+            practiceBoards.put(id, board);
+            player.setScoreboard(board);
+        }
+        Objective objective = board.getObjective("practice");
+        if (objective == null) return;
+        String[] lines = {
+                "&6&lPRACTICE",
+                "&8----------------",
+                "&e&lSWORD",
+                "&7Highscore: &a" + highScore(player, Mode.SWORD),
+                "&r ",
+                "&e&lSTUN SLAM",
+                "&7Highscore: &a" + highScore(player, Mode.STUN_SLAM)
+        };
+        for (int i = 0; i < lines.length; i++) {
+            String entry = org.bukkit.ChatColor.values()[i].toString();
+            board.resetScores(entry);
+            String rendered = org.bukkit.ChatColor.translateAlternateColorCodes('&', lines[i]);
+            objective.getScore(entry).setScore(lines.length - i);
+            // Scoreboard entries are unique color codes; the visible line is supplied by a team prefix.
+            org.bukkit.scoreboard.Team team = board.getTeam("practice_line_" + i);
+            if (team == null) team = board.registerNewTeam("practice_line_" + i);
+            team.addEntry(entry);
+            team.prefix(net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacySection().deserialize(rendered));
+        }
+    }
+
+    private void restorePracticeBoard(Player player) {
+        UUID id = player.getUniqueId();
+        Scoreboard current = practiceBoards.remove(id);
+        Scoreboard previous = previousBoards.remove(id);
+        if (current != null && player.getScoreboard() == current) {
+            player.setScoreboard(previous != null ? previous : Bukkit.getScoreboardManager().getMainScoreboard());
+        }
+    }
+
+    private void recoverSwordBotAtEdge(Player owner, int centerX, int centerZ) {
+        Player bot = plugin.bots().ownedBot(owner);
+        if (bot == null || !bot.isValid() || bot.getWorld() != owner.getWorld()) return;
+        Location location = bot.getLocation();
+        double edgeX = Math.abs(location.getX() - centerX);
+        double edgeZ = Math.abs(location.getZ() - centerZ);
+        org.bukkit.util.Vector velocity = bot.getVelocity();
+        if ((edgeX < 22.0 && edgeZ < 22.0)
+                || Math.hypot(velocity.getX(), velocity.getZ()) > 0.10) return;
+        org.bukkit.util.Vector towardCenter = new org.bukkit.util.Vector(
+                centerX + 0.5 - location.getX(), 0.0, centerZ + 0.5 - location.getZ());
+        if (towardCenter.lengthSquared() < 0.01) return;
+        towardCenter.normalize().multiply(1.35).setY(0.42);
+        bot.setVelocity(towardCenter);
+    }
 
     public void enforceStunSlamFood() {
         for (Player player : Bukkit.getOnlinePlayers()) {
@@ -168,7 +252,7 @@ public final class PracticeManager implements Listener {
         int cx = 128 + index * 96, cz = 128;
         // Sword practice starts directly on the arena floor; only Stun Slam uses an elevated spawn.
         int spawnHeight = height > 0 ? height : 0;
-        return new Location(world, cx + 0.5, 81 + spawnHeight, cz + 0.5);
+        return new Location(world, cx + 0.5, 81 + spawnHeight, cz + 0.5, 0.0f, height > 0 ? 90.0f : 0.0f);
     }
 
     public Location botSpawnLocation(Player owner) {
@@ -237,6 +321,7 @@ public final class PracticeManager implements Listener {
         activeAttempts.remove(id);
         if (success) {
             scores.merge(id, 1, Integer::sum);
+            updateHighScore(p, Mode.STUN_SLAM, score(p));
             plugin.message(p, "&a+1 point! &7Score: &e" + score(p));
         } else {
             plugin.message(p, "&cMissed! &7Try again. Score: &e" + score(p));
@@ -266,9 +351,12 @@ public final class PracticeManager implements Listener {
         if (!(event.getDamager() instanceof Player player)) return;
         if (!player.getWorld().getName().equals("prac_rooms")) return;
         if (!plugin.bots().isOwnedBot(player, event.getEntity())) return;
+        // Shield-blocked mace swings trigger damage events too, but must never award a point.
+        if (event.isCancelled() || event.getFinalDamage() <= 0.0) return;
 
         if (mode(player) == Mode.SWORD) {
             swordHits.merge(player.getUniqueId(), 1, Integer::sum);
+            updateHighScore(player, Mode.SWORD, swordHits.get(player.getUniqueId()));
             updateSwordAccuracy(player);
             return;
         }
@@ -335,6 +423,7 @@ public final class PracticeManager implements Listener {
 
     @EventHandler public void onQuit(PlayerQuitEvent event) {
         UUID id = event.getPlayer().getUniqueId();
+        restorePracticeBoard(event.getPlayer());
         scores.remove(id); selectedHeights.remove(id); swordSwings.remove(id); swordHits.remove(id);
         activeAttempts.remove(id); resetting.remove(id);
     }
@@ -342,6 +431,7 @@ public final class PracticeManager implements Listener {
     @EventHandler public void onWorldChange(PlayerChangedWorldEvent event) {
         UUID id = event.getPlayer().getUniqueId();
         activeAttempts.remove(id); resetting.remove(id);
+        if (!event.getPlayer().getWorld().getName().equals("prac_rooms")) restorePracticeBoard(event.getPlayer());
     }
 
     public void applyKit(Player p) {
