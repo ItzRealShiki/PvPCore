@@ -5,12 +5,10 @@ api-version: '26.2'
 author: Leon
 description: ꜱᴛᴀɴᴅᴀʟᴏɴᴇ ᴘᴠᴘ ᴛʀᴀɪɴɪɴɢ ᴀɴᴅ ꜱᴇʀᴠᴇʀ ᴄᴏʀᴇ ᴡɪᴛʜ ɢᴜɪ ᴀᴅᴍɪɴɪꜱᴛʀᴀᴛɪᴏɴ.
 commands:
-  bot:
-    description: Opens the training bot menu.
-    usage: /bot
-  rtp:
-    description: Opens the random teleport world selector.
-    usage: /rtp [reset]
+  prac:
+    description: Opens private PvP practice rooms and kit editor.
+    usage: /prac [kit|join]
+    aliases: [practise]
   spawn:
     description: Teleports you or an admin-selected player to spawn.
     usage: /spawn [player]
@@ -30,7 +28,7 @@ commands:
     aliases: [itemedit]
 permissions:
   Member.Core:
-    description: Access to PvPCore training and RTP features.
+    description: Access to PvPCore practice rooms and kits.
     default: true
   Admin.Core:
     description: Access to administration and item editing.
