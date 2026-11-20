@@ -192,11 +192,27 @@ public final class PracticeManager implements Listener {
         if (world == null) return;
         for (int offset = -24; offset <= 24; offset++) {
             for (int y = 81; y <= 110; y++) {
-                world.getBlockAt(cx - 24, y, cz + offset).setType(Material.GLASS, false);
-                world.getBlockAt(cx + 24, y, cz + offset).setType(Material.GLASS, false);
-                world.getBlockAt(cx + offset, y, cz - 24).setType(Material.GLASS, false);
-                world.getBlockAt(cx + offset, y, cz + 24).setType(Material.GLASS, false);
+                world.getBlockAt(cx - 24, y, cz + offset).setType(forceFieldMaterial(), false);
+                world.getBlockAt(cx + 24, y, cz + offset).setType(forceFieldMaterial(), false);
+                world.getBlockAt(cx + offset, y, cz - 24).setType(forceFieldMaterial(), false);
+                world.getBlockAt(cx + offset, y, cz + 24).setType(forceFieldMaterial(), false);
             }
+        }
+    }
+
+    public Material forceFieldMaterial() {
+        Material material = Material.matchMaterial(plugin.getConfig().getString("practice.forcefield.material", "GLASS"));
+        return material != null && (material == Material.GLASS || material.name().endsWith("_STAINED_GLASS"))
+                ? material : Material.GLASS;
+    }
+
+    public void setForceFieldMaterial(Material material) {
+        if (material != Material.GLASS && !material.name().endsWith("_STAINED_GLASS")) return;
+        plugin.getConfig().set("practice.forcefield.material", material.name());
+        plugin.saveConfig();
+        for (int index : activeForceFields) {
+            int cx = 128 + index * 96, cz = 128;
+            buildForceField(cx, cz);
         }
     }
 
