@@ -85,6 +85,31 @@ public final class PracticeManager {
         }
         loadSavedKit(owner, bot.getInventory());
     }
+    public void applyKitToInventory(Player player, Inventory editor) {
+        editor.clear();
+        if (mode(player) == Mode.SWORD) editor.setItem(0, gear(Material.DIAMOND_SWORD));
+        else {
+            editor.setItem(0, enchanted(Material.NETHERITE_AXE, "sharpness", 5));
+            ItemStack mace = enchanted(Material.MACE, "density", 5); enchant(mace, "wind_burst", 3);
+            editor.setItem(1, mace);
+            editor.setItem(2, enchanted(Material.SPEAR, "lunge", 3));
+        }
+        editor.setItem(45, gear(Material.DIAMOND_HELMET));
+        editor.setItem(46, gear(Material.DIAMOND_CHESTPLATE));
+        editor.setItem(47, gear(Material.DIAMOND_LEGGINGS));
+        editor.setItem(48, gear(Material.DIAMOND_BOOTS));
+        String path = "practice.players." + player.getUniqueId() + ".kits." + mode(player).name();
+        if (!plugin.getConfig().contains(path + ".contents")) return;
+        java.util.List<?> contents = plugin.getConfig().getList(path + ".contents");
+        if (contents != null) for (int slot=0; slot<Math.min(36, contents.size()); slot++) {
+            Object value = contents.get(slot);
+            if (value instanceof ItemStack item) editor.setItem(slot, item.clone());
+        }
+        editor.setItem(45, plugin.getConfig().getItemStack(path + ".helmet"));
+        editor.setItem(46, plugin.getConfig().getItemStack(path + ".chestplate"));
+        editor.setItem(47, plugin.getConfig().getItemStack(path + ".leggings"));
+        editor.setItem(48, plugin.getConfig().getItemStack(path + ".boots"));
+    }
     public void saveKit(Player player, Inventory editor) {
         String path = "practice.players." + player.getUniqueId() + ".kits." + mode(player).name();
         java.util.List<ItemStack> contents = new java.util.ArrayList<>();
