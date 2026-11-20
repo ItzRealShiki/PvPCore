@@ -216,7 +216,7 @@ public final class PracticeManager implements Listener {
 
     public void enforceStunSlamFood() {
         for (Player player : Bukkit.getOnlinePlayers()) {
-            if (!player.getWorld().getName().equals("prac_rooms") || mode(player) != Mode.STUN_SLAM) continue;
+            if (!player.getWorld().equals(world) || mode(player) != Mode.STUN_SLAM) continue;
             if (player.getFoodLevel() != 20) player.setFoodLevel(20);
             if (player.getSaturation() < 20.0f) player.setSaturation(20.0f);
             if (player.getExhaustion() != 0.0f) player.setExhaustion(0.0f);
@@ -226,7 +226,7 @@ public final class PracticeManager implements Listener {
     @EventHandler
     public void onFoodLevelChange(FoodLevelChangeEvent event) {
         if (!(event.getEntity() instanceof Player player)) return;
-        if (player.getWorld().getName().equals("prac_rooms") && mode(player) == Mode.STUN_SLAM) {
+        if (player.getWorld().equals(world) && mode(player) == Mode.STUN_SLAM) {
             event.setCancelled(true);
             player.setFoodLevel(20);
             player.setSaturation(20.0f);
@@ -325,11 +325,11 @@ public final class PracticeManager implements Listener {
         plugin.saveConfig();
 
         // Update every allocated private room immediately, including rooms whose owners are offline.
-        if (world == null) world = Bukkit.getWorld("prac_rooms");
+        if (world == null) world = Bukkit.getWorld(PRACTICE_WORLD);
         if (world != null) {
             int rooms = plugin.getConfig().getInt("practice.next-room", 0);
             for (int index = 0; index < rooms; index++) {
-                buildArenaPlatform(128 + index * 96, 128);
+                buildArenaPlatform(roomCenterX(index), 128);
             }
         }
     }
@@ -401,7 +401,7 @@ public final class PracticeManager implements Listener {
         plugin.getConfig().set("practice.forcefield.material", material.name());
         plugin.saveConfig();
         for (int index : activeForceFields) {
-            int cx = 128 + index * 96, cz = 128;
+            int cx = roomCenterX(index), cz = 128;
             buildForceField(cx, cz);
         }
     }
@@ -510,14 +510,14 @@ public final class PracticeManager implements Listener {
 
     @EventHandler
     public void onDamage(EntityDamageEvent event) {
-        if (!(event.getEntity() instanceof Player p) || !p.getWorld().getName().equals("prac_rooms")) return;
+        if (!(event.getEntity() instanceof Player p) || !p.getWorld().equals(world)) return;
         // Fake-player bots must remain damageable; only the human practice player is protected.
         if (plugin.bots().isPracticeBot(p)) return;
         event.setCancelled(true);
     }
 
     @EventHandler public void onBreak(BlockBreakEvent event) {
-        if (event.getBlock().getWorld().getName().equals("prac_rooms")) event.setCancelled(true);
+        if (event.getBlock().getWorld().equals(world)) event.setCancelled(true);
     }
 
     @EventHandler public void onPlace(BlockPlaceEvent event) {
