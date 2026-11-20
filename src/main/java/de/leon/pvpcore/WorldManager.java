@@ -231,8 +231,17 @@ public final class WorldManager {
 
     public void applyPermanentDay(World world) {
         if (world == null) return;
+
+        // Minecraft 26.2 supports dimensions without a default world clock.
+        // World#setTime() throws IllegalArgumentException in those dimensions.
+        // Freeze the default clock when one exists; otherwise only disable the
+        // daylight-cycle gamerule and leave the clockless dimension untouched.
+        io.papermc.paper.world.WorldClock clock = world.getDefaultClock();
+        if (clock != null) {
+            world.setFullTime(clock, 1000L);
+            world.setClockPaused(clock, true);
+        }
         world.setGameRule(GameRule.DO_DAYLIGHT_CYCLE, false);
-        world.setTime(1000L);
     }
 
     public void initializeWorldsOnce() {
