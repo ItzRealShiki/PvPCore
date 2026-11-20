@@ -34,7 +34,7 @@ public final class BotManager implements Listener {
 
     private final PvPCore plugin;
     private final Map<UUID, FakePlayer> owned = new HashMap<>();
-    // Keep the shield disabled for the vanilla 5-second axe cooldown.
+    // Keep the shield disabled for 2 seconds after an axe hit.
     private final Map<UUID, Long> shieldDisabledUntil = new HashMap<>();
     private boolean available;
     private boolean warned;
@@ -231,9 +231,9 @@ public final class BotManager implements Listener {
                 && byEntity.getDamager() instanceof Player attacker) {
             Material weapon = attacker.getInventory().getItemInMainHand().getType();
 
-            // An axe disables the shield for 5 seconds, allowing follow-up hits.
+            // An axe disables the shield for 2 seconds, allowing follow-up hits.
             if (weapon.name().endsWith("_AXE")) {
-                long disabledUntil = System.currentTimeMillis() + 5000L;
+                long disabledUntil = System.currentTimeMillis() + 2000L;
                 shieldDisabledUntil.put(ownerId, disabledUntil);
                 fake.setShieldRaised(false);
             }
