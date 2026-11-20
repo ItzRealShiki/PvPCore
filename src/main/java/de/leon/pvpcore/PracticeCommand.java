@@ -59,6 +59,7 @@ public final class PracticeCommand implements CommandExecutor, Listener {
     @EventHandler public void click(InventoryClickEvent e){
         if(!(e.getWhoClicked() instanceof Player p) || !(e.getView().getTopInventory().getHolder() instanceof Holder h))return;
         if(h.kind.equals("editor")){
+            if(e.isShiftClick()){e.setCancelled(true);return;}
             if(e.getClickedInventory()==e.getView().getTopInventory()){
                 int s=e.getSlot();
                 if(s==53){e.setCancelled(true);plugin.practice().saveKit(p,e.getView().getTopInventory());p.closeInventory();plugin.message(p,"&aKit saved.");return;}
@@ -82,5 +83,9 @@ public final class PracticeCommand implements CommandExecutor, Listener {
     @EventHandler public void close(InventoryCloseEvent e){
         if(!(e.getPlayer() instanceof Player p) || !(e.getInventory().getHolder() instanceof Holder h) || !h.kind.equals("editor"))return;
         plugin.practice().saveKit(p,e.getInventory());
+        if (p.getWorld().getName().equals("prac_rooms")) {
+            plugin.practice().applyKit(p);
+            plugin.bots().refreshOwned(p);
+        }
     }
 }
