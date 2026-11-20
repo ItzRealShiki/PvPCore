@@ -388,6 +388,13 @@ public final class PracticeManager implements Listener {
                 world.getBlockAt(cx + offset, y, cz + 24).setType(forceFieldMaterial(), false);
             }
         }
+
+        // Close the arena at the top with a complete glass roof.
+        for (int x = -24; x <= 24; x++) {
+            for (int z = -24; z <= 24; z++) {
+                world.getBlockAt(cx + x, 110, cz + z).setType(forceFieldMaterial(), false);
+            }
+        }
     }
 
     public Material forceFieldMaterial() {
@@ -414,6 +421,11 @@ public final class PracticeManager implements Listener {
                 world.getBlockAt(cx + 24, y, cz + offset).setType(Material.AIR, false);
                 world.getBlockAt(cx + offset, y, cz - 24).setType(Material.AIR, false);
                 world.getBlockAt(cx + offset, y, cz + 24).setType(Material.AIR, false);
+            }
+        }
+        for (int x = -24; x <= 24; x++) {
+            for (int z = -24; z <= 24; z++) {
+                world.getBlockAt(cx + x, 110, cz + z).setType(Material.AIR, false);
             }
         }
     }
