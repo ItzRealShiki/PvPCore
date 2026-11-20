@@ -92,7 +92,7 @@ public final class WorldManager {
                 if (biome != null) biomeGrid.setBiome(x, z, biome);
             }
             if (minY < 0) data.setRegion(0, minY + 1, 0, 16, 1, 16, Material.DEEPSLATE);
-            data.setRegion(0, Math.max(1, minY + 1), 0, 16, 59, 16, Material.STONE);
+            data.setRegion(0, Math.max(1, minY + 1), 0, 16, 60, 16, Material.STONE);
 
             for (int x=0; x<16; x++) for (int z=0; z<16; z++) {
                 int wx=chunkX*16+x, wz=chunkZ*16+z;
