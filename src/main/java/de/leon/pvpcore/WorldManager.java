@@ -243,6 +243,7 @@ public final class WorldManager {
         for (String key : keys) {
             String[] oldNames = {
                     "pvp_" + key + "_arena",
+                    "pvp_" + key + "_arena_v1",
                     "pvp_" + key + "_arena_v2",
                     "pvp_" + key + "_arena_v3",
                     "pvp_" + key + "_arena_v4",
