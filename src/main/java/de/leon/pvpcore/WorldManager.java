@@ -143,12 +143,13 @@ public final class WorldManager {
                     if (treeRandom.nextDouble() >= 0.05) continue;
                     int treeX = cellX * 300 + 150 + treeRandom.nextInt(81) - 40;
                     int treeZ = cellZ * 300 + 150 + treeRandom.nextInt(81) - 40;
-                    if ((treeX >> 4) != chunkX || (treeZ >> 4) != chunkZ) continue;
-                    int lx = Math.floorMod(treeX, 16);
-                    int lz = Math.floorMod(treeZ, 16);
+                    int lx = treeX - chunkX * 16;
+                    int lz = treeZ - chunkZ * 16;
                     int groundY = height(treeX, treeZ, seed);
-                    for (int y = groundY + 1; y <= groundY + 4; y++) {
-                        data.setBlock(lx, y, lz, Material.OAK_LOG);
+                    if (lx >= 0 && lx < 16 && lz >= 0 && lz < 16) {
+                        for (int y = groundY + 1; y <= groundY + 4; y++) {
+                            data.setBlock(lx, y, lz, Material.OAK_LOG);
+                        }
                     }
                     for (int dy = 2; dy <= 5; dy++) {
                         int radius = dy == 5 ? 1 : (dy == 2 ? 1 : 2);
