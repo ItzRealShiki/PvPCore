@@ -14,27 +14,24 @@ import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.Objects;
-import java.util.Set;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 public final class PvPCore extends JavaPlugin implements Listener {
     private Menus menus;
     private BotManager bots;
     private WorldManager worlds;
     private ItemEditCommand itemEdit;
-    private final Set<UUID> rtpLoading = ConcurrentHashMap.newKeySet();
+    private PracticeManager practice;
 
     @Override public void onEnable() {
         saveDefaultConfig();
         worlds = new WorldManager(this);
-        worlds.initializeWorldsOnce();
         for (World world : Bukkit.getWorlds()) worlds.applyPermanentDay(world);
-        worlds.startRegenerationCycle();
         menus = new Menus(this);
         bots = new BotManager(this);
-        register("bot", new PvpCommand(this));
-        register("rtp", new RtpCommand(this));
+        practice = new PracticeManager(this);
+        PracticeCommand practiceCommand = new PracticeCommand(this);
+        register("prac", practiceCommand);
+        Bukkit.getPluginManager().registerEvents(practiceCommand, this);
         register("spawn", new SpawnCommand(this));
         register("setspawn", new SetSpawnCommand(this));
         register("admin", new AdminCommand(this));
@@ -82,21 +79,6 @@ public final class PvPCore extends JavaPlugin implements Listener {
         }
     }
 
-    public boolean beginRtp(Player player) {
-        if (!rtpLoading.add(player.getUniqueId())) {
-            message(player, "&cYour previous RTP is still loading. Please wait.");
-            return false;
-        }
-        message(player, "&eYour random teleport is loading. Please wait...");
-        return true;
-    }
-
-    public void finishRtp(Player player) {
-        if (rtpLoading.remove(player.getUniqueId()) && player.isOnline()) {
-            message(player, "&aRTP is ready. You can use /rtp again!");
-        }
-    }
-
     private void register(String name, CommandExecutor executor) {
         PluginCommand command = Objects.requireNonNull(getCommand(name), "Missing command " + name);
         command.setExecutor(executor);
@@ -104,6 +86,7 @@ public final class PvPCore extends JavaPlugin implements Listener {
     public Menus menus() { return menus; }
     public BotManager bots() { return bots; }
     public WorldManager worlds() { return worlds; }
+    public PracticeManager practice() { return practice; }
     public String color(String text) {
         return ChatColor.translateAlternateColorCodes('&', SmallCaps.of(text));
     }
