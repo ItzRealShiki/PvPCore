@@ -10,7 +10,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-public final class DuelCommand implements CommandExecutor {
+public final class FightCommand implements CommandExecutor {
     private final PvPCore plugin;
     private final Map<UUID, UUID> incomingInvites = new HashMap<>();
 
@@ -47,11 +47,11 @@ public final class DuelCommand implements CommandExecutor {
                 plugin.message(player, "&cYou do not have a pending duel invitation.");
                 return true;
             }
-            if (plugin.practice().isDueling(player) || plugin.practice().isDueling(challenger)) {
+            if (plugin.practice().isFighting(player) || plugin.practice().isDueling(challenger)) {
                 plugin.message(player, "&cOne of you is already in a duel.");
                 return true;
             }
-            plugin.practice().startDuel(challenger, player);
+            plugin.practice().startFight(challenger, player);
             return true;
         }
         if (args.length == 1 && args[0].equalsIgnoreCase("deny")) {
