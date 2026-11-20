@@ -96,6 +96,10 @@ public final class BotManager implements Listener {
     }
 
     private void equip(Player owner, FakePlayer fake) {
+        if (owner.getWorld().getName().equals("prac_rooms")) {
+            plugin.practice().applyBotKit(fake.bukkit(), owner);
+            return;
+        }
         PlayerInventory inventory = fake.bukkit().getInventory();
         inventory.setHelmet(armor(owner, Material.NETHERITE_HELMET, "helmet"));
         inventory.setChestplate(armor(owner, Material.NETHERITE_CHESTPLATE, "chestplate"));
@@ -210,12 +214,6 @@ public final class BotManager implements Listener {
                 fake.setShieldRaised(false);
             }
 
-            // A player hitting the raised shield must not receive shield-impact knockback.
-            if (shieldWasRaised) {
-                Bukkit.getScheduler().runTask(plugin, () -> {
-                    if (attacker.isOnline()) attacker.setVelocity(new Vector(0, 0, 0));
-                });
-            }
         }
     }
 
