@@ -62,9 +62,8 @@ public final class WorldManager {
             return (a + (b-a)*fx) * (1-fz) + (c + (d-c)*fx) * fz;
         }
         private static int height(int x, int z, long seed) {
-            double n = noise(x,z,150,seed)*2.8 + noise(x,z,55,seed+7)*1.6
-                    + noise(x,z,22,seed+19)*0.65;
-            return 64 + (int)Math.round(n);
+            // Keep every arena completely level so the FFA has no terrain obstacles.
+            return 64;
         }
 
         @Override
@@ -101,7 +100,7 @@ public final class WorldManager {
                 surfaceHeights[x][z] = surface;
                 for (int y=surface-4; y<surface; y++) data.setBlock(x,y,z,filler);
                 data.setBlock(x,surface,z,top);
-                if (terrainKey.equals("snow")) data.setBlock(x,surface+1,z,Material.SNOW);
+                // No snow layers or surface decorations: the entire arena stays clear.
             }
 
             // Ore veins are placed only inside existing stone, never in open air.
@@ -129,40 +128,7 @@ public final class WorldManager {
                 }
             }
 
-            // Natural trees are 60% less common than the previous generator.
-            Random flora = new Random(seed + chunkX * 73428767L + chunkZ * 912931L);
-            if (flora.nextInt(5000) < (terrainKey.equals("plains") ? 10 : 2000) && !terrainKey.equals("desert")) {
-                int tx=flora.nextInt(8)+4, tz=flora.nextInt(8)+4;
-                int wx=chunkX*16+tx, wz=chunkZ*16+tz, sy=height(wx,wz,seed);
-                Material log=terrainKey.equals("snow")?Material.SPRUCE_LOG:
-                        terrainKey.equals("badlands")?Material.ACACIA_LOG:Material.OAK_LOG;
-                Material leaves=terrainKey.equals("snow")?Material.SPRUCE_LEAVES:
-                        terrainKey.equals("badlands")?Material.ACACIA_LEAVES:Material.OAK_LEAVES;
-                int trunkHeight=5+flora.nextInt(2);
-                for(int y=1;y<=trunkHeight;y++) data.setBlock(tx,sy+y,tz,log);
-                org.bukkit.block.data.BlockData leafBlock=Bukkit.createBlockData(leaves);
-                if(leafBlock instanceof org.bukkit.block.data.type.Leaves leafData) leafData.setPersistent(true);
-                for(int layer=0;layer<4;layer++) {
-                    int canopyY=sy+trunkHeight-2+layer;
-                    int radius=(layer==1||layer==2)?3:2;
-                    for(int dx=-radius;dx<=radius;dx++) for(int dz=-radius;dz<=radius;dz++) {
-                        int distance=dx*dx+dz*dz;
-                        if(distance>radius*radius+1 || (distance>1 && flora.nextDouble()<0.13)) continue;
-                        int lx=tx+dx,lz=tz+dz;
-                        if(lx>=0&&lx<16&&lz>=0&&lz<16&&data.getType(lx,canopyY,lz).isAir())
-                            data.setBlock(lx,canopyY,lz,leafBlock);
-                    }
-                }
-            }
-            if(terrainKey.equals("desert") && flora.nextInt(100)<85) {
-                int count=1+flora.nextInt(3);
-                for(int i=0;i<count;i++) {
-                    int bx=flora.nextInt(16),bz=flora.nextInt(16);
-                    int surface=height(chunkX*16+bx,chunkZ*16+bz,seed);
-                    if(data.getType(bx,surface,bz)==Material.SAND && data.getType(bx,surface+1,bz).isAir())
-                        data.setBlock(bx,surface+1,bz,Material.DEAD_BUSH);
-                }
-            }
+            // Intentionally no trees, bushes, snow layers, or other surface obstacles.
             return data;
         }
         @Override public boolean shouldGenerateNoise(){return false;}
@@ -196,10 +162,10 @@ public final class WorldManager {
         // for worlds created with the restored PvPCore terrain generator.
         if (!plugin.getConfig().getBoolean("worlds.custom-terrain-migrated", false)) {
             String[][] arenas = {
-                    {"plains", "pvp_plains_arena_v3", "pvp_plains_arena_v4"},
-                    {"desert", "pvp_desert_arena_v3", "pvp_desert_arena_v4"},
-                    {"snow", "pvp_snow_arena_v3", "pvp_snow_arena_v4"},
-                    {"badlands", "pvp_badlands_arena_v3", "pvp_badlands_arena_v4"}
+                    {"plains", "pvp_plains_arena_v4", "pvp_plains_arena_v5"},
+                    {"desert", "pvp_desert_arena_v4", "pvp_desert_arena_v5"},
+                    {"snow", "pvp_snow_arena_v4", "pvp_snow_arena_v5"},
+                    {"badlands", "pvp_badlands_arena_v4", "pvp_badlands_arena_v5"}
             };
             for (String[] arena : arenas) {
                 String path = "worlds." + arena[0] + ".name";
@@ -209,7 +175,28 @@ public final class WorldManager {
             }
             plugin.getConfig().set("worlds.custom-terrain-migrated", true);
         }
+        if (!plugin.getConfig().getBoolean("worlds.flat-open-arena-migrated", false)) {
+            String[][] arenas = {
+                    {"plains", "pvp_plains_arena_v4", "pvp_plains_arena_v5"},
+                    {"desert", "pvp_desert_arena_v4", "pvp_desert_arena_v5"},
+                    {"snow", "pvp_snow_arena_v4", "pvp_snow_arena_v5"},
+                    {"badlands", "pvp_badlands_arena_v4", "pvp_badlands_arena_v5"}
+            };
+            for (String[] arena : arenas) {
+                String path = "worlds." + arena[0] + ".name";
+                if (plugin.getConfig().getString(path, "").equalsIgnoreCase(arena[1])) {
+                    plugin.getConfig().set(path, arena[2]);
+                }
+            }
+            plugin.getConfig().set("worlds.flat-open-arena-migrated", true);
+        }
         plugin.saveConfig();
+    }
+
+    public void applyPermanentDay(World world) {
+        if (world == null) return;
+        world.setGameRule(GameRule.DO_DAYLIGHT_CYCLE, false);
+        world.setTime(1000L);
     }
 
     public void initializeWorldsOnce() {
@@ -245,7 +232,10 @@ public final class WorldManager {
             world = new WorldCreator(name).environment(World.Environment.NORMAL)
                     .type(WorldType.NORMAL).seed(worldSeed(key)).generator(new PvPGenerator(key)).generateStructures(false).createWorld();
         }
-        if (world != null) world.setGameRule(GameRule.DO_MOB_SPAWNING, false);
+        if (world != null) {
+            world.setGameRule(GameRule.DO_MOB_SPAWNING, false);
+            applyPermanentDay(world);
+        }
         return world;
     }
 
@@ -516,6 +506,7 @@ public final class WorldManager {
                 plugin.getLogger().severe("Could not create regenerated arena " + name);
             } else {
                 fresh.setGameRule(GameRule.DO_MOB_SPAWNING, false);
+                applyPermanentDay(fresh);
             }
         }
 
