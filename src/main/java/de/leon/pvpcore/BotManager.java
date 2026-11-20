@@ -130,6 +130,8 @@ public final class BotManager implements Listener {
         if (fake != null && fake.isValid()) equip(owner, fake);
     }
 
+    public boolean isAvailable() { return available; }
+
     public boolean hasOwnedBot(Player owner) {
         FakePlayer fake = owned.get(owner.getUniqueId());
         return fake != null && fake.isValid();
