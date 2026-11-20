@@ -47,7 +47,7 @@ public final class FightCommand implements CommandExecutor {
                 plugin.message(player, "&cYou do not have a pending duel invitation.");
                 return true;
             }
-            if (plugin.practice().isFighting(player) || plugin.practice().isDueling(challenger)) {
+            if (plugin.practice().isFighting(player) || plugin.practice().isFighting(challenger)) {
                 plugin.message(player, "&cOne of you is already in a duel.");
                 return true;
             }
@@ -77,7 +77,7 @@ public final class FightCommand implements CommandExecutor {
             plugin.message(player, "&cYou cannot duel yourself.");
             return true;
         }
-        if (plugin.practice().isDueling(player) || plugin.practice().isDueling(target)) {
+        if (plugin.practice().isFighting(player) || plugin.practice().isFighting(target)) {
             plugin.message(player, "&cOne of you is already in a duel.");
             return true;
         }
