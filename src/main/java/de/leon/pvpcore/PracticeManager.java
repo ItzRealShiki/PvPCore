@@ -36,12 +36,17 @@ public final class PracticeManager implements Listener {
     public enum Mode { STUN_SLAM, SWORD }
 
     private static final int ROOM_SPACING = 1024;
-    private static final int ARENA_RADIUS = 48;
+    private static final int DUEL_ARENA_RADIUS = 48;
+    private static final int PRACTICE_ARENA_RADIUS = 24;
     private static final String PRACTICE_WORLD = "prac_void";
 
     private final PvPCore plugin;
     private World world;
-    private final Map<UUID, Integer> scores = new HashMap<>();
+    private final Map<UUID, Integer> stunCombos = new HashMap<>();
+    private final Map<UUID, Integer> swordCombos = new HashMap<>();
+    private final Map<UUID, Long> lastSwordHitTicks = new HashMap<>();
+    private final Map<UUID, Integer> swordSwingSequence = new HashMap<>();
+    private final Map<UUID, Integer> swordHitSwingSequence = new HashMap<>();
     private final Map<UUID, Integer> selectedHeights = new HashMap<>();
     private final Map<UUID, Integer> swordSwings = new HashMap<>();
     private final Map<UUID, Integer> swordHits = new HashMap<>();
@@ -49,6 +54,7 @@ public final class PracticeManager implements Listener {
     private final Set<UUID> resetting = new HashSet<>();
     private final Set<Integer> activeForceFields = new HashSet<>();
     private final Map<Integer, Integer> forceFieldHeights = new HashMap<>();
+    private final Map<Integer, Integer> forceFieldRadii = new HashMap<>();
     private final Map<UUID, Integer> fightRooms = new HashMap<>();
     private final Map<UUID, Integer> fightSpawnOffsets = new HashMap<>();
     private final Map<UUID, Mode> fightModes = new HashMap<>();
@@ -108,17 +114,21 @@ public final class PracticeManager implements Listener {
             }
             nearbyRooms.add(index);
             int glassHeight = mode(player) == Mode.SWORD ? 30 : selectedHeight(player) + 10;
+            int arenaRadius = isFighting(player) ? DUEL_ARENA_RADIUS : PRACTICE_ARENA_RADIUS;
             Integer previousGlassHeight = forceFieldHeights.get(index);
             if (!activeForceFields.contains(index)) {
                 // Clear the previous full-height forcefield from older plugin versions.
-                removeForceField(cx, cz, world.getMaxHeight() - 81);
-                buildForceField(cx, cz, glassHeight);
+                removeForceField(cx, cz, world.getMaxHeight() - 81, DUEL_ARENA_RADIUS);
+                buildForceField(cx, cz, glassHeight, arenaRadius);
                 activeForceFields.add(index);
                 forceFieldHeights.put(index, glassHeight);
+                forceFieldRadii.put(index, arenaRadius);
             } else if (previousGlassHeight == null || previousGlassHeight != glassHeight) {
-                removeForceField(cx, cz, previousGlassHeight == null ? world.getMaxHeight() - 81 : previousGlassHeight);
-                buildForceField(cx, cz, glassHeight);
+                removeForceField(cx, cz, previousGlassHeight == null ? world.getMaxHeight() - 81 : previousGlassHeight,
+                        forceFieldRadii.getOrDefault(index, PRACTICE_ARENA_RADIUS));
+                buildForceField(cx, cz, glassHeight, arenaRadius);
                 forceFieldHeights.put(index, glassHeight);
+                forceFieldRadii.put(index, arenaRadius);
             }
             if (!isFighting(player) && !adminBoxVisits.containsKey(player.getUniqueId())
                     && plugin.bots().isAvailable() && !plugin.bots().hasOwnedBot(player)) plugin.bots().spawn(player);
@@ -128,9 +138,11 @@ public final class PracticeManager implements Listener {
         }
         for (int index : new HashSet<>(activeForceFields)) {
             if (nearbyRooms.contains(index)) continue;
-            removeForceField(roomCenterX(index), 128, forceFieldHeights.getOrDefault(index, 40));
+            removeForceField(roomCenterX(index), 128, forceFieldHeights.getOrDefault(index, 40),
+                    forceFieldRadii.getOrDefault(index, PRACTICE_ARENA_RADIUS));
             activeForceFields.remove(index);
             forceFieldHeights.remove(index);
+            forceFieldRadii.remove(index);
         }
     }
 
@@ -167,10 +179,11 @@ public final class PracticeManager implements Listener {
         int height = owner.getGameMode() == GameMode.SPECTATOR ? 0
                 : (mode(owner) == Mode.SWORD ? 30 : selectedHeight(owner) + 10);
         if (!activeForceFields.contains(index)) {
-            removeForceField(roomCenterX(index), 128, world.getMaxHeight() - 81);
-            buildForceField(roomCenterX(index), 128, height);
+            removeForceField(roomCenterX(index), 128, world.getMaxHeight() - 81, DUEL_ARENA_RADIUS);
+            buildForceField(roomCenterX(index), 128, height, PRACTICE_ARENA_RADIUS);
             activeForceFields.add(index);
             forceFieldHeights.put(index, height);
+            forceFieldRadii.put(index, PRACTICE_ARENA_RADIUS);
         }
         admin.teleport(new Location(world, roomCenterX(index) + 0.5, 82.0, 128.5));
         Bukkit.getScheduler().runTask(plugin, () -> updatePlayerVisibility(admin));
@@ -207,7 +220,8 @@ public final class PracticeManager implements Listener {
             plugin.getConfig().set(base + ".built", true);
             plugin.saveConfig();
         }
-        clearPlatform(cx, cz);
+        clearPlatform(cx, cz, DUEL_ARENA_RADIUS);
+        buildDuelObstacles(cx, cz, index);
         buildDuelFoundation(cx, cz, index);
         buildBackgroundLandscape(cx, cz, index);
         plugin.bots().removeOwned(challenger);
@@ -303,7 +317,7 @@ public final class PracticeManager implements Listener {
         plugin.saveConfig();
     }
 
-    public int score(Player p) { return scores.getOrDefault(p.getUniqueId(), 0); }
+    public int score(Player p) { return stunCombos.getOrDefault(p.getUniqueId(), 0); }
 
     private String highScorePath(Player player, Mode mode) {
         return "practice.highscores." + player.getUniqueId() + "." + (mode == Mode.SWORD ? "sword-accuracy" : "stun-slam");
@@ -370,11 +384,12 @@ public final class PracticeManager implements Listener {
         if (scoreboardOption(player, "sword")) {
             lines.add("&b&lSWORD");
             lines.add("&7Accuracy: &a" + accuracy + "%");
+            lines.add("&7Combo: &f" + swordCombos.getOrDefault(id, 0));
             if (scoreboardOption(player, "personal-bests")) lines.add("&7Personal Best: &e" + highScore(player, Mode.SWORD) + "%");
         }
         if (scoreboardOption(player, "stun-slam")) {
             lines.add("&d&lSTUN SLAM");
-            lines.add("&7Current Score: &f" + score(player));
+            lines.add("&7Current Combo: &f" + score(player));
             if (scoreboardOption(player, "personal-bests")) lines.add("&7Personal Best: &e" + highScore(player, Mode.STUN_SLAM));
         }
         if (scoreboardOption(player, "footer")) {
@@ -465,14 +480,15 @@ public final class PracticeManager implements Listener {
             plugin.getConfig().set(base + ".built", true);
             plugin.saveConfig();
         }
-        clearPlatform(cx, cz);
+        clearPlatform(cx, cz, PRACTICE_ARENA_RADIUS);
         plugin.bots().removeOwned(p);
         p.setGameMode(GameMode.SURVIVAL);
         p.setFallDistance(0);
         p.teleport(startLocation(p, challengeHeight));
         Bukkit.getScheduler().runTask(plugin, () -> updatePlayerVisibility(p));
         applyKit(p);
-        scores.putIfAbsent(p.getUniqueId(), 0);
+        stunCombos.putIfAbsent(p.getUniqueId(), 0);
+        swordCombos.putIfAbsent(p.getUniqueId(), 0);
         if (mode(p) == Mode.SWORD) {
             swordSwings.put(p.getUniqueId(), 0);
             swordHits.put(p.getUniqueId(), 0);
@@ -505,13 +521,13 @@ public final class PracticeManager implements Listener {
     }
 
     private void buildRoom(int cx, int cz) {
-        buildArenaPlatform(cx, cz);
+        buildArenaPlatform(cx, cz, PRACTICE_ARENA_RADIUS);
     }
 
-    private void clearPlatform(int cx, int cz) {
+    private void clearPlatform(int cx, int cz, int radius) {
         // Remove the old 49x49 glass enclosure when upgrading existing rooms.
-        for (int x = -24; x <= 24; x++) {
-            for (int z = -24; z <= 24; z++) {
+        for (int x = -DUEL_ARENA_RADIUS; x <= DUEL_ARENA_RADIUS; x++) {
+            for (int z = -DUEL_ARENA_RADIUS; z <= DUEL_ARENA_RADIUS; z++) {
                 for (int y = 81; y < world.getMaxHeight(); y++) {
                     Block block = world.getBlockAt(cx + x, y, cz + z);
                     Material type = block.getType();
@@ -519,7 +535,34 @@ public final class PracticeManager implements Listener {
                 }
             }
         }
-        buildArenaPlatform(cx, cz);
+        buildArenaPlatform(cx, cz, radius);
+    }
+
+    private void buildDuelObstacles(int cx, int cz, int roomIndex) {
+        Material[] pillars = {Material.STONE_BRICKS, Material.MOSSY_STONE_BRICKS, Material.POLISHED_ANDESITE, Material.COBBLED_DEEPSLATE};
+        int[][] positions = {
+                {-14, -12, 3}, {14, -12, 2}, {-14, 12, 2}, {14, 12, 3},
+                {-25, -2, 2}, {25, 2, 2}, {-3, -22, 2}, {3, 22, 2}
+        };
+        for (int i = 0; i < positions.length; i++) {
+            int[] pos = positions[i];
+            Material block = pillars[Math.floorMod(roomIndex + i, pillars.length)];
+            for (int dx = 0; dx < 2; dx++) for (int dz = 0; dz < 2; dz++)
+                for (int y = 1; y <= pos[2]; y++)
+                    world.getBlockAt(cx + pos[0] + dx, 80 + y, cz + pos[1] + dz).setType(block, false);
+        }
+        // Low cover walls on the outer lanes; keep the central spawn-to-spawn lane open.
+        for (int i = -4; i <= 4; i++) {
+            world.getBlockAt(cx - 21 + i, 81, cz - 15).setType(Material.STONE_BRICKS, false);
+            world.getBlockAt(cx - 21 + i, 82, cz - 15).setType(Material.STONE_BRICKS, false);
+            world.getBlockAt(cx + 21 + i, 81, cz + 15).setType(Material.POLISHED_ANDESITE, false);
+            world.getBlockAt(cx + 21 + i, 82, cz + 15).setType(Material.POLISHED_ANDESITE, false);
+        }
+        // Raised two-block stepping platforms add vertical movement without blocking combat.
+        for (int x : new int[]{-8, 8}) for (int z : new int[]{-28, 28}) {
+            for (int dx = -2; dx <= 2; dx++) for (int dz = -2; dz <= 2; dz++)
+                world.getBlockAt(cx + x + dx, 81, cz + z + dz).setType(Material.CUT_COPPER, false);
+        }
     }
 
     private void buildDuelFoundation(int cx, int cz, int roomIndex) {
@@ -625,7 +668,7 @@ public final class PracticeManager implements Listener {
         };
     }
 
-    private void buildArenaPlatform(int cx, int cz) {
+    private void buildArenaPlatform(int cx, int cz, int arenaRadius) {
         if (world == null) return;
         int roomIndex = Math.floorDiv(cx - 128, ROOM_SPACING);
         String theme = arenaTheme(roomIndex);
@@ -637,8 +680,8 @@ public final class PracticeManager implements Listener {
         org.bukkit.scheduler.BukkitTask oldDecay = leafDecayTasks.remove(roomIndex);
         if (oldDecay != null) oldDecay.cancel();
 
-        for (int x = -ARENA_RADIUS; x <= ARENA_RADIUS; x++) {
-            for (int z = -ARENA_RADIUS; z <= ARENA_RADIUS; z++) {
+        for (int x = -DUEL_ARENA_RADIUS; x <= DUEL_ARENA_RADIUS; x++) {
+            for (int z = -DUEL_ARENA_RADIUS; z <= DUEL_ARENA_RADIUS; z++) {
                 int edge = Math.max(Math.abs(x), Math.abs(z));
                 double radius = Math.hypot(x, z);
 
@@ -647,14 +690,18 @@ public final class PracticeManager implements Listener {
                 double terrainNoise = Math.sin(x * 0.37) + Math.cos(z * 0.33)
                         + Math.sin((x + z) * 0.21) * 0.8;
                 int height = 0;
-                if (radius >= 26.0 && radius <= 43.0) {
+                if (radius >= arenaRadius * 0.54 && radius <= arenaRadius * 0.90) {
                     if (terrainNoise > 2.05) height = 2;
                     else if (terrainNoise > 1.15) height = 1;
                 }
 
                 // Never touch the outermost ring: it contains the forcefield wall.
                 // Clearing y=81..85 there would remove the bottom glass rows.
-                if (edge == ARENA_RADIUS) continue;
+                if (edge > arenaRadius) {
+                    for (int y = 80; y <= 90; y++) world.getBlockAt(cx + x, y, cz + z).setType(Material.AIR, false);
+                    continue;
+                }
+                if (edge == arenaRadius) continue;
 
                 // Clear old decoration and raised terrain before rebuilding the tile.
                 // Clear the full decoration height, including persistent cherry leaves and logs
@@ -671,7 +718,7 @@ public final class PracticeManager implements Listener {
 
                 // Add varied ground cover from the mid-ring outward. The central
                 // combat zone stays clear, while plants are scattered in small clusters.
-                if (radius >= 16.0 && radius <= 45.0) {
+                if (radius >= arenaRadius * 0.33 && radius <= arenaRadius * 0.94) {
                     int plantRoll = decorationRandom.nextInt(17);
                     Material groundDetail = null;
                     switch (theme) {
@@ -741,7 +788,7 @@ public final class PracticeManager implements Listener {
                 // Compact ornamental cherry trees with a tapered, rounded canopy.
                 // They stay near the perimeter and their leaves are temporary accents.
                 if (theme.equals("CHERRY_BLOSSOM")
-                        && edge >= 36 && edge <= 44
+                        && edge >= arenaRadius * 0.75 && edge <= arenaRadius * 0.92
                         && decorationRandom.nextInt(173) == 0) {
                     int trunkBase = topY + 1;
                     for (int trunkY = 0; trunkY < 3; trunkY++) {
@@ -769,11 +816,11 @@ public final class PracticeManager implements Listener {
 
         // Decorative frame inside the glass enclosure, using the selected theme's accent block.
         Material trim = palette[3];
-        for (int offset = -47; offset <= 47; offset++) {
-            world.getBlockAt(cx - 47, 80, cz + offset).setType(trim, false);
-            world.getBlockAt(cx + 47, 80, cz + offset).setType(trim, false);
-            world.getBlockAt(cx + offset, 80, cz - 47).setType(trim, false);
-            world.getBlockAt(cx + offset, 80, cz + 47).setType(trim, false);
+        for (int offset = -arenaRadius + 1; offset <= arenaRadius - 1; offset++) {
+            world.getBlockAt(cx - arenaRadius + 1, 80, cz + offset).setType(trim, false);
+            world.getBlockAt(cx + arenaRadius - 1, 80, cz + offset).setType(trim, false);
+            world.getBlockAt(cx + offset, 80, cz - arenaRadius + 1).setType(trim, false);
+            world.getBlockAt(cx + offset, 80, cz + arenaRadius - 1).setType(trim, false);
         }
 
         if (!timedLeaves.isEmpty()) {
@@ -795,21 +842,21 @@ public final class PracticeManager implements Listener {
         timedLeaves.add(block);
     }
 
-    private void buildForceField(int cx, int cz, int glassHeight) {
+    private void buildForceField(int cx, int cz, int glassHeight, int arenaRadius) {
         if (world == null) return;
         int roofY = 80 + glassHeight;
-        for (int offset = -ARENA_RADIUS; offset <= ARENA_RADIUS; offset++) {
+        for (int offset = -arenaRadius; offset <= arenaRadius; offset++) {
             for (int y = 81; y <= roofY; y++) {
-                world.getBlockAt(cx - ARENA_RADIUS, y, cz + offset).setType(forceFieldMaterial(), false);
-                world.getBlockAt(cx + ARENA_RADIUS, y, cz + offset).setType(forceFieldMaterial(), false);
-                world.getBlockAt(cx + offset, y, cz - ARENA_RADIUS).setType(forceFieldMaterial(), false);
-                world.getBlockAt(cx + offset, y, cz + ARENA_RADIUS).setType(forceFieldMaterial(), false);
+                world.getBlockAt(cx - arenaRadius, y, cz + offset).setType(forceFieldMaterial(), false);
+                world.getBlockAt(cx + arenaRadius, y, cz + offset).setType(forceFieldMaterial(), false);
+                world.getBlockAt(cx + offset, y, cz - arenaRadius).setType(forceFieldMaterial(), false);
+                world.getBlockAt(cx + offset, y, cz + arenaRadius).setType(forceFieldMaterial(), false);
             }
         }
 
         // Close the arena with a complete glass roof at the calculated mode-specific height.
-        for (int x = -ARENA_RADIUS; x <= ARENA_RADIUS; x++) {
-            for (int z = -ARENA_RADIUS; z <= ARENA_RADIUS; z++) {
+        for (int x = -arenaRadius; x <= arenaRadius; x++) {
+            for (int z = -arenaRadius; z <= arenaRadius; z++) {
                 world.getBlockAt(cx + x, roofY, cz + z).setType(forceFieldMaterial(), false);
             }
         }
@@ -827,23 +874,23 @@ public final class PracticeManager implements Listener {
         plugin.saveConfig();
         for (int index : activeForceFields) {
             int cx = roomCenterX(index), cz = 128;
-            buildForceField(cx, cz, forceFieldHeights.getOrDefault(index, 40));
+            buildForceField(cx, cz, forceFieldHeights.getOrDefault(index, 40), forceFieldRadii.getOrDefault(index, PRACTICE_ARENA_RADIUS));
         }
     }
 
-    private void removeForceField(int cx, int cz, int glassHeight) {
+    private void removeForceField(int cx, int cz, int glassHeight, int arenaRadius) {
         if (world == null) return;
         int roofY = 80 + glassHeight;
-        for (int offset = -ARENA_RADIUS; offset <= ARENA_RADIUS; offset++) {
+        for (int offset = -arenaRadius; offset <= arenaRadius; offset++) {
             for (int y = 81; y <= roofY; y++) {
-                world.getBlockAt(cx - ARENA_RADIUS, y, cz + offset).setType(Material.AIR, false);
-                world.getBlockAt(cx + ARENA_RADIUS, y, cz + offset).setType(Material.AIR, false);
-                world.getBlockAt(cx + offset, y, cz - ARENA_RADIUS).setType(Material.AIR, false);
-                world.getBlockAt(cx + offset, y, cz + ARENA_RADIUS).setType(Material.AIR, false);
+                world.getBlockAt(cx - arenaRadius, y, cz + offset).setType(Material.AIR, false);
+                world.getBlockAt(cx + arenaRadius, y, cz + offset).setType(Material.AIR, false);
+                world.getBlockAt(cx + offset, y, cz - arenaRadius).setType(Material.AIR, false);
+                world.getBlockAt(cx + offset, y, cz + arenaRadius).setType(Material.AIR, false);
             }
         }
-        for (int x = -ARENA_RADIUS; x <= ARENA_RADIUS; x++) {
-            for (int z = -ARENA_RADIUS; z <= ARENA_RADIUS; z++) {
+        for (int x = -arenaRadius; x <= arenaRadius; x++) {
+            for (int z = -arenaRadius; z <= arenaRadius; z++) {
                 world.getBlockAt(cx + x, roofY, cz + z).setType(Material.AIR, false);
             }
         }
@@ -854,11 +901,12 @@ public final class PracticeManager implements Listener {
         if (!resetting.add(id)) return;
         activeAttempts.remove(id);
         if (success) {
-            scores.merge(id, 1, Integer::sum);
+            stunCombos.merge(id, 1, Integer::sum);
             updateHighScore(p, Mode.STUN_SLAM, score(p));
             plugin.message(p, "&a+1 point! &7Score: &e" + score(p));
         } else {
-            plugin.message(p, "&cMissed! &7Try again. Score: &e" + score(p));
+            stunCombos.put(id, 0);
+            plugin.message(p, "&cMissed! &7Combo reset. Current combo: &e" + score(p));
         }
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             resetting.remove(id);
@@ -875,8 +923,15 @@ public final class PracticeManager implements Listener {
         Player player = event.getPlayer();
         if (event.getAnimationType() != PlayerAnimationType.ARM_SWING
                 || !player.getWorld().equals(world)
-                || mode(player) != Mode.SWORD) return;
-        swordSwings.merge(player.getUniqueId(), 1, Integer::sum);
+                || mode(player) != Mode.SWORD
+                || !player.getInventory().getItemInMainHand().getType().name().endsWith("_SWORD")) return;
+        UUID id = player.getUniqueId();
+        swordSwings.merge(id, 1, Integer::sum);
+        int swing = swordSwingSequence.merge(id, 1, Integer::sum);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (!player.isOnline()) return;
+            if (swordHitSwingSequence.getOrDefault(id, 0) != swing) resetSwordCombo(player);
+        }, 1L);
         updateSwordAccuracy(player);
     }
 
@@ -889,8 +944,22 @@ public final class PracticeManager implements Listener {
         if (event.isCancelled() || event.getFinalDamage() <= 0.0) return;
 
         if (mode(player) == Mode.SWORD) {
-            swordHits.merge(player.getUniqueId(), 1, Integer::sum);
+            if (!player.getInventory().getItemInMainHand().getType().name().endsWith("_SWORD")) return;
+            UUID id = player.getUniqueId();
+            swordHits.merge(id, 1, Integer::sum);
+            swordHitSwingSequence.put(id, swordSwingSequence.getOrDefault(id, 0));
+            long now = world.getGameTime();
+            Long previousHit = lastSwordHitTicks.get(id);
+            int nextCombo = previousHit == null || now - previousHit > 200L ? 1 : swordCombos.getOrDefault(id, 0) + 1;
+            swordCombos.put(id, nextCombo);
+            lastSwordHitTicks.put(id, now);
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                if (!player.isOnline()) return;
+                Long last = lastSwordHitTicks.get(id);
+                if (last != null && last == now && world.getGameTime() - last >= 200L) resetSwordCombo(player);
+            }, 200L);
             updateSwordAccuracy(player);
+            updatePracticeBoard(player);
             return;
         }
 
@@ -900,6 +969,14 @@ public final class PracticeManager implements Listener {
         retry(player, true);
     }
 
+    private void resetSwordCombo(Player player) {
+        UUID id = player.getUniqueId();
+        swordCombos.put(id, 0);
+        lastSwordHitTicks.remove(id);
+        updatePracticeBoard(player);
+        player.sendActionBar(ChatColor.RED + "Sword combo missed! " + ChatColor.GRAY + "Combo: " + ChatColor.YELLOW + "0");
+    }
+
     private void updateSwordAccuracy(Player player) {
         UUID id = player.getUniqueId();
         int swings = swordSwings.getOrDefault(id, 0);
@@ -907,6 +984,8 @@ public final class PracticeManager implements Listener {
         int accuracy = swings == 0 ? 0 : Math.min(100, Math.round(hits * 100.0f / swings));
         updateHighScore(player, Mode.SWORD, accuracy);
         player.sendActionBar(ChatColor.GREEN + "Accuracy: " + ChatColor.YELLOW + accuracy + "%"
+                + ChatColor.DARK_GRAY + " | " + ChatColor.GRAY + "Combo: "
+                + ChatColor.AQUA + swordCombos.getOrDefault(id, 0)
                 + ChatColor.DARK_GRAY + " | " + ChatColor.GRAY + "Hits: "
                 + ChatColor.GREEN + hits + ChatColor.GRAY + "/" + swings);
     }
@@ -921,11 +1000,12 @@ public final class PracticeManager implements Listener {
         if (roomIndex >= 0) {
             int cx = roomCenterX(roomIndex);
             int cz = 128;
+            int arenaRadius = isFighting(p) ? DUEL_ARENA_RADIUS : PRACTICE_ARENA_RADIUS;
             Location to = event.getTo();
             // Only teleport after the player's position has passed beyond the outer edge
             // of the glass wall (at +/-48), not while approaching or touching its inner face.
-            if (to.getX() < cx - ARENA_RADIUS - 0.5 || to.getX() > cx + ARENA_RADIUS + 0.5
-                    || to.getZ() < cz - ARENA_RADIUS - 0.5 || to.getZ() > cz + ARENA_RADIUS + 0.5) {
+            if (to.getX() < cx - arenaRadius - 0.5 || to.getX() > cx + arenaRadius + 0.5
+                    || to.getZ() < cz - arenaRadius - 0.5 || to.getZ() > cz + arenaRadius + 0.5) {
                 p.setFallDistance(0);
                 p.setVelocity(new org.bukkit.util.Vector(0, 0, 0));
                 if (isFighting(p)) p.teleport(fightSpawnLocation(roomIndex, fightSpawnOffsets.getOrDefault(p.getUniqueId(), 0)));
