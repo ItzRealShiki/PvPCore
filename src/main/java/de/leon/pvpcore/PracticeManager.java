@@ -443,7 +443,7 @@ public final class PracticeManager implements Listener {
     public void onSwordSwing(PlayerAnimationEvent event) {
         Player player = event.getPlayer();
         if (event.getAnimationType() != PlayerAnimationType.ARM_SWING
-                || !player.getWorld().getName().equals("prac_rooms")
+                || !player.getWorld().equals(world)
                 || mode(player) != Mode.SWORD) return;
         swordSwings.merge(player.getUniqueId(), 1, Integer::sum);
         updateSwordAccuracy(player);
@@ -452,7 +452,7 @@ public final class PracticeManager implements Listener {
     @EventHandler
     public void onBotHit(EntityDamageByEntityEvent event) {
         if (!(event.getDamager() instanceof Player player)) return;
-        if (!player.getWorld().getName().equals("prac_rooms")) return;
+        if (!player.getWorld().equals(world)) return;
         if (!plugin.bots().isOwnedBot(player, event.getEntity())) return;
         // Shield-blocked mace swings trigger damage events too, but must never award a point.
         if (event.isCancelled() || event.getFinalDamage() <= 0.0) return;
@@ -521,7 +521,7 @@ public final class PracticeManager implements Listener {
     }
 
     @EventHandler public void onPlace(BlockPlaceEvent event) {
-        if (event.getBlock().getWorld().getName().equals("prac_rooms")) event.setCancelled(true);
+        if (event.getBlock().getWorld().equals(world)) event.setCancelled(true);
     }
 
     @EventHandler public void onQuit(PlayerQuitEvent event) {

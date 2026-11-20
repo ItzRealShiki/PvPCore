@@ -68,7 +68,7 @@ public final class BotManager implements Listener {
             bot.setInvulnerable(false);
             bot.setGravity(true);
             owned.put(owner.getUniqueId(), fake);
-            boolean stunSlam = owner.getWorld().getName().equals("prac_rooms")
+            boolean stunSlam = owner.getWorld().getName().equals("prac_void")
                     && plugin.practice().mode(owner) == PracticeManager.Mode.STUN_SLAM;
             fake.setKnockbackEnabled(!(stunSlam || !option(owner, "knockback", true)));
             equip(owner, fake);
@@ -100,7 +100,7 @@ public final class BotManager implements Listener {
     }
 
     private void equip(Player owner, FakePlayer fake) {
-        if (owner.getWorld().getName().equals("prac_rooms")) {
+        if (owner.getWorld().getName().equals("prac_void")) {
             plugin.practice().applyBotKit(fake.bukkit(), owner);
             return;
         }
@@ -181,7 +181,7 @@ public final class BotManager implements Listener {
                 }
 
                 Player bot = fake.bukkit();
-                if (owner.getWorld().getName().equals("prac_rooms")) {
+                if (owner.getWorld().getName().equals("prac_void")) {
                     // Keep bots damageable, but preserve vanilla player hit immunity frames.
                     // Do not reset noDamageTicks here: doing so bypasses the normal attack cooldown.
                     bot.setInvulnerable(false);
@@ -190,7 +190,7 @@ public final class BotManager implements Listener {
                         && bot.getInventory().getItemInOffHand().getType().isAir()) {
                     bot.getInventory().setItemInOffHand(new ItemStack(Material.TOTEM_OF_UNDYING));
                 }
-                boolean practiceStunSlam = owner.getWorld().getName().equals("prac_rooms")
+                boolean practiceStunSlam = owner.getWorld().getName().equals("prac_void")
                         && plugin.practice().mode(owner) == PracticeManager.Mode.STUN_SLAM;
                 fake.setKnockbackEnabled(!(practiceStunSlam || !option(owner, "knockback", true)));
                 boolean shieldEnabled = practiceStunSlam || option(owner, "shield", false);
@@ -231,14 +231,14 @@ public final class BotManager implements Listener {
         FakePlayer fake = owned.get(ownerId);
         if (fake == null) return;
 
-        if ((owner.getWorld().getName().equals("prac_rooms") && plugin.practice().mode(owner) == PracticeManager.Mode.STUN_SLAM)
+        if ((owner.getWorld().getName().equals("prac_void") && plugin.practice().mode(owner) == PracticeManager.Mode.STUN_SLAM)
                 || !option(owner, "knockback", true)) {
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (fake.isValid()) fake.bukkit().setVelocity(new Vector(0, 0, 0));
             });
         }
 
-        boolean shieldEnabled = (owner.getWorld().getName().equals("prac_rooms")
+        boolean shieldEnabled = (owner.getWorld().getName().equals("prac_void")
                 && plugin.practice().mode(owner) == PracticeManager.Mode.STUN_SLAM)
                 || option(owner, "shield", false);
         if (shieldEnabled
