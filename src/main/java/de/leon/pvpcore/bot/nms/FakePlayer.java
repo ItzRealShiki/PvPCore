@@ -28,6 +28,7 @@ import java.util.UUID;
 public final class FakePlayer {
     private final ServerPlayer handle;
     private final EmptyConnection connection;
+    private boolean knockbackEnabled = true;
 
     private FakePlayer(ServerPlayer handle, EmptyConnection connection) {
         this.handle = handle;
@@ -71,6 +72,13 @@ public final class FakePlayer {
         return !handle.isRemoved() && handle.isAlive();
     }
 
+    /** Enable or disable knockback packets received by this fake player. */
+    public void setKnockbackEnabled(boolean enabled) {
+        if (knockbackEnabled == enabled) return;
+        knockbackEnabled = enabled;
+        if (!enabled) handle.setDeltaMovement(Vec3.ZERO);
+    }
+
     /** Keep a shield actively raised while it is equipped in the main hand. */
     public void setShieldRaised(boolean enabled) {
         if (enabled) {
@@ -85,7 +93,7 @@ public final class FakePlayer {
         if (!isValid()) return;
         if (handle.level() instanceof ServerLevel level) level.players().remove(handle);
         Vec3 knockback = connection.takePendingMotion();
-        if (knockback != null) handle.setDeltaMovement(knockback);
+        if (knockbackEnabled && knockback != null) handle.setDeltaMovement(knockback);
         handle.doTick();
     }
 
