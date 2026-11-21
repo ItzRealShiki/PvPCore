@@ -5,6 +5,7 @@ import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.generator.WorldInfo;
 import org.bukkit.generator.ChunkGenerator.ChunkData;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Shulker;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -679,7 +680,7 @@ public final class PracticeManager implements Listener {
     private Material[] arenaPalette(int roomIndex) {
         return switch (arenaTheme(roomIndex)) {
             case "DESERT" -> new Material[]{Material.SAND, Material.SANDSTONE, Material.SMOOTH_SANDSTONE, Material.CUT_SANDSTONE, Material.DEAD_BUSH};
-            case "END" -> new Material[]{Material.END_STONE, Material.END_STONE, Material.PURPUR_BLOCK, Material.END_STONE_BRICKS, Material.CHORUS_FLOWER};
+            case "END" -> new Material[]{Material.END_STONE, Material.END_STONE, Material.END_STONE, Material.END_STONE, Material.CHORUS_FLOWER};
             case "NETHER" -> new Material[]{Material.NETHERRACK, Material.NETHERRACK, Material.BASALT, Material.BLACKSTONE, Material.FIRE};
             case "BADLANDS" -> new Material[]{Material.RED_SAND, Material.RED_SANDSTONE, Material.TERRACOTTA, Material.ORANGE_TERRACOTTA, Material.DEAD_BUSH};
             case "PALE_GARDEN" -> new Material[]{Material.PALE_MOSS_BLOCK, Material.PALE_MOSS_BLOCK, Material.PALE_OAK_PLANKS, Material.PALE_OAK_LOG, Material.PALE_HANGING_MOSS};
@@ -689,6 +690,46 @@ public final class PracticeManager implements Listener {
             case "FLOWER_PLAINS" -> new Material[]{Material.GRASS_BLOCK, Material.DIRT, Material.ROOTED_DIRT, Material.MOSS_BLOCK, Material.PINK_PETALS};
             default -> new Material[]{Material.GRASS_BLOCK, Material.DIRT, Material.DIRT, Material.STONE, Material.SHORT_GRASS};
         };
+    }
+
+    private void clearEndDecorativeShulkers(int roomIndex) {
+        String tag = "pvpcore_end_shulker_" + roomIndex;
+        for (org.bukkit.entity.Entity entity : world.getEntities()) {
+            if (entity.getScoreboardTags().contains(tag)) entity.remove();
+        }
+    }
+
+    private void buildEndRuin(int x, int z, int roomIndex, int variant) {
+        // Small 5x5 End-stone-brick outposts with purpur details.
+        int baseY = 81;
+        Material brick = Material.END_STONE_BRICKS;
+        Material accent = Material.PURPUR_PILLAR;
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) {
+                boolean corner = Math.abs(dx) == 2 && Math.abs(dz) == 2;
+                if (!corner) world.getBlockAt(x + dx, baseY, z + dz).setType(brick, false);
+            }
+        }
+        for (int[] corner : new int[][]{{-2,-2},{-2,2},{2,-2},{2,2}}) {
+            int px = x + corner[0], pz = z + corner[1];
+            for (int y = 1; y <= 3; y++)
+                world.getBlockAt(px, baseY + y, pz).setType(accent, false);
+            world.getBlockAt(px, baseY + 4, pz).setType(Material.PURPUR_BLOCK, false);
+        }
+        world.getBlockAt(x, baseY + 1, z).setType(Material.PURPUR_BLOCK, false);
+        world.getBlockAt(x, baseY + 2, z).setType(Material.PURPUR_PILLAR, false);
+        world.getBlockAt(x, baseY + 3, z).setType(Material.PURPUR_BLOCK, false);
+        // Each ruin has one stationary, invulnerable shulker as decoration.
+        Location spawn = new Location(world, x + 0.5, baseY + 1.0, z + 0.5);
+        Shulker shulker = world.spawn(spawn, Shulker.class, entity -> {
+            entity.setAI(false);
+            entity.setInvulnerable(true);
+            entity.setSilent(true);
+            entity.setGravity(false);
+            entity.addScoreboardTag("pvpcore_end_shulker_" + roomIndex);
+            entity.setPeek((byte) 0);
+            entity.setColor(org.bukkit.DyeColor.PURPLE);
+        });
     }
 
     private void buildArenaPlatform(int cx, int cz, int arenaRadius) {
@@ -835,6 +876,18 @@ public final class PracticeManager implements Listener {
                     addTimedCherryLeaves(cx + x, trunkBase + 5, cz + z, timedLeaves);
                 }
             }
+        }
+
+        // The END theme gets a few compact ruins around the perimeter. The central
+        // combat area remains completely open and the shulkers are display-only.
+        if (theme.equals("END")) {
+            clearEndDecorativeShulkers(roomIndex);
+            buildEndRuin(cx - 15, cz - 14, roomIndex, 0);
+            buildEndRuin(cx + 15, cz - 14, roomIndex, 1);
+            buildEndRuin(cx - 15, cz + 14, roomIndex, 2);
+            buildEndRuin(cx + 15, cz + 14, roomIndex, 3);
+        } else {
+            clearEndDecorativeShulkers(roomIndex);
         }
 
         // Decorative frame inside the glass enclosure, using the selected theme's accent block.
@@ -1093,6 +1146,23 @@ public final class PracticeManager implements Listener {
             UUID id = player.getUniqueId();
             crystalAnchorStartTicks.put(id, world.getGameTime());
             crystalAnchorLocations.put(id, event.getBlockPlaced().getLocation());
+            // Refill the placing hand after Bukkit applies the normal item decrement.
+            // This keeps the practice anchor available indefinitely.
+            org.bukkit.inventory.EquipmentSlot hand = event.getHand();
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (!player.isOnline() || mode(player) != Mode.CRYSTAL_ANCHOR) return;
+                ItemStack held = hand == org.bukkit.inventory.EquipmentSlot.OFF_HAND
+                        ? player.getInventory().getItemInOffHand()
+                        : player.getInventory().getItemInMainHand();
+                if (held == null || held.getType() != Material.RESPAWN_ANCHOR) {
+                    held = gear(Material.RESPAWN_ANCHOR);
+                    if (hand == org.bukkit.inventory.EquipmentSlot.OFF_HAND)
+                        player.getInventory().setItemInOffHand(held);
+                    else player.getInventory().setItemInMainHand(held);
+                } else if (held.getAmount() < 64) {
+                    held.setAmount(64);
+                }
+            });
             player.sendActionBar(ChatColor.GOLD + "Anchor placed! " + ChatColor.GRAY + "Timer started.");
             updatePracticeBoard(player);
             return;
@@ -1104,6 +1174,8 @@ public final class PracticeManager implements Listener {
     public void onAnchorExplode(BlockExplodeEvent event) {
         if (world == null || !event.getBlock().getWorld().equals(world)
                 || event.getBlock().getType() != Material.RESPAWN_ANCHOR) return;
+        // Respawn anchors are practice equipment, never loot.
+        event.setDropItems(false);
         Location exploded = event.getBlock().getLocation();
         for (Player player : Bukkit.getOnlinePlayers()) {
             UUID id = player.getUniqueId();
