@@ -1175,7 +1175,7 @@ public final class PracticeManager implements Listener {
         if (world == null || !event.getBlock().getWorld().equals(world)
                 || event.getBlock().getType() != Material.RESPAWN_ANCHOR) return;
         // Respawn anchors are practice equipment, never loot.
-        event.setDropItems(false);
+        event.setYield(0.0f);
         Location exploded = event.getBlock().getLocation();
         for (Player player : Bukkit.getOnlinePlayers()) {
             UUID id = player.getUniqueId();
