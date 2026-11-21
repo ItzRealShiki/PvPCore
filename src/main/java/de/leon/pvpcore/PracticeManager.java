@@ -15,6 +15,7 @@ import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityResurrectEvent;
 import org.bukkit.event.entity.FoodLevelChangeEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerAnimationEvent;
@@ -1134,8 +1135,24 @@ public final class PracticeManager implements Listener {
     public void onDamage(EntityDamageEvent event) {
         if (!(event.getEntity() instanceof Player p) || !p.getWorld().equals(world)) return;
         // Human-vs-human damage is enabled only for participants in an accepted 1v1.
+        // In Crystal Anchor practice, players must take respawn-anchor explosion damage.
         if (isFighting(p) || plugin.bots().isPracticeBot(p)) return;
+        if (mode(p) == Mode.CRYSTAL_ANCHOR
+                && event.getCause() == EntityDamageEvent.DamageCause.BLOCK_EXPLOSION) return;
         event.setCancelled(true);
+    }
+
+    @EventHandler
+    public void onAnchorTotemResurrect(EntityResurrectEvent event) {
+        if (!(event.getEntity() instanceof Player player) || world == null
+                || !player.getWorld().equals(world) || mode(player) != Mode.CRYSTAL_ANCHOR
+                || isFighting(player)) return;
+        // Replenish the offhand after the totem has been consumed by resurrection.
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (!player.isOnline() || !player.getWorld().equals(world)
+                    || mode(player) != Mode.CRYSTAL_ANCHOR || isFighting(player)) return;
+            player.getInventory().setItemInOffHand(new ItemStack(Material.TOTEM_OF_UNDYING));
+        });
     }
 
     @EventHandler public void onBreak(BlockBreakEvent event) {
@@ -1252,6 +1269,9 @@ public final class PracticeManager implements Listener {
             p.getInventory().setItem(2, enchanted(spearMaterial(), "lunge", 3));
         }
         loadSavedKit(p, p.getInventory());
+        if (mode(p) == Mode.CRYSTAL_ANCHOR) {
+            p.getInventory().setItemInOffHand(new ItemStack(Material.TOTEM_OF_UNDYING));
+        }
         p.getInventory().setHeldItemSlot(0);
         p.setHealth(20); p.setFoodLevel(20); p.setSaturation(20); p.setFireTicks(0);
     }
