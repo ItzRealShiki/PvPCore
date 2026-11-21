@@ -1260,7 +1260,6 @@ public final class PracticeManager implements Listener {
         if (mode(p) == Mode.CRYSTAL_ANCHOR) {
             p.getInventory().setItem(0, gear(Material.RESPAWN_ANCHOR));
             p.getInventory().setItem(1, new ItemStack(Material.GLOWSTONE, 64));
-            p.getInventory().setItem(2, new ItemStack(Material.OBSIDIAN, 64));
         } else if (mode(p) == Mode.SWORD) p.getInventory().setItem(0, gear(Material.DIAMOND_SWORD));
         else {
             p.getInventory().setItem(0, enchanted(Material.NETHERITE_AXE, "sharpness", 5));
@@ -1306,7 +1305,6 @@ public final class PracticeManager implements Listener {
         if (mode(player) == Mode.CRYSTAL_ANCHOR) {
             editor.setItem(0, gear(Material.RESPAWN_ANCHOR));
             editor.setItem(1, new ItemStack(Material.GLOWSTONE, 64));
-            editor.setItem(2, new ItemStack(Material.OBSIDIAN, 64));
         } else if (mode(player) == Mode.SWORD) editor.setItem(0, gear(Material.DIAMOND_SWORD));
         else {
             editor.setItem(0, enchanted(Material.NETHERITE_AXE, "sharpness", 5));
