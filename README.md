@@ -47,3 +47,12 @@ Only these three permission nodes are defined:
 - `Owner.Core` — Full access; bypasses lower-level permission checks.
 
 Assign permissions through LuckPerms or another permission manager. No extra permission nodes are required.
+
+
+## Credits
+
+Original work by **ItzRealShiki**. If you use PvPCore on a Minecraft server, follow the server-credit requirement in the repository's LICENSE.
+
+## License
+
+See [LICENSE](LICENSE). Third-party components remain subject to their own license terms.
