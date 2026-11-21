@@ -1006,11 +1006,18 @@ public final class PracticeManager implements Listener {
         UUID id = player.getUniqueId();
         swordSwings.merge(id, 1, Integer::sum);
         int swing = swordSwingSequence.merge(id, 1, Integer::sum);
+        long swingTick = world.getGameTime();
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            if (!player.isOnline()) return;
-            if (swordSwingSequence.getOrDefault(id, 0) == swing
-                    && swordHitSwingSequence.getOrDefault(id, 0) != swing) resetSwordCombo(player);
-        }, 1L);
+            if (!player.isOnline() || !player.getWorld().equals(world)) return;
+            // Paper may deliver the entity-damage event before the arm-swing animation
+            // event for a successful hit. Allow the hit event to arrive first, including
+            // when both events happen during the same server tick.
+            Long lastHitTick = lastSwordHitTicks.get(id);
+            boolean hitThisSwing = lastHitTick != null && lastHitTick >= swingTick;
+            if (swordSwingSequence.getOrDefault(id, 0) == swing && !hitThisSwing) {
+                resetSwordCombo(player);
+            }
+        }, 2L);
         updateSwordAccuracy(player);
     }
 
