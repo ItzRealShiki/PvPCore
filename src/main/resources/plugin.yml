@@ -2,7 +2,7 @@ name: PvPCore
 version: '${project.version}'
 main: de.leon.pvpcore.PvPCore
 api-version: '26.2'
-author: Leon
+author: ItzRealShiki
 description: ꜱᴛᴀɴᴅᴀʟᴏɴᴇ ᴘᴠᴘ ᴛʀᴀɪɴɪɴɢ ᴀɴᴅ ꜱᴇʀᴠᴇʀ ᴄᴏʀᴇ ᴡɪᴛʜ ɢᴜɪ ᴀᴅᴍɪɴɪꜱᴛʀᴀᴛɪᴏɴ.
 commands:
   bot:
