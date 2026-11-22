@@ -94,7 +94,7 @@ public final class PracticeCommand implements CommandExecutor, Listener {
         Inventory i = create("&8✦ ᴋɪᴛ ᴇᴅɪᴛᴏʀ", "selector", 54);
         i.setItem(10, item(Material.NETHERITE_AXE, "&6Practice · Stun Slam", "&7Edit your personal practice loadout."));
         i.setItem(12, item(Material.DIAMOND_SWORD, "&bPractice · Sword", "&7Edit your personal practice loadout."));
-        i.setItem(14, item(Material.NETHERITE_AXE, "&6Duel · Stun Slam", "&7Edit the kit you receive in /duel."));
+        i.setItem(14, item(Material.MACE, "&6Duel · Spear-Mace", "&7Edit the kit you receive in /duel."));
         i.setItem(16, item(Material.DIAMOND_SWORD, "&bDuel · Sword", "&7Edit the kit you receive in /duel."));
         i.setItem(18, item(Material.RESPAWN_ANCHOR, "&6Practice · Crystal Anchor", "&7Edit your Crystal Anchor loadout."));
         i.setItem(31, item(Material.BOOK, "&ePersonal Kits", "&7Duel kits are saved separately from Practice kits.", "&7If no personal Duel kit exists, the Admin kit is used."));
@@ -104,9 +104,10 @@ public final class PracticeCommand implements CommandExecutor, Listener {
 
     private void edit(Player p, PracticeManager.Mode mode, boolean duelKit) {
         Holder holder = new Holder("editor", mode, duelKit);
-        Inventory inv = create("&8✦ " + (duelKit ? "ᴅᴜᴇʟ" : "ᴘʀᴀᴄᴛɪᴄᴇ") + " ᴋɪᴛ · " + mode.name(), holder, 54);
+        String kitName = duelKit && mode == PracticeManager.Mode.STUN_SLAM ? "SPEAR-MACE" : mode.name();
+        Inventory inv = create("&8✦ " + (duelKit ? "ᴅᴜᴇʟ" : "ᴘʀᴀᴄᴛɪᴄᴇ") + " ᴋɪᴛ · " + kitName, holder, 54);
         if (duelKit) plugin.practice().applyDuelKitToInventory(p, mode, inv);
-        else plugin.practice().applyKitToInventory(p, inv);
+        else plugin.practice().applyKitToInventory(p, mode, inv);
         for (int s = 36; s <= 44; s++) inv.setItem(s, item(Material.GRAY_STAINED_GLASS_PANE, "&8 "));
         inv.setItem(49, item(Material.BOOK, "&eKit Editor", "&7Move items within this menu.", "&7Armor slots: 45–48.", "&7Your changes save when you close."));
         inv.setItem(53, item(Material.EMERALD, "&aSave & Close", "&7Save your kit and return."));

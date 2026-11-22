@@ -1256,18 +1256,22 @@ public final class PracticeManager implements Listener {
     }
 
     public void applyKitToInventory(Player player, Inventory editor) {
+        applyKitToInventory(player, selectedMode, editor);
+    }
+
+    public void applyKitToInventory(Player player, Mode selectedMode, Inventory editor) {
         editor.clear();
-        if (mode(player) == Mode.CRYSTAL_ANCHOR) {
+        if (selectedMode == Mode.CRYSTAL_ANCHOR) {
             editor.setItem(0, new ItemStack(Material.RESPAWN_ANCHOR, 64));
             editor.setItem(1, new ItemStack(Material.GLOWSTONE, 64));
-        } else if (mode(player) == Mode.SWORD) editor.setItem(0, gear(Material.DIAMOND_SWORD));
+        } else if (selectedMode == Mode.SWORD) editor.setItem(0, gear(Material.DIAMOND_SWORD));
         else {
             editor.setItem(0, enchanted(Material.NETHERITE_AXE, "sharpness", 5));
             ItemStack mace = enchanted(Material.MACE, "density", 5); enchant(mace, "wind_burst", 3);
             editor.setItem(1, mace);
             editor.setItem(2, enchanted(spearMaterial(), "lunge", 3));
         }
-        if (mode(player) == Mode.CRYSTAL_ANCHOR) {
+        if (selectedMode == Mode.CRYSTAL_ANCHOR) {
             ItemStack[] armor = crystalAnchorArmor();
             editor.setItem(45, armor[3]);
             editor.setItem(46, armor[2]);
@@ -1279,7 +1283,7 @@ public final class PracticeManager implements Listener {
             editor.setItem(47, gear(Material.DIAMOND_LEGGINGS));
             editor.setItem(48, gear(Material.DIAMOND_BOOTS));
         }
-        String path = "practice.players." + player.getUniqueId() + ".kits." + mode(player).name();
+        String path = "practice.players." + player.getUniqueId() + ".kits." + selectedMode.name();
         if (!plugin.getConfig().contains(path + ".contents")) return;
         for (int slot = 0; slot < 36; slot++) {
             ItemStack item = plugin.getConfig().getItemStack(path + ".contents." + slot);
@@ -1289,6 +1293,7 @@ public final class PracticeManager implements Listener {
         editor.setItem(46, plugin.getConfig().getItemStack(path + ".chestplate"));
         editor.setItem(47, plugin.getConfig().getItemStack(path + ".leggings"));
         editor.setItem(48, plugin.getConfig().getItemStack(path + ".boots"));
+        if (selectedMode == Mode.STUN_SLAM) migrateLegacyStunSlamSwordKit(editor);
     }
 
     public void saveKit(Player player, Inventory editor) {
@@ -1437,7 +1442,8 @@ public final class PracticeManager implements Listener {
     }
 
     private void loadSavedKit(Player player, PlayerInventory inventory) {
-        String path = "practice.players." + player.getUniqueId() + ".kits." + mode(player).name();
+        Mode selectedMode = mode(player);
+        String path = "practice.players." + player.getUniqueId() + ".kits." + selectedMode.name();
         if (!plugin.getConfig().contains(path + ".contents")) return;
         for (int slot = 0; slot < 36; slot++) {
             ItemStack item = plugin.getConfig().getItemStack(path + ".contents." + slot);
@@ -1447,6 +1453,24 @@ public final class PracticeManager implements Listener {
         inventory.setChestplate(plugin.getConfig().getItemStack(path + ".chestplate"));
         inventory.setLeggings(plugin.getConfig().getItemStack(path + ".leggings"));
         inventory.setBoots(plugin.getConfig().getItemStack(path + ".boots"));
+        if (selectedMode == Mode.STUN_SLAM) migrateLegacyStunSlamSwordKit(inventory);
+    }
+
+    private void migrateLegacyStunSlamSwordKit(Inventory inventory) {
+        ItemStack first = inventory.getItem(0);
+        ItemStack second = inventory.getItem(1);
+        ItemStack third = inventory.getItem(2);
+        if (first == null || first.getType() != Material.DIAMOND_SWORD
+                || (second != null && !second.getType().isAir())
+                || (third != null && !third.getType().isAir())) return;
+
+        // The old kit-editor bug stored the currently selected Sword kit under STUN_SLAM.
+        // Repair only that unmistakable one-sword pattern, preserving all other custom kits.
+        inventory.setItem(0, enchanted(Material.NETHERITE_AXE, "sharpness", 5));
+        ItemStack mace = enchanted(Material.MACE, "density", 5);
+        enchant(mace, "wind_burst", 3);
+        inventory.setItem(1, mace);
+        inventory.setItem(2, enchanted(spearMaterial(), "lunge", 3));
     }
 
     private void setSingleSpear(Inventory inventory) {
