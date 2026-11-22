@@ -50,6 +50,7 @@ public final class PvPCore extends JavaPlugin implements Listener {
         Bukkit.getPluginManager().registerEvents(optionsCommand, this);
         Bukkit.getPluginManager().registerEvents(practiceCommand, this);
         register("spawn", new SpawnCommand(this));
+        register("leave", new LeaveCommand(this));
         register("setspawn", new SetSpawnCommand(this));
         register("admin", new AdminCommand(this));
         fights = new FightCommand(this);

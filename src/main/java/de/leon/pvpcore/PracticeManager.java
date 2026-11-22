@@ -330,6 +330,44 @@ public final class PracticeManager implements Listener {
     }
 
 
+    /**
+     * Leaves a practice room or active duel and sends the player to the configured server spawn.
+     * When leaving a duel, the opponent is returned to their pre-duel location.
+     */
+    public boolean leaveToSpawn(Player player) {
+        UUID id = player.getUniqueId();
+        boolean inPracticeWorld = world != null && player.getWorld().equals(world);
+        boolean inDuel = isFighting(player);
+        boolean visitingAdminBox = adminBoxVisits.containsKey(id);
+        if (!inPracticeWorld && !inDuel && !visitingAdminBox) return false;
+
+        if (inDuel) endFight(player, "&cA participant left the duel.");
+
+        plugin.bots().removeOwned(player);
+        activeAttempts.remove(id);
+        resetting.remove(id);
+        adminBoxVisits.remove(id);
+        pendingBotHitTicks.remove(id);
+        pendingBotHitModes.remove(id);
+        lastBotComboScoreTicks.remove(id);
+        lastStunSlamScoreTicks.remove(id);
+        crystalAnchorStartTicks.remove(id);
+        crystalAnchorLocations.remove(id);
+        stunCombos.remove(id);
+        swordCombos.remove(id);
+        lastSwordHitTicks.remove(id);
+        swordSwingSequence.remove(id);
+        swordHitSwingSequence.remove(id);
+        swordSwings.remove(id);
+        swordHits.remove(id);
+        restorePracticeBoard(player);
+        restorePlayerVisibility(player);
+
+        plugin.worlds().teleportToSpawn(player);
+        plugin.message(player, "&aYou left Practice and returned to spawn.");
+        return true;
+    }
+
     public void setMode(Player p, Mode mode) {
         activeAttempts.remove(p.getUniqueId());
         resetting.remove(p.getUniqueId());

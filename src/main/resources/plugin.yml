@@ -21,6 +21,10 @@ commands:
   spawn:
     description: Teleports you or an admin-selected player to spawn.
     usage: /spawn [player]
+  leave:
+    description: Leaves an active duel or practice room and returns to spawn.
+    usage: /leave
+    aliases: [l]
   setspawn:
     description: Sets the server spawn location.
     usage: /setspawn
