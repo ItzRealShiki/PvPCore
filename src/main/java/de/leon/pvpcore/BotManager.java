@@ -209,6 +209,9 @@ public final class BotManager implements Listener {
         if (ownerId == null) return;
         Player owner = Bukkit.getPlayer(ownerId);
         if (owner == null || !option(owner, "infinite-totem", true)) return;
+        if (owner.getWorld().getName().equals("prac_void")) {
+            plugin.practice().onPracticeBotTotemPop(owner);
+        }
         int delay = difficultyTicks(owner, "totem-difficulty");
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             FakePlayer fake = owned.get(ownerId);

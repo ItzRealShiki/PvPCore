@@ -50,6 +50,9 @@ public final class PracticeManager implements Listener {
     private final Map<UUID, Integer> stunCombos = new HashMap<>();
     private final Map<UUID, Integer> swordCombos = new HashMap<>();
     private final Map<UUID, Long> lastSwordHitTicks = new HashMap<>();
+    private final Map<UUID, Long> pendingBotHitTicks = new HashMap<>();
+    private final Map<UUID, Mode> pendingBotHitModes = new HashMap<>();
+    private final Map<UUID, Long> lastBotComboScoreTicks = new HashMap<>();
     private final Map<UUID, Integer> swordSwingSequence = new HashMap<>();
     private final Map<UUID, Integer> swordHitSwingSequence = new HashMap<>();
     private final Map<UUID, Integer> selectedHeights = new HashMap<>();
@@ -749,6 +752,7 @@ public final class PracticeManager implements Listener {
         if (!resetting.add(id)) return;
         activeAttempts.remove(id);
         if (success) {
+            if (world != null) lastBotComboScoreTicks.put(id, world.getGameTime());
             stunCombos.merge(id, 1, Integer::sum);
             updateHighScore(p, Mode.STUN_SLAM, score(p));
             updatePracticeBoard(p);
@@ -798,12 +802,27 @@ public final class PracticeManager implements Listener {
         if (!(event.getDamager() instanceof Player player)) return;
         if (!player.getWorld().equals(world)) return;
         if (!plugin.bots().isOwnedBot(player, event.getEntity())) return;
-        // Shield-blocked mace swings trigger damage events too, but must never award a point.
+
+        UUID id = player.getUniqueId();
+        Mode hitMode = mode(player);
+        Material weapon = player.getInventory().getItemInMainHand().getType();
+        if (hitMode == Mode.SWORD && weapon.name().endsWith("_SWORD")) {
+            pendingBotHitTicks.put(id, world.getGameTime());
+            pendingBotHitModes.put(id, Mode.SWORD);
+        } else if (hitMode == Mode.STUN_SLAM && weapon == Material.MACE) {
+            pendingBotHitTicks.put(id, world.getGameTime());
+            pendingBotHitModes.put(id, Mode.STUN_SLAM);
+        } else {
+            pendingBotHitTicks.remove(id);
+            pendingBotHitModes.remove(id);
+        }
+
+        // A totem can resurrect the bot even when the damage event reports zero final damage.
+        // Keep the attempted weapon/tick above so the resurrection event can safely award it once.
         if (event.isCancelled() || event.getFinalDamage() <= 0.0) return;
 
-        if (mode(player) == Mode.SWORD) {
-            if (!player.getInventory().getItemInMainHand().getType().name().endsWith("_SWORD")) return;
-            UUID id = player.getUniqueId();
+        if (hitMode == Mode.SWORD) {
+            if (!weapon.name().endsWith("_SWORD")) return;
             swordHits.merge(id, 1, Integer::sum);
             swordHitSwingSequence.put(id, swordSwingSequence.getOrDefault(id, 0));
             long now = world.getGameTime();
@@ -811,20 +830,58 @@ public final class PracticeManager implements Listener {
             int nextCombo = previousHit == null || now - previousHit > 200L ? 1 : swordCombos.getOrDefault(id, 0) + 1;
             swordCombos.put(id, nextCombo);
             lastSwordHitTicks.put(id, now);
-            Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                if (!player.isOnline()) return;
-                Long last = lastSwordHitTicks.get(id);
-                if (last != null && last == now && world.getGameTime() - last >= 200L) resetSwordCombo(player);
-            }, 200L);
+            lastBotComboScoreTicks.put(id, now);
+            scheduleSwordComboReset(player, id, now);
             updateSwordAccuracy(player);
             updatePracticeBoard(player);
             return;
         }
 
-        if (!activeAttempts.contains(player.getUniqueId())) return;
-        // Stun Slam only scores a real mace hit; other weapons still deal normal damage.
-        if (player.getInventory().getItemInMainHand().getType() != Material.MACE) return;
+        if (!activeAttempts.contains(id) || weapon != Material.MACE) return;
         retry(player, true);
+    }
+
+    private void scheduleSwordComboReset(Player player, UUID id, long hitTick) {
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (!player.isOnline()) return;
+            Long last = lastSwordHitTicks.get(id);
+            if (last != null && last == hitTick && world.getGameTime() - last >= 200L) resetSwordCombo(player);
+        }, 200L);
+    }
+
+    public void onPracticeBotTotemPop(Player owner) {
+        if (world == null || !owner.isOnline() || !owner.getWorld().equals(world) || isFighting(owner)) return;
+        UUID id = owner.getUniqueId();
+        Long hitTick = pendingBotHitTicks.get(id);
+        Mode hitMode = pendingBotHitModes.get(id);
+        if (hitTick == null || hitMode == null) return;
+
+        long now = world.getGameTime();
+        if (now < hitTick || now - hitTick > 1L) return;
+        if (Objects.equals(lastBotComboScoreTicks.get(id), hitTick)) return;
+
+        pendingBotHitTicks.remove(id);
+        pendingBotHitModes.remove(id);
+        lastBotComboScoreTicks.put(id, hitTick);
+
+        if (hitMode == Mode.STUN_SLAM && mode(owner) == Mode.STUN_SLAM
+                && activeAttempts.contains(id)) {
+            retry(owner, true);
+            return;
+        }
+
+        if (hitMode == Mode.SWORD && mode(owner) == Mode.SWORD) {
+            swordHits.merge(id, 1, Integer::sum);
+            swordHitSwingSequence.put(id, swordSwingSequence.getOrDefault(id, 0));
+            Long previousHit = lastSwordHitTicks.get(id);
+            int nextCombo = previousHit == null || now - previousHit > 200L
+                    ? 1 : swordCombos.getOrDefault(id, 0) + 1;
+            swordCombos.put(id, nextCombo);
+            lastSwordHitTicks.put(id, now);
+            scheduleSwordComboReset(owner, id, now);
+            updateSwordAccuracy(owner);
+            updatePracticeBoard(owner);
+        }
     }
 
     private void resetSwordCombo(Player player) {
@@ -1011,6 +1068,7 @@ public final class PracticeManager implements Listener {
         adminBoxVisits.remove(id);
         fightReturnLocations.remove(id);
         stunCombos.remove(id); swordCombos.remove(id); lastSwordHitTicks.remove(id);
+        pendingBotHitTicks.remove(id); pendingBotHitModes.remove(id); lastBotComboScoreTicks.remove(id);
         crystalAnchorStartTicks.remove(id); crystalAnchorLocations.remove(id);
         swordSwingSequence.remove(id); swordHitSwingSequence.remove(id);
         selectedHeights.remove(id); swordSwings.remove(id); swordHits.remove(id);
@@ -1027,6 +1085,7 @@ public final class PracticeManager implements Listener {
         }
         if (!event.getPlayer().getWorld().equals(world)) {
             adminBoxVisits.remove(id);
+            pendingBotHitTicks.remove(id); pendingBotHitModes.remove(id); lastBotComboScoreTicks.remove(id);
             restorePracticeBoard(event.getPlayer());
             restorePlayerVisibility(event.getPlayer());
         } else Bukkit.getScheduler().runTask(plugin, () -> updatePlayerVisibility(event.getPlayer()));
