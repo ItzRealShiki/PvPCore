@@ -43,7 +43,7 @@ public final class PracticeManager implements Listener {
     private static final int PRACTICE_ARENA_RADIUS = 24;
     private static final int ARENA_WALL_HEIGHT = 12;
     private static final List<String> ARENA_MAPS = List.of(
-            "COLOSSEUM", "RUINS", "FOREST", "NETHER_FORTRESS", "END_CITADEL");
+            "ANUBIS_RISE", "TINY_END_COLISEUM");
     private static final String PRACTICE_WORLD = "prac_void";
 
     private final PvPCore plugin;
@@ -665,7 +665,7 @@ public final class PracticeManager implements Listener {
 
     public String arenaMap(Player player) {
         return normalizeArenaMap(plugin.getConfig().getString(
-                "practice.players." + player.getUniqueId() + ".arena-map", "COLOSSEUM"));
+                "practice.players." + player.getUniqueId() + ".arena-map", "ANUBIS_RISE"));
     }
 
     private String arenaMap(int roomIndex) {
@@ -674,7 +674,7 @@ public final class PracticeManager implements Listener {
             for (String uuid : players.getKeys(false)) {
                 if (plugin.getConfig().getInt("practice.players." + uuid + ".room", -1) == roomIndex) {
                     return normalizeArenaMap(plugin.getConfig().getString(
-                            "practice.players." + uuid + ".arena-map", "COLOSSEUM"));
+                            "practice.players." + uuid + ".arena-map", "ANUBIS_RISE"));
                 }
             }
         }
@@ -682,8 +682,13 @@ public final class PracticeManager implements Listener {
     }
 
     private String normalizeArenaMap(String value) {
-        String normalized = value == null ? "COLOSSEUM" : value.toUpperCase(Locale.ROOT);
-        return ARENA_MAPS.contains(normalized) ? normalized : "COLOSSEUM";
+        String normalized = value == null ? "ANUBIS_RISE" : value.toUpperCase(Locale.ROOT);
+        // Preserve saved selections from the previous test build when upgrading.
+        return switch (normalized) {
+            case "END_CITADEL", "TINY_END", "TINY_END_COLISEUM" -> "TINY_END_COLISEUM";
+            case "ANUBIS_RISE" -> "ANUBIS_RISE";
+            default -> "ANUBIS_RISE";
+        };
     }
 
     public void setArenaMap(Player player, String map) {
@@ -696,23 +701,17 @@ public final class PracticeManager implements Listener {
 
     private Material arenaWallMaterial(int roomIndex) {
         return switch (arenaMap(roomIndex)) {
-            case "COLOSSEUM" -> Material.SMOOTH_SANDSTONE;
-            case "RUINS" -> Material.MOSSY_STONE_BRICKS;
-            case "FOREST" -> Material.MOSSY_COBBLESTONE;
-            case "NETHER_FORTRESS" -> Material.POLISHED_BLACKSTONE_BRICKS;
-            case "END_CITADEL" -> Material.PURPUR_BLOCK;
-            default -> Material.STONE_BRICKS;
+            case "ANUBIS_RISE" -> Material.SANDSTONE_BRICKS;
+            case "TINY_END_COLISEUM" -> Material.END_STONE_BRICKS;
+            default -> Material.SANDSTONE_BRICKS;
         };
     }
 
     private Material arenaAccentMaterial(int roomIndex) {
         return switch (arenaMap(roomIndex)) {
-            case "COLOSSEUM" -> Material.CHISELED_SANDSTONE;
-            case "RUINS" -> Material.CRACKED_STONE_BRICKS;
-            case "FOREST" -> Material.MOSS_BLOCK;
-            case "NETHER_FORTRESS" -> Material.NETHER_BRICKS;
-            case "END_CITADEL" -> Material.PURPUR_PILLAR;
-            default -> Material.STONE_BRICKS;
+            case "ANUBIS_RISE" -> Material.CHISELED_SANDSTONE;
+            case "TINY_END_COLISEUM" -> Material.PURPUR_PILLAR;
+            default -> Material.CHISELED_SANDSTONE;
         };
     }
 
@@ -747,81 +746,161 @@ public final class PracticeManager implements Listener {
         }
     }
 
+    private void placeArenaColumn(int x, int z, int height, Material base, Material body, Material cap) {
+        if (world == null) return;
+        int baseY = world.getHighestBlockYAt(x, z) + 1;
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                for (int y = 0; y < height; y++) {
+                    Material material = y == 0 ? base : y == height - 1 ? cap : body;
+                    world.getBlockAt(x + dx, baseY + y, z + dz).setType(material, false);
+                }
+            }
+        }
+    }
+
+    private void buildArenaGate(int cx, int cz, int centerX, int centerZ, boolean alongX,
+                                Material base, Material body, Material cap, int height) {
+        int leftX = alongX ? centerX - 4 : centerX;
+        int leftZ = alongX ? centerZ : centerZ - 4;
+        int rightX = alongX ? centerX + 4 : centerX;
+        int rightZ = alongX ? centerZ : centerZ + 4;
+        placeArenaColumn(leftX, leftZ, height, base, body, cap);
+        placeArenaColumn(rightX, rightZ, height, base, body, cap);
+        int bridgeY = Math.max(world.getHighestBlockYAt(leftX, leftZ),
+                world.getHighestBlockYAt(rightX, rightZ)) + height;
+        for (int offset = -4; offset <= 4; offset++) {
+            int x = alongX ? centerX + offset : centerX;
+            int z = alongX ? centerZ : centerZ + offset;
+            world.getBlockAt(x, bridgeY, z).setType(cap, false);
+            if (Math.abs(offset) == 4) {
+                world.getBlockAt(x, bridgeY + 1, z).setType(base, false);
+            }
+        }
+        // A clear 3-block passage remains between the gate pillars.
+    }
+
+    private void buildAnubisRise(int cx, int cz, int arenaRadius) {
+        Material sandstone = Material.SANDSTONE_BRICKS;
+        Material cut = Material.CUT_SANDSTONE;
+        Material chiseled = Material.CHISELED_SANDSTONE;
+        Material red = Material.RED_SANDSTONE;
+        Material dark = Material.POLISHED_BLACKSTONE;
+        Material gold = Material.GOLD_BLOCK;
+
+        // Four desert obelisks frame the combat bowl without obstructing the center.
+        int reach = Math.max(9, arenaRadius - 8);
+        for (int sx : new int[]{-1, 1}) {
+            for (int sz : new int[]{-1, 1}) {
+                int x = cx + sx * reach;
+                int z = cz + sz * reach;
+                placeArenaColumn(x, z, 8, red, sandstone, chiseled);
+                int y = world.getHighestBlockYAt(x, z) + 8;
+                world.getBlockAt(x, y, z).setType(gold, false);
+                world.getBlockAt(x + 1, y - 2, z).setType(dark, false);
+                world.getBlockAt(x - 1, y - 2, z).setType(dark, false);
+            }
+        }
+
+        // Four monumental entrances: sandstone pylons, red-sandstone bases and gold caps.
+        int gateReach = Math.max(8, arenaRadius - 6);
+        buildArenaGate(cx, cz, cx, cz - gateReach, true, red, sandstone, gold, 7);
+        buildArenaGate(cx, cz, cx, cz + gateReach, true, red, sandstone, gold, 7);
+        buildArenaGate(cx, cz, cx - gateReach, cz, false, red, sandstone, gold, 7);
+        buildArenaGate(cx, cz, cx + gateReach, cz, false, red, sandstone, gold, 7);
+
+        // A stepped temple facade stands behind the north entrance.
+        int templeZ = cz - Math.max(10, arenaRadius - 13);
+        for (int layer = 0; layer < 3; layer++) {
+            int halfWidth = 8 - layer * 2;
+            int y = 81 + layer;
+            for (int x = -halfWidth; x <= halfWidth; x++) {
+                world.getBlockAt(cx + x, y, templeZ + layer).setType(layer == 2 ? chiseled : sandstone, false);
+                world.getBlockAt(cx + x, y, templeZ + layer + 2).setType(layer == 2 ? chiseled : cut, false);
+            }
+        }
+        for (int x : new int[]{-6, -3, 3, 6}) {
+            placeArenaColumn(cx + x, templeZ + 1, 6, red, dark, gold);
+        }
+
+        // An original sun-disc floor emblem marks the shared spawn point.
+        for (int x = -7; x <= 7; x++) {
+            for (int z = -7; z <= 7; z++) {
+                int diamond = Math.abs(x) + Math.abs(z);
+                if (diamond == 5 || diamond == 6) {
+                    world.getBlockAt(cx + x, 80, cz + z).setType(red, false);
+                } else if (diamond == 3 || diamond == 4) {
+                    world.getBlockAt(cx + x, 80, cz + z).setType(chiseled, false);
+                } else if (diamond == 1 || diamond == 2) {
+                    world.getBlockAt(cx + x, 80, cz + z).setType(cut, false);
+                }
+            }
+        }
+        world.getBlockAt(cx, 80, cz).setType(gold, false);
+    }
+
+    private void buildTinyEndColiseum(int cx, int cz, int arenaRadius) {
+        Material endStone = Material.END_STONE_BRICKS;
+        Material endAccent = Material.PURPUR_PILLAR;
+        Material purpur = Material.PURPUR_BLOCK;
+        Material obsidian = Material.OBSIDIAN;
+        Material light = Material.SEA_LANTERN;
+
+        // Four compact gatehouses give the coliseum its four distinct entrances.
+        int gateReach = Math.max(8, arenaRadius - 6);
+        buildArenaGate(cx, cz, cx, cz - gateReach, true, obsidian, endStone, endAccent, 7);
+        buildArenaGate(cx, cz, cx, cz + gateReach, true, obsidian, endStone, endAccent, 7);
+        buildArenaGate(cx, cz, cx - gateReach, cz, false, obsidian, endStone, endAccent, 7);
+        buildArenaGate(cx, cz, cx + gateReach, cz, false, obsidian, endStone, endAccent, 7);
+
+        // Purpur corner towers and End-rod beacons establish a clear silhouette.
+        int reach = Math.max(9, arenaRadius - 8);
+        for (int sx : new int[]{-1, 1}) {
+            for (int sz : new int[]{-1, 1}) {
+                int x = cx + sx * reach;
+                int z = cz + sz * reach;
+                placeArenaColumn(x, z, 8, obsidian, endAccent, purpur);
+                int top = world.getHighestBlockYAt(x, z) + 8;
+                world.getBlockAt(x, top, z).setType(light, false);
+                world.getBlockAt(x, top + 1, z).setType(Material.END_ROD, false);
+            }
+        }
+
+        // Two compact spectator tiers follow the four outer walls; the middle stays open.
+        int halfSpan = Math.max(5, arenaRadius - 15);
+        for (int side : new int[]{-1, 1}) {
+            for (int row = 0; row < 2; row++) {
+                for (int offset = -halfSpan; offset <= halfSpan; offset++) {
+                    int yNorthSouth = world.getHighestBlockYAt(cx + offset, cz + side * (arenaRadius - 12 + row * 2)) + 1 + row;
+                    world.getBlockAt(cx + offset, yNorthSouth, cz + side * (arenaRadius - 12 + row * 2))
+                            .setType(row == 0 ? purpur : endAccent, false);
+                    int yEastWest = world.getHighestBlockYAt(cx + side * (arenaRadius - 12 + row * 2), cz + offset) + 1 + row;
+                    world.getBlockAt(cx + side * (arenaRadius - 12 + row * 2), yEastWest, cz + offset)
+                            .setType(row == 0 ? purpur : endAccent, false);
+                }
+            }
+        }
+
+        // A concentric End/purpur floor seal sits beneath the shared spawn point.
+        for (int x = -8; x <= 8; x++) {
+            for (int z = -8; z <= 8; z++) {
+                int ring = Math.max(Math.abs(x), Math.abs(z));
+                if (ring == 7) world.getBlockAt(cx + x, 80, cz + z).setType(obsidian, false);
+                else if (ring == 6 || ring == 4) world.getBlockAt(cx + x, 80, cz + z).setType(purpur, false);
+                else if (ring == 5 || ring == 3) world.getBlockAt(cx + x, 80, cz + z).setType(endStone, false);
+                else if (ring == 2) world.getBlockAt(cx + x, 80, cz + z).setType(endAccent, false);
+            }
+        }
+        for (int[] point : new int[][]{{-5, -5}, {-5, 5}, {5, -5}, {5, 5}}) {
+            world.getBlockAt(cx + point[0], 80, cz + point[1]).setType(light, false);
+        }
+    }
+
     private void buildArenaLandmarks(int cx, int cz, int arenaRadius, int roomIndex) {
         if (world == null) return;
-        int reach = Math.max(8, arenaRadius - 8);
-        int[][] corners = {{-reach, -reach}, {-reach, reach}, {reach, -reach}, {reach, reach}};
         switch (arenaMap(roomIndex)) {
-            case "RUINS" -> {
-                Material[] ruins = {Material.CRACKED_STONE_BRICKS, Material.MOSSY_STONE_BRICKS,
-                        Material.STONE_BRICKS, Material.CHISELED_STONE_BRICKS};
-                for (int i = 0; i < corners.length; i++) {
-                    int[] point = corners[i];
-                    placeArenaTower(cx + point[0], cz + point[1], 3 + (i % 3), ruins[i], Material.MOSSY_STONE_BRICKS);
-                }
-                for (int side : new int[]{-1, 1}) {
-                    for (int offset = -7; offset <= 7; offset++) {
-                        if (Math.abs(offset) < 3) continue;
-                        int x = cx + offset;
-                        int z = cz + side * (arenaRadius - 8);
-                        int y = world.getHighestBlockYAt(x, z) + 1;
-                        world.getBlockAt(x, y, z).setType(Material.MOSSY_STONE_BRICKS, false);
-                        if (Math.floorMod(offset, 3) == 0)
-                            world.getBlockAt(x, y + 1, z).setType(Material.CRACKED_STONE_BRICKS, false);
-                    }
-                }
-            }
-            case "FOREST" -> {
-                for (int[] point : corners) {
-                    buildArenaTree(cx + point[0], cz + point[1]);
-                    int inwardX = cx + point[0] - Integer.signum(point[0]) * 4;
-                    int inwardZ = cz + point[1] - Integer.signum(point[1]) * 4;
-                    placeArenaTower(inwardX, inwardZ, 2,
-                            Material.MOSSY_COBBLESTONE, Material.MOSSY_COBBLESTONE);
-                }
-            }
-            case "NETHER_FORTRESS" -> {
-                for (int i = 0; i < corners.length; i++) {
-                    int[] point = corners[i];
-                    placeArenaTower(cx + point[0], cz + point[1], 5 + (i % 2),
-                            Material.BASALT, Material.POLISHED_BLACKSTONE_BRICKS);
-                    int topY = world.getHighestBlockYAt(cx + point[0], cz + point[1]) + 1;
-                    world.getBlockAt(cx + point[0], topY, cz + point[1]).setType(Material.GLOWSTONE, false);
-                }
-            }
-            case "END_CITADEL" -> {
-                for (int[] point : corners) {
-                    int baseY = world.getHighestBlockYAt(cx + point[0], cz + point[1]) + 1;
-                    placeArenaTower(cx + point[0], cz + point[1], 6,
-                            Material.PURPUR_PILLAR, Material.PURPUR_BLOCK);
-                    world.getBlockAt(cx + point[0], baseY + 6, cz + point[1]).setType(Material.END_ROD, false);
-                }
-                for (int side : new int[]{-1, 1}) {
-                    for (int offset = -5; offset <= 5; offset++) {
-                        int x = cx + offset;
-                        int z = cz + side * (arenaRadius - 8);
-                        int y = world.getHighestBlockYAt(x, z) + 1;
-                        world.getBlockAt(x, y, z).setType(Material.PURPUR_SLAB, false);
-                    }
-                }
-            }
-            default -> {
-                // Colosseum: symmetric sandstone towers and tiered spectator ledges.
-                for (int[] point : corners) {
-                    placeArenaTower(cx + point[0], cz + point[1], 6,
-                            Material.SMOOTH_SANDSTONE, Material.CHISELED_SANDSTONE);
-                }
-                for (int side : new int[]{-1, 1}) {
-                    for (int row = 0; row < 3; row++) {
-                        for (int offset = -8; offset <= 8; offset++) {
-                            int x = cx + offset;
-                            int z = cz + side * (arenaRadius - 13 + row * 2);
-                            int y = world.getHighestBlockYAt(x, z) + 1 + row;
-                            world.getBlockAt(x, y, z).setType(Material.SMOOTH_SANDSTONE_SLAB, false);
-                        }
-                    }
-                }
-            }
+            case "TINY_END_COLISEUM" -> buildTinyEndColiseum(cx, cz, arenaRadius);
+            default -> buildAnubisRise(cx, cz, arenaRadius);
         }
     }
 
