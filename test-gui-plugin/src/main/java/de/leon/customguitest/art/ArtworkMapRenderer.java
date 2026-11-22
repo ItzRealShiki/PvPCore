@@ -1,16 +1,12 @@
 package de.leon.customguitest.art;
 
+import org.bukkit.entity.Player;
 import org.bukkit.map.MapCanvas;
 import org.bukkit.map.MapRenderer;
 import org.bukkit.map.MapView;
-import org.bukkit.entity.Player;
 
 import java.awt.Color;
 
-/**
- * Draws a fully custom 128x128 pixel graphic into a vanilla filled-map item.
- * This is sent by the server as map data, so no client resource pack is required.
- */
 public final class ArtworkMapRenderer extends MapRenderer {
     private final MapArtwork artwork;
     private boolean rendered;
@@ -30,9 +26,12 @@ public final class ArtworkMapRenderer extends MapRenderer {
     private void draw(MapCanvas c, MapArtwork type) {
         gradient(c, new Color(7, 12, 28), new Color(18, 25, 50));
         switch (type) {
-            case PANEL -> drawPanel(c);
-            case EDGE -> drawEdge(c);
-            case ORNAMENT -> drawOrnament(c);
+            case PANEL -> drawPanel(c, false);
+            case PANEL_VIOLET -> drawPanel(c, true);
+            case EDGE -> drawEdge(c, false);
+            case EDGE_VIOLET -> drawEdge(c, true);
+            case ORNAMENT -> drawOrnament(c, false);
+            case ORNAMENT_VIOLET -> drawOrnament(c, true);
             case TITLE_N -> drawTitle(c, "N");
             case TITLE_O -> drawTitle(c, "O");
             case TITLE_V -> drawTitle(c, "V");
@@ -48,44 +47,52 @@ public final class ArtworkMapRenderer extends MapRenderer {
             case CLOSE -> drawClose(c);
             case INFO -> drawInfo(c);
         }
-        frame(c, type == MapArtwork.EDGE ? new Color(102, 222, 255) : new Color(85, 130, 190));
+        Color frame = switch (type) {
+            case EDGE, ORNAMENT, TITLE_N, TITLE_O, TITLE_V, TITLE_A, PROFILE, STATUS, BACK ->
+                    new Color(102, 222, 255);
+            case EDGE_VIOLET, ORNAMENT_VIOLET, TITLE_L, TITLE_B, DESIGN, THEME ->
+                    new Color(194, 146, 255);
+            case CLOSE -> new Color(255, 118, 151);
+            default -> new Color(85, 130, 190);
+        };
+        frame(c, frame);
     }
 
-    private void drawPanel(MapCanvas c) {
-        for (int y = 0; y < 128; y++) {
-            for (int x = 0; x < 128; x++) {
-                int shimmer = ((x * 3 + y * 5) % 19 == 0) ? 8 : 0;
-                int r = 9 + shimmer;
-                int g = 15 + shimmer;
-                int b = 31 + shimmer * 2;
-                if ((x + y) % 24 == 0) { r += 2; g += 5; b += 11; }
-                px(c, x, y, new Color(clamp(r), clamp(g), clamp(b)));
-            }
+    private void drawPanel(MapCanvas c, boolean violet) {
+        Color baseTop = violet ? new Color(23, 12, 40) : new Color(7, 16, 33);
+        Color baseBottom = violet ? new Color(41, 20, 62) : new Color(12, 30, 48);
+        gradient(c, baseTop, baseBottom);
+        Color glow = violet ? new Color(75, 43, 109) : new Color(23, 67, 94);
+        for (int i = 0; i < 8; i++) {
+            line(c, 8 + i * 18, 0, 0, 8 + i * 18, glow);
+            line(c, 127, 8 + i * 17, 8 + i * 17, 127, glow);
         }
-        line(c, 0, 126, 127, 126, new Color(23, 43, 72));
-        line(c, 126, 0, 126, 127, new Color(23, 43, 72));
-        circle(c, 108, 18, 3, new Color(30, 73, 106), true);
-        circle(c, 18, 105, 2, new Color(43, 52, 103), true);
+        for (int y = 8; y < 120; y += 24)
+            for (int x = 8; x < 120; x += 24)
+                px(c, x, y, violet ? new Color(111, 76, 151) : new Color(60, 119, 146));
+        line(c, 0, 126, 127, 126, glow);
     }
 
-    private void drawEdge(MapCanvas c) {
-        gradient(c, new Color(13, 35, 60), new Color(44, 24, 74));
-        rect(c, 5, 5, 122, 122, new Color(34, 72, 105), false);
-        rect(c, 7, 7, 120, 120, new Color(99, 205, 242), false);
-        line(c, 10, 12, 117, 12, new Color(193, 240, 255));
-        line(c, 10, 115, 117, 115, new Color(117, 102, 190));
-        circle(c, 16, 16, 3, new Color(220, 247, 255), true);
-        circle(c, 112, 112, 3, new Color(213, 162, 255), true);
-        for (int i = 0; i < 5; i++) {
-            px(c, 20 + i * 4, 20, new Color(104, 205, 240));
-            px(c, 108 - i * 4, 108, new Color(172, 130, 237));
-        }
+    private void drawEdge(MapCanvas c, boolean violet) {
+        gradient(c, violet ? new Color(50, 24, 73) : new Color(13, 35, 60),
+                violet ? new Color(90, 33, 103) : new Color(24, 71, 100));
+        Color bright = violet ? new Color(218, 161, 255) : new Color(99, 205, 242);
+        Color dark = violet ? new Color(106, 57, 139) : new Color(34, 72, 105);
+        rect(c, 5, 5, 122, 122, dark, false);
+        rect(c, 7, 7, 120, 120, bright, false);
+        line(c, 10, 12, 117, 12, new Color(227, 239, 255));
+        line(c, 10, 115, 117, 115, dark);
+        circle(c, 16, 16, 3, new Color(230, 247, 255), true);
+        circle(c, 112, 112, 3, bright, true);
     }
 
-    private void drawOrnament(MapCanvas c) {
-        radial(c, 64, 64, 58, new Color(14, 28, 58), new Color(52, 23, 75));
+    private void drawOrnament(MapCanvas c, boolean violet) {
+        radial(c, 64, 64, 58,
+                violet ? new Color(52, 25, 81) : new Color(14, 28, 58),
+                violet ? new Color(95, 37, 100) : new Color(52, 23, 75));
+        Color ring = violet ? new Color(206, 151, 255) : new Color(92, 194, 231);
         circle(c, 64, 64, 43, new Color(43, 86, 132), false);
-        circle(c, 64, 64, 37, new Color(92, 194, 231), false);
+        circle(c, 64, 64, 37, ring, false);
         circle(c, 64, 64, 5, new Color(236, 226, 255), true);
         line(c, 64, 13, 64, 115, new Color(51, 87, 131));
         line(c, 13, 64, 115, 64, new Color(51, 87, 131));
@@ -99,10 +106,8 @@ public final class ArtworkMapRenderer extends MapRenderer {
         circle(c, 64, 64, 48, new Color(32, 57, 96), false);
         String[] rows = glyph(letter);
         int scale = 9;
-        int width = 5 * scale;
-        int height = 7 * scale;
-        int left = (128 - width) / 2;
-        int top = (128 - height) / 2;
+        int width = 5 * scale, height = 7 * scale;
+        int left = (128 - width) / 2, top = (128 - height) / 2;
         Color glow = new Color(47, 170, 219);
         for (int row = 0; row < 7; row++) {
             for (int col = 0; col < 5; col++) {
@@ -166,11 +171,9 @@ public final class ArtworkMapRenderer extends MapRenderer {
 
     private void drawInteraction(MapCanvas c) {
         radial(c, 64, 64, 61, new Color(9, 46, 66), new Color(35, 29, 80));
-        int[][] points = {{72,17},{35,73},{57,73},{49,111},{93,51},{68,51}};
-        polygon(c, points, new Color(74, 199, 255));
-        int[][] inner = {{69,35},{48,67},{63,67},{59,91},{81,55},{65,55}};
-        polygon(c, inner, new Color(234, 248, 255));
-        circle(c, 64, 64, 53, new Color(90, 168, 222), false);
+        polygon(c, new int[][]{{72,17},{35,73},{57,73},{49,111},{93,51},{68,51}}, new Color(74,199,255));
+        polygon(c, new int[][]{{69,35},{48,67},{63,67},{59,91},{81,55},{65,55}}, new Color(234,248,255));
+        circle(c, 64, 64, 53, new Color(90,168,222), false);
     }
 
     private void drawStatus(MapCanvas c) {
@@ -199,8 +202,6 @@ public final class ArtworkMapRenderer extends MapRenderer {
         circle(c, 64, 64, 43, new Color(255, 111, 138), false);
         line(c, 39, 39, 89, 89, new Color(255, 224, 232));
         line(c, 89, 39, 39, 89, new Color(255, 224, 232));
-        line(c, 44, 44, 84, 84, new Color(255, 145, 167));
-        line(c, 84, 44, 44, 84, new Color(255, 145, 167));
     }
 
     private void drawInfo(MapCanvas c) {
@@ -239,8 +240,7 @@ public final class ArtworkMapRenderer extends MapRenderer {
 
     private void fill(MapCanvas c, int x1, int y1, int x2, int y2, Color color) {
         for (int y = Math.max(0, y1); y <= Math.min(127, y2); y++)
-            for (int x = Math.max(0, x1); x <= Math.min(127, x2); x++)
-                px(c, x, y, color);
+            for (int x = Math.max(0, x1); x <= Math.min(127, x2); x++) px(c, x, y, color);
     }
 
     private void rect(MapCanvas c, int x1, int y1, int x2, int y2, Color color, boolean filled) {
@@ -252,16 +252,13 @@ public final class ArtworkMapRenderer extends MapRenderer {
     }
 
     private void rounded(MapCanvas c, int x1, int y1, int x2, int y2, int radius, Color color, boolean filled) {
-        if (filled) {
-            fill(c, x1 + radius, y1, x2 - radius, y2, color);
-            fill(c, x1, y1 + radius, x2, y2 - radius, color);
-            circle(c, x1 + radius, y1 + radius, radius, color, true);
-            circle(c, x2 - radius, y1 + radius, radius, color, true);
-            circle(c, x1 + radius, y2 - radius, radius, color, true);
-            circle(c, x2 - radius, y2 - radius, radius, color, true);
-        } else {
-            rect(c, x1, y1, x2, y2, color, false);
-        }
+        if (!filled) { rect(c, x1, y1, x2, y2, color, false); return; }
+        fill(c, x1 + radius, y1, x2 - radius, y2, color);
+        fill(c, x1, y1 + radius, x2, y2 - radius, color);
+        circle(c, x1 + radius, y1 + radius, radius, color, true);
+        circle(c, x2 - radius, y1 + radius, radius, color, true);
+        circle(c, x1 + radius, y2 - radius, radius, color, true);
+        circle(c, x2 - radius, y2 - radius, radius, color, true);
     }
 
     private void ellipse(MapCanvas c, int cx, int cy, int rx, int ry, Color color, boolean filled) {
@@ -275,13 +272,12 @@ public final class ArtworkMapRenderer extends MapRenderer {
 
     private void circle(MapCanvas c, int cx, int cy, int radius, Color color, boolean filled) {
         int squared = radius * radius;
-        for (int y = -radius; y <= radius; y++) {
+        for (int y = -radius; y <= radius; y++)
             for (int x = -radius; x <= radius; x++) {
                 int distance = x * x + y * y;
                 if (filled ? distance <= squared : distance <= squared && distance >= (radius - 2) * (radius - 2))
                     px(c, cx + x, cy + y, color);
             }
-        }
     }
 
     private void line(MapCanvas c, int x1, int y1, int x2, int y2, Color color) {
@@ -305,12 +301,12 @@ public final class ArtworkMapRenderer extends MapRenderer {
             int count = 0;
             for (int i = 0; i < points.length; i++) {
                 int[] a = points[i], b = points[(i + 1) % points.length];
-                if ((a[1] <= y && b[1] > y) || (b[1] <= y && a[1] > y)) {
+                if ((a[1] <= y && b[1] > y) || (b[1] <= y && a[1] > y))
                     intersections[count++] = a[0] + (y - a[1]) * (b[0] - a[0]) / (b[1] - a[1]);
-                }
             }
             java.util.Arrays.sort(intersections, 0, count);
-            for (int i = 0; i + 1 < count; i += 2) line(c, intersections[i], y, intersections[i + 1], y, color);
+            for (int i = 0; i + 1 < count; i += 2)
+                line(c, intersections[i], y, intersections[i + 1], y, color);
         }
     }
 
@@ -332,7 +328,5 @@ public final class ArtworkMapRenderer extends MapRenderer {
                 clamp((int) (a.getBlue() + (b.getBlue() - a.getBlue()) * t)));
     }
 
-    private int clamp(int value) {
-        return Math.max(0, Math.min(255, value));
-    }
+    private int clamp(int value) { return Math.max(0, Math.min(255, value)); }
 }
