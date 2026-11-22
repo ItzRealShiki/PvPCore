@@ -47,7 +47,11 @@ public final class AIAdminPlugin extends JavaPlugin {
         logMonitor = new LogMonitor(this, serverRoot);
         refreshClient();
 
-        if (getCommand("aiadmin") != null) getCommand("aiadmin").setExecutor(new AIAdminCommand(this));
+        if (getCommand("aiadmin") != null) {
+            AIAdminCommand adminCommand = new AIAdminCommand(this);
+            getCommand("aiadmin").setExecutor(adminCommand);
+            getCommand("aiadmin").setTabCompleter(adminCommand);
+        }
         logMonitor.start();
         getLogger().info("AIAdmin enabled. API key configured: " + (hasApiKey() ? "yes" : "no"));
         getLogger().info("Use /aiadmin help. No repair is applied without an explicit administrator approval.");
