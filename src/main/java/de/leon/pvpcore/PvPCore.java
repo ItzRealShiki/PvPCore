@@ -10,6 +10,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.World;
 import org.bukkit.GameRule;
 import org.bukkit.event.world.WorldLoadEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -69,6 +70,16 @@ public final class PvPCore extends JavaPlugin implements Listener {
         getLogger().info("PvPCore enabled.");
     }
 
+
+    @org.bukkit.event.EventHandler
+    public void onPlayerJoin(PlayerJoinEvent event) {
+        Player player = event.getPlayer();
+        Bukkit.getScheduler().runTaskLater(this, () -> {
+            if (player.isOnline() && Bukkit.getWorld("Spawn") != null) {
+                worlds.teleportToSpawn(player);
+            }
+        }, 5L);
+    }
 
     @org.bukkit.event.EventHandler
     public void onWorldLoad(WorldLoadEvent event) {

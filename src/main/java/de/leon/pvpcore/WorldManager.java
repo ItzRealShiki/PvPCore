@@ -402,50 +402,70 @@ public final class WorldManager {
         return world;
     }
 
+    private static final String SPAWN_WORLD_NAME = "Spawn";
+
+    private static final class VoidSpawnGenerator extends ChunkGenerator {
+        @Override
+        public void generateNoise(org.bukkit.generator.WorldInfo worldInfo, Random random,
+                                  int chunkX, int chunkZ, ChunkData chunkData) {
+            // Deliberately empty: the Spawn world is a true void world.
+        }
+        @Override public boolean shouldGenerateNoise() { return false; }
+        @Override public boolean shouldGenerateSurface() { return false; }
+        @Override public boolean shouldGenerateCaves() { return false; }
+        @Override public boolean shouldGenerateDecorations() { return false; }
+        @Override public boolean shouldGenerateMobs() { return false; }
+        @Override public boolean shouldGenerateStructures() { return false; }
+    }
+
     /**
-     * Installs the High Crown hub once in the main overworld, centered at X=0/Z=0.
-     * The schematic's central spawn slab is at local coordinate (95, 101, 131).
+     * Creates/loads the dedicated void hub world and pastes High Crown from
+     * the JAR resource. Existing normal world "world" is deliberately preserved.
      */
     public void installHighCrownSpawnOnce() {
-        if (plugin.getConfig().getBoolean("spawn.high-crown-installed", false)) return;
-
-        World mainWorld = Bukkit.getWorld("world");
-        if (mainWorld == null || isManagedWorldName(mainWorld.getName())) {
-            mainWorld = Bukkit.getWorlds().stream()
-                    .filter(candidate -> candidate.getEnvironment() == World.Environment.NORMAL)
-                    .filter(candidate -> !isManagedWorldName(candidate.getName()))
-                    .findFirst().orElse(null);
+        World spawnWorld = Bukkit.getWorld(SPAWN_WORLD_NAME);
+        if (spawnWorld == null) {
+            spawnWorld = new WorldCreator(SPAWN_WORLD_NAME)
+                    .environment(World.Environment.NORMAL)
+                    .type(WorldType.NORMAL)
+                    .generator(new VoidSpawnGenerator())
+                    .generateStructures(false)
+                    .createWorld();
         }
-        if (mainWorld == null) {
-            plugin.getLogger().severe("High Crown spawn was not installed: the main overworld is unavailable.");
+        if (spawnWorld == null) {
+            plugin.getLogger().severe("Could not create the void Spawn world.");
+            return;
+        }
+
+        spawnWorld.setGameRule(GameRule.DO_MOB_SPAWNING, false);
+        spawnWorld.setGameRule(GameRule.DO_DAYLIGHT_CYCLE, false);
+        applyPermanentDay(spawnWorld);
+
+        if (plugin.getConfig().getBoolean("spawn.void-hub-installed", false)) {
+            plugin.getConfig().set("spawn.world", SPAWN_WORLD_NAME);
+            plugin.saveConfig();
             return;
         }
 
         try {
-            mainWorld.getChunkAt(0, 0);
-            int terrainY = mainWorld.getHighestBlockYAt(0, 0);
-            int baseY = terrainY - 101;
-            baseY = Math.max(mainWorld.getMinHeight(),
-                    Math.min(baseY, mainWorld.getMaxHeight() - 147));
+            final int baseY = 64;
+            SchematicLoader.paste(plugin, spawnWorld, "HIGH_CROWN_SPAWN",
+                    null, 0, baseY, 0);
 
-            // Clear and paste only the schematic footprint, never the entire main world.
-            SchematicLoader.paste(plugin, mainWorld, "HIGH_CROWN_SPAWN",
-                    "HIGH_CROWN_SPAWN", 0, baseY, 0);
-
-            double spawnY = baseY + 101.5D;
-            plugin.getConfig().set("spawn.world", mainWorld.getName());
-            plugin.getConfig().set("spawn.x", 0.5D);
-            plugin.getConfig().set("spawn.y", spawnY);
-            plugin.getConfig().set("spawn.z", 0.5D);
-            plugin.getConfig().set("spawn.yaw", 0.0D);
-            plugin.getConfig().set("spawn.pitch", 0.0D);
+            // Center platform: local (95, 101, 131), bottom slab top at y=101.5.
+            Location center = new Location(spawnWorld, 0.5D, baseY + 101.5D, 0.5D, 0.0F, 0.0F);
+            plugin.getConfig().set("spawn.world", SPAWN_WORLD_NAME);
+            plugin.getConfig().set("spawn.x", center.getX());
+            plugin.getConfig().set("spawn.y", center.getY());
+            plugin.getConfig().set("spawn.z", center.getZ());
+            plugin.getConfig().set("spawn.yaw", center.getYaw());
+            plugin.getConfig().set("spawn.pitch", center.getPitch());
             plugin.getConfig().set("spawn.high-crown-base-y", baseY);
-            plugin.getConfig().set("spawn.high-crown-installed", true);
-            mainWorld.setSpawnLocation(0, baseY + 102, 0);
+            plugin.getConfig().set("spawn.void-hub-installed", true);
+            spawnWorld.setSpawnLocation(0, baseY + 102, 0);
             plugin.saveConfig();
 
-            plugin.getLogger().info("Installed High Crown Medieval Spawn in "
-                    + mainWorld.getName() + " centered at X=0, Z=0 (base Y=" + baseY + ").");
+            plugin.getLogger().info("High Crown hub installed in void world 'Spawn' at X=0, Z=0.");
         } catch (IOException exception) {
             plugin.getLogger().severe("Could not install High Crown spawn: " + exception.getMessage());
         }
@@ -464,6 +484,9 @@ public final class WorldManager {
     }
 
     public void teleportToSpawn(Player player) {
+        if (Bukkit.getWorld(SPAWN_WORLD_NAME) != null) {
+            plugin.getConfig().set("spawn.world", SPAWN_WORLD_NAME);
+        }
         String configuredWorld = plugin.getConfig().getString("spawn.world");
         World spawnWorld = configuredWorld == null ? null : Bukkit.getWorld(configuredWorld);
         Location destination = null;
