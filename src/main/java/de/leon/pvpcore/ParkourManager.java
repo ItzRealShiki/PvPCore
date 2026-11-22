@@ -311,7 +311,6 @@ public final class ParkourManager implements Listener {
         // Accept an admin-placed weighted gold pressure plate for the parkour entrance.
         boolean weightedPlate = event.getBlockPlaced().getType() == Material.LIGHT_WEIGHTED_PRESSURE_PLATE;
         if (weightedPlate) {
-            Player player = event.getPlayer();
             if (!plugin.hasCore(player, "Admin.Core")) {
                 event.setCancelled(true);
                 plugin.message(player, "&cOnly admins can place a Parkour entrance.");
