@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'de.leon'
-version = '1.0.9' // Dedicated void spawn world migration
+version = '1.0.9' // True void Spawn world migration
 
 repositories {
     mavenCentral()
