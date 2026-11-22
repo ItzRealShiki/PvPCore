@@ -63,7 +63,7 @@ public final class OptionsCommand implements CommandExecutor, Listener {
             meta.setDisplayName(plugin.color((material == selected ? "&a✔ " : "&e") + name));
             meta.setLore(List.of(plugin.color(material == selected
                     ? "&7Selected arena wall accent"
-                    : "&7Accent band on the low stadium wall."), plugin.color("&eClick to select")));
+                    : "&7Accent band on the arena walls."), plugin.color("&eClick to select")));
             item.setItemMeta(meta);
             inventory.setItem(index, item);
         }
