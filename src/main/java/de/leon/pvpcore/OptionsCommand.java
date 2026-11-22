@@ -14,19 +14,9 @@ import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
-import java.util.Arrays;
 import java.util.List;
 
 public final class OptionsCommand implements CommandExecutor, Listener {
-    private static final List<Material> COLORS = List.of(
-            Material.GLASS, Material.WHITE_STAINED_GLASS, Material.LIGHT_GRAY_STAINED_GLASS,
-            Material.GRAY_STAINED_GLASS, Material.BLACK_STAINED_GLASS, Material.BROWN_STAINED_GLASS,
-            Material.RED_STAINED_GLASS, Material.ORANGE_STAINED_GLASS, Material.YELLOW_STAINED_GLASS,
-            Material.LIME_STAINED_GLASS, Material.GREEN_STAINED_GLASS, Material.CYAN_STAINED_GLASS,
-            Material.LIGHT_BLUE_STAINED_GLASS, Material.BLUE_STAINED_GLASS, Material.PURPLE_STAINED_GLASS,
-            Material.MAGENTA_STAINED_GLASS, Material.PINK_STAINED_GLASS
-    );
-
     private static final class Holder implements InventoryHolder {
         private Inventory inventory;
         @Override public Inventory getInventory() { return inventory; }
@@ -47,84 +37,50 @@ public final class OptionsCommand implements CommandExecutor, Listener {
         return true;
     }
 
+    private ItemStack item(Material material, String title, String... lore) {
+        ItemStack stack = new ItemStack(material);
+        ItemMeta meta = stack.getItemMeta();
+        meta.setDisplayName(plugin.color(title));
+        meta.setLore(java.util.Arrays.stream(lore).map(plugin::color).toList());
+        stack.setItemMeta(meta);
+        return stack;
+    }
+
     private void open(Player player) {
         Holder holder = new Holder();
-        Inventory inventory = Bukkit.createInventory(holder, 27, plugin.color("&8✦ ᴀʀᴇɴᴀ ᴏᴘᴛɪᴏɴꜱ"));
+        Inventory inventory = Bukkit.createInventory(holder, 27, plugin.color("&8✦ ᴀʀᴇɴᴀ ɪɴꜰᴏ"));
         holder.inventory = inventory;
-        Material selected = plugin.practice().forceFieldMaterial();
-        for (int index = 0; index < COLORS.size(); index++) {
-            Material material = COLORS.get(index);
-            ItemStack item = new ItemStack(material);
-            ItemMeta meta = item.getItemMeta();
-            String name = material == Material.GLASS ? "Clear Glass"
-                    : Arrays.stream(material.name().replace("_STAINED_GLASS", "").split("_"))
-                    .map(part -> part.charAt(0) + part.substring(1).toLowerCase())
-                    .reduce((a, b) -> a + " " + b).orElse("Glass");
-            meta.setDisplayName(plugin.color((material == selected ? "&a✔ " : "&e") + name));
-            meta.setLore(List.of(plugin.color(material == selected
-                    ? "&7Selected arena wall accent"
-                    : "&7Accent band on the arena walls."), plugin.color("&eClick to select")));
-            item.setItemMeta(meta);
-            inventory.setItem(index, item);
-        }
-        inventory.setItem(22, arenaItem(player));
-        player.openInventory(inventory);
-    }
 
-    private ItemStack arenaItem(Player player) {
-        ItemStack item = new ItemStack(Material.GRASS_BLOCK);
-        ItemMeta meta = item.getItemMeta();
-        meta.setDisplayName(plugin.color("&aArena Ground Theme"));
-        meta.setLore(List.of(plugin.color("&7Current: &f" + plugin.practice().arenaTheme(player).replace('_', ' ')),
-                plugin.color("&eClick to change the ground style")));
-        item.setItemMeta(meta);
-        return item;
-    }
+        String arena = plugin.practice().arenaMap(player);
+        Material icon = switch (arena) {
+            case "RUINS" -> Material.MOSSY_STONE_BRICKS;
+            case "FOREST" -> Material.OAK_LEAVES;
+            case "NETHER_FORTRESS" -> Material.POLISHED_BLACKSTONE_BRICKS;
+            case "END_CITADEL" -> Material.PURPUR_BLOCK;
+            default -> Material.SMOOTH_SANDSTONE;
+        };
+        inventory.setItem(11, item(icon, "&aSelected Arena: &f" + arena.replace('_', ' '),
+                "&7This preset controls the entire arena:",
+                "&7Floor, walls, trim and decorations.",
+                "&7Change it from &f/prac &7→ Arena Selector."));
 
-    private void openArenaThemes(Player player) {
-        Holder holder = new Holder();
-        Inventory inventory = Bukkit.createInventory(holder, 27, plugin.color("&8✦ ᴀʀᴇɴᴀ ɢʀᴏᴜɴᴅ"));
-        holder.inventory = inventory;
-        Material[] icons = {Material.SAND, Material.GRASS_BLOCK, Material.END_STONE, Material.NETHERRACK,
-                Material.RED_SAND, Material.PALE_MOSS_BLOCK, Material.CHERRY_LEAVES,
-                Material.WARPED_NYLIUM, Material.CRIMSON_NYLIUM, Material.POPPY};
-        String[] themes = {"DESERT", "PLAINS", "END", "NETHER", "BADLANDS", "PALE_GARDEN",
-                "CHERRY_BLOSSOM", "WARPED", "CRIMSON", "FLOWER_PLAINS"};
-        for (int i = 0; i < themes.length; i++) {
-            ItemStack item = new ItemStack(icons[i]);
-            ItemMeta meta = item.getItemMeta();
-            boolean active = plugin.practice().arenaTheme(player).equals(themes[i]);
-            meta.setDisplayName(plugin.color((active ? "&a✔ " : "&e") + themes[i].replace('_', ' ')));
-            meta.setLore(List.of(plugin.color(active ? "&7Currently selected" : "&eClick to select")));
-            item.setItemMeta(meta);
-            inventory.setItem(i, item);
-        }
+        int activationDistance = Math.max(2,
+                plugin.getConfig().getInt("practice.forcefield.activation-distance", 6));
+        inventory.setItem(15, item(Material.LIGHT_BLUE_STAINED_GLASS,
+                "&bBoundary Forcefield",
+                "&7A cyan particle barrier appears near the arena edge.",
+                "&7Activation distance: &f" + activationDistance + " blocks",
+                "&7The barrier prevents leaving the arena."));
+        inventory.setItem(26, item(Material.BARRIER, "&cClose", "&7Close this menu."));
         player.openInventory(inventory);
     }
 
     @EventHandler
     public void onClick(InventoryClickEvent event) {
-        if (!(event.getWhoClicked() instanceof Player player)
+        if (!(event.getWhoClicked() instanceof Player)
                 || !(event.getView().getTopInventory().getHolder() instanceof Holder)) return;
         event.setCancelled(true);
         if (event.getClickedInventory() != event.getView().getTopInventory()) return;
-        if (event.getView().getTitle().equals(plugin.color("&8✦ ᴀʀᴇɴᴀ ɢʀᴏᴜɴᴅ"))) {
-            int themeSlot = event.getSlot();
-            String[] themes = {"DESERT", "PLAINS", "END", "NETHER", "BADLANDS", "PALE_GARDEN",
-                    "CHERRY_BLOSSOM", "WARPED", "CRIMSON", "FLOWER_PLAINS"};
-            if (themeSlot >= 0 && themeSlot < themes.length) {
-                plugin.practice().setArenaTheme(player, themes[themeSlot]);
-                plugin.message(player, "&aArena ground set to &e" + themes[themeSlot].replace('_', ' ') + "&a.");
-                open(player);
-            }
-            return;
-        }
-        int slot = event.getSlot();
-        if (slot == 22) { openArenaThemes(player); return; }
-        if (slot < 0 || slot >= COLORS.size()) return;
-        Material selected = COLORS.get(slot);
-        plugin.practice().setForceFieldMaterial(selected);
-        plugin.message(player, "&aArena wall accent set to &e" + selected.name().replace("_STAINED_GLASS", "").replace('_', ' ') + "&a.");
-        open(player);
+        if (event.getSlot() == 26) event.getWhoClicked().closeInventory();
     }
 }
