@@ -417,29 +417,29 @@ public final class WorldManager {
             java.util.regex.Matcher matcher = pattern.matcher(current);
             String updated;
             if (matcher.find()) {
-                updated = matcher.replaceFirst("level-name=Spawn");
+                updated = matcher.replaceFirst("level-name=Spawn_Void");
             } else {
                 updated = current + (current.endsWith(System.lineSeparator()) ? "" : System.lineSeparator())
-                        + "level-name=Spawn" + System.lineSeparator();
+                        + "level-name=Spawn_Void" + System.lineSeparator();
             }
             if (!updated.equals(current)) {
                 Files.writeString(propertiesFile, updated);
-                plugin.getLogger().info("Set server.properties level-name=Spawn. The default world changes after the next full restart.");
+                plugin.getLogger().info("Set server.properties level-name=Spawn_Void. The default world changes after the next full restart.");
             } else {
-                plugin.getLogger().info("server.properties already uses Spawn as the default world.");
+                plugin.getLogger().info("server.properties already uses Spawn_Void as the default world.");
             }
         } catch (IOException exception) {
             plugin.getLogger().warning("Could not update server.properties: " + exception.getMessage());
         }
     }
 
-    private static final String SPAWN_WORLD_NAME = "Spawn";
+    private static final String SPAWN_WORLD_NAME = "Spawn_Void";
 
     private static final class VoidSpawnGenerator extends ChunkGenerator {
         @Override
         public void generateNoise(org.bukkit.generator.WorldInfo worldInfo, Random random,
                                   int chunkX, int chunkZ, ChunkData chunkData) {
-            // Deliberately empty: the Spawn world is a true void world.
+            // Deliberately empty: the Spawn_Void world is a true void world.
         }
         @Override public boolean shouldGenerateNoise() { return false; }
         @Override public boolean shouldGenerateSurface() { return false; }
@@ -464,7 +464,7 @@ public final class WorldManager {
                     .createWorld();
         }
         if (spawnWorld == null) {
-            plugin.getLogger().severe("Could not create the void Spawn world.");
+            plugin.getLogger().severe("Could not create the void Spawn_Void world.");
             return;
         }
 
@@ -509,7 +509,7 @@ public final class WorldManager {
         spawnWorld.setSpawnLocation(-3, 142, 48);
         plugin.saveConfig();
 
-        plugin.getLogger().info("High Crown void hub ready in world 'Spawn' at -2.5, 142, 48 facing north.");
+        plugin.getLogger().info("High Crown void hub ready in world 'Spawn_Void' at -2.5, 142, 48 facing north.");
     }
 
     public void setSpawn(Player player) {
