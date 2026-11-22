@@ -1408,7 +1408,7 @@ public final class PracticeManager implements Listener {
 
             // Stop at the invisible boundary, just inside the solid arena wall.
             // Do not teleport players to the center when they touch the forcefield.
-            if (Math.abs(relativeX) >= limit || Math.abs(relativeZ) >= limit) {
+            if (Math.abs(relativeX) > limit || Math.abs(relativeZ) > limit) {
                 event.setTo(event.getFrom());
                 p.setVelocity(new org.bukkit.util.Vector(0, 0, 0));
                 return;
