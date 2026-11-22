@@ -484,9 +484,11 @@ public final class PracticeManager implements Listener {
         // trying to move outward or has become stuck against the invisible blocks.
         double outwardSpeed = velocity.getX() * -towardCenter.getX()
                 + velocity.getZ() * -towardCenter.getZ();
-        if (outwardSpeed < 0.02 && velocity.lengthSquared() > 0.06) return;
+        double horizontalSpeedSquared = velocity.getX() * velocity.getX()
+                + velocity.getZ() * velocity.getZ();
+        if (outwardSpeed < 0.02 && horizontalSpeedSquared > 0.06) return;
 
-        towardCenter.multiply(1.25).setY(Math.max(0.18, velocity.getY()));
+        towardCenter.multiply(1.25).setY(velocity.getY());
         bot.setVelocity(towardCenter);
     }
 
