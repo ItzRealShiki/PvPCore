@@ -106,16 +106,15 @@ public final class Menus implements Listener {
     }
 
     public void openBoxThemes(Player p) {
-        Inventory inv = create("arena-maps", "&8ᴘᴠᴘ ᴀʀᴇɴᴀ ꜱᴇʟᴇᴄᴛᴏʀ", 27);
-        String[] maps = {"COLOSSEUM", "RUINS", "FOREST", "NETHER_FORTRESS", "END_CITADEL"};
-        Material[] icons = {Material.SMOOTH_SANDSTONE, Material.MOSSY_STONE_BRICKS,
-                Material.OAK_LEAVES, Material.POLISHED_BLACKSTONE_BRICKS, Material.PURPUR_BLOCK};
-        int[] slots = {10, 12, 14, 16, 22};
+        Inventory inv = create("arena-maps", "&8ᴛᴇꜱᴛ ᴀʀᴇɴᴀꜱ", 27);
+        String[] maps = {"ANUBIS_RISE", "TINY_END_COLISEUM"};
+        Material[] icons = {Material.CHISELED_SANDSTONE, Material.PURPUR_PILLAR};
+        int[] slots = {11, 15};
         String selected = plugin.practice().arenaMap(p);
         for (int i = 0; i < maps.length; i++) {
             String name = maps[i].replace('_', ' ');
             inv.setItem(slots[i], item(icons[i], (maps[i].equals(selected) ? "&a✓ " : "&e") + name,
-                    "&7Complete arena preset: floor, walls and details.",
+                    "&7Complete test build: floor, walls and structures.",
                     "&eClick to select"));
         }
         inv.setItem(26, item(Material.ARROW, "&cBack", "&7Return to practice menu."));
@@ -268,11 +267,8 @@ public final class Menus implements Listener {
                     return;
                 }
                 String map = switch (slot) {
-                    case 10 -> "COLOSSEUM";
-                    case 12 -> "RUINS";
-                    case 14 -> "FOREST";
-                    case 16 -> "NETHER_FORTRESS";
-                    case 22 -> "END_CITADEL";
+                    case 11 -> "ANUBIS_RISE";
+                    case 15 -> "TINY_END_COLISEUM";
                     default -> null;
                 };
                 if (map != null) {
