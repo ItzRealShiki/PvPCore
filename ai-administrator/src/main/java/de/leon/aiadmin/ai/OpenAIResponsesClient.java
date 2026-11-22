@@ -57,7 +57,10 @@ public final class OpenAIResponsesClient {
         payload.addProperty("instructions", INSTRUCTIONS);
         payload.addProperty("max_output_tokens", maxOutputTokens);
         JsonArray input = new JsonArray();
-        input.add("Administrator request: " + request + "\n\nSERVER SNAPSHOT:\n" + context);
+        JsonObject userMessage = new JsonObject();
+        userMessage.addProperty("role", "user");
+        userMessage.addProperty("content", "Administrator request: " + request + "\\n\\nSERVER SNAPSHOT:\\n" + context);
+        input.add(userMessage);
         payload.add("input", input);
 
         JsonObject format = new JsonObject();
