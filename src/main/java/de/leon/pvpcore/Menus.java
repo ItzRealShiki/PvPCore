@@ -170,6 +170,17 @@ public final class Menus implements Listener {
         inv.setItem(22, item(Material.BARRIER, "&cClose", "&7Close this menu."));
         inv.setItem(24, item(Material.IRON_PICKAXE, "&ePractice Block Breaking",
                 "&7Configure block breaking separately", "&7for Anchor, Stun Slam and Sword."));
+        inv.setItem(26, item(Material.COMPARATOR, "&bModules", "&7Open PvPCore server modules."));
+        p.openInventory(inv);
+    }
+
+    public void openAdminModules(Player p) {
+        Inventory inv = create("admin-modules", "&8ᴀᴅᴍɪɴ · ᴍᴏᴅᴜʟᴇꜱ", 27);
+        inv.setItem(13, item(Material.LIGHT_WEIGHTED_PRESSURE_PLATE, "&6Parkour Module",
+                "&7Get the golden pressure plate entrance.",
+                "&7Place it in Spawn to activate parkour.",
+                "&7Every player gets a private course."));
+        inv.setItem(22, item(Material.ARROW, "&cBack"));
         p.openInventory(inv);
     }
 
@@ -283,6 +294,7 @@ public final class Menus implements Listener {
                     case 20 -> { plugin.reloadConfig(); plugin.message(p, "&aConfiguration reloaded."); p.closeInventory(); }
                     case 22 -> p.closeInventory();
                     case 24 -> openPracticeBlockSettings(p);
+                    case 26 -> openAdminModules(p);
                     default -> { }
                 }
             }
@@ -316,6 +328,11 @@ public final class Menus implements Listener {
                 if (!plugin.hasCore(p, "Admin.Core")) return;
                 if (slot == 10) openAdminKitEditor(p, PracticeManager.Mode.SWORD);
                 else if (slot == 16) openAdminKitEditor(p, PracticeManager.Mode.STUN_SLAM);
+                else if (slot == 22) openAdmin(p);
+            }
+            case "admin-modules" -> {
+                if (!plugin.hasCore(p, "Admin.Core")) return;
+                if (slot == 13) plugin.parkour().giveEntrancePlate(p);
                 else if (slot == 22) openAdmin(p);
             }
             case "practice-block-breaking" -> {

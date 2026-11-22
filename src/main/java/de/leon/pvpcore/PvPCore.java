@@ -26,6 +26,7 @@ public final class PvPCore extends JavaPlugin implements Listener {
     private ItemEditCommand itemEdit;
     private PracticeManager practice;
     private FightCommand fights;
+    private ParkourManager parkour;
     private final Set<UUID> rtpLoading = ConcurrentHashMap.newKeySet();
 
     @Override public void onEnable() {
@@ -34,13 +35,16 @@ public final class PvPCore extends JavaPlugin implements Listener {
         // Run the one-time, whitelist-only world reset before PracticeManager caches
         // a reference to prac_void. No normal server world is included in this cleanup.
         worlds.initializeWorldsOnce();
+        worlds.configureDefaultWorldProperty();
         // Install the hub after startup, once the main world is available.
         Bukkit.getScheduler().runTaskLater(this, worlds::installHighCrownSpawnOnce, 1L);
         for (World world : Bukkit.getWorlds()) worlds.applyPermanentDay(world);
         menus = new Menus(this);
         bots = new BotManager(this);
         practice = new PracticeManager(this);
+        parkour = new ParkourManager(this);
         Bukkit.getPluginManager().registerEvents(practice, this);
+        Bukkit.getPluginManager().registerEvents(parkour, this);
         Bukkit.getScheduler().runTaskTimer(this, practice::enforcePracticeFood, 1L, 1L);
         PracticeCommand practiceCommand = new PracticeCommand(this);
         register("prac", practiceCommand);
@@ -130,6 +134,7 @@ public final class PvPCore extends JavaPlugin implements Listener {
     public WorldManager worlds() { return worlds; }
     public PracticeManager practice() { return practice; }
     public FightCommand fights() { return fights; }
+    public ParkourManager parkour() { return parkour; }
     public String color(String text) {
         return ChatColor.translateAlternateColorCodes('&', SmallCaps.of(text));
     }

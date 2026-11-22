@@ -4,14 +4,21 @@ import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.data.BlockData;
+import org.bukkit.block.BlockState;
+import org.bukkit.block.Sign;
+import org.bukkit.block.Skull;
+import org.bukkit.block.data.type.Leaves;
+import org.bukkit.profile.PlayerProfile;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.BufferedInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -97,16 +104,19 @@ final class SchematicLoader {
             for (int z = 0; z < schematic.length; z++) {
                 for (int x = 0; x < schematic.width; x++) {
                     BlockData state = schematic.palette[schematic.blockIndices[index++] & 0xFFFF];
-                    if (state == null || state.getMaterial().isAir()
-                            || state.getMaterial() == Material.BARRIER) continue;
+                    if (state == null || state.getMaterial().isAir()) continue;
+                    // Decorative foliage should remain exactly as pasted, even if the source
+                    // schematic's leaf distance metadata was calculated for another tree layout.
+                    if (state instanceof Leaves leaves) leaves.setPersistent(true);
                     world.getBlockAt(schematicX + x, worldY, schematicZ + z).setBlockData(state, false);
                 }
             }
         }
 
-        if (schematic.blockEntityCount > 0) {
-            plugin.getLogger().warning("Arena " + arena + " contains " + schematic.blockEntityCount
-                    + " block entities; decorative/container data is not imported.");
+        int importedBlockEntities = applyBlockEntities(world, schematic, schematicX, baseY, schematicZ);
+        if (!schematic.blockEntities.isEmpty()) {
+            plugin.getLogger().info("Imported " + importedBlockEntities + "/" + schematic.blockEntities.size()
+                    + " schematic block entities for " + arena + ".");
         }
     }
 
@@ -189,9 +199,14 @@ final class SchematicLoader {
                 }
                 short[] blockIndices = decodeVarInts(encodedData, total, palette.length);
 
-                int blockEntities = 0;
+                List<Map<String, Object>> blockEntities = new ArrayList<>();
                 Object rawBlockEntities = schematic.get("BlockEntities");
-                if (rawBlockEntities instanceof List<?> list) blockEntities = list.size();
+                if (rawBlockEntities instanceof List<?> list) {
+                    for (Object value : list) {
+                        Map<String, Object> entry = compound(value);
+                        if (entry != null) blockEntities.add(entry);
+                    }
+                }
                 return new Schematic(width, height, length, palette, blockIndices, blockEntities);
             }
         } catch (SchematicLoadFailure failure) {
@@ -242,8 +257,80 @@ final class SchematicLoader {
         return value instanceof Number number ? number.intValue() : fallback;
     }
 
+    private static int applyBlockEntities(World world, Schematic schematic,
+                                           int schematicX, int baseY, int schematicZ) {
+        int imported = 0;
+        for (Map<String, Object> tag : schematic.blockEntities) {
+            Object rawPos = tag.get("Pos");
+            if (!(rawPos instanceof List<?> pos) || pos.size() < 3) continue;
+            int x = number(pos.get(0), Integer.MIN_VALUE);
+            int y = number(pos.get(1), Integer.MIN_VALUE);
+            int z = number(pos.get(2), Integer.MIN_VALUE);
+            if (x == Integer.MIN_VALUE || y == Integer.MIN_VALUE || z == Integer.MIN_VALUE) continue;
+
+            int worldY = baseY + y;
+            if (worldY < world.getMinHeight() || worldY >= world.getMaxHeight()) continue;
+            BlockState state = world.getBlockAt(schematicX + x, worldY, schematicZ + z).getState();
+
+            if (state instanceof Sign sign) {
+                for (int line = 0; line < 4; line++) {
+                    sign.setLine(line, legacySignText(tag.get("Text" + (line + 1))));
+                }
+            }
+            if (state instanceof Skull skull) applySkullTexture(skull, tag);
+
+            // Chests, trapped chests and hoppers in this schematic have empty Items lists;
+            // their block states and empty inventories are restored by the block palette.
+            if (state.update(true, false)) imported++;
+        }
+        return imported;
+    }
+
+    private static String legacySignText(Object raw) {
+        if (!(raw instanceof String json) || json.isBlank()) return "";
+        int key = json.indexOf("text");
+        if (key < 0) return "";
+        int colon = json.indexOf(':', key);
+        int start = colon < 0 ? -1 : json.indexOf('"', colon + 1);
+        if (start < 0) return "";
+        int end = json.indexOf('"', start + 1);
+        if (end < 0) return "";
+        return json.substring(start + 1, end).replace("\\n", " ")
+                .replace("\\r", "").replace("\\\"", "\"");
+    }
+
+    private static void applySkullTexture(Skull skull, Map<String, Object> tag) {
+        try {
+            Map<String, Object> owner = compound(tag.get("SkullOwner"));
+            Map<String, Object> properties = owner == null ? null : compound(owner.get("Properties"));
+            Object rawTextures = properties == null ? null : properties.get("textures");
+            if (!(rawTextures instanceof List<?> textures) || textures.isEmpty()) return;
+            Map<String, Object> texture = compound(textures.get(0));
+            if (texture == null || !(texture.get("Value") instanceof String encoded)) return;
+
+            String json = new String(Base64.getDecoder().decode(encoded), StandardCharsets.UTF_8);
+            int urlKey = json.indexOf("url");
+            int colon = urlKey < 0 ? -1 : json.indexOf(':', urlKey);
+            int start = colon < 0 ? -1 : json.indexOf('"', colon + 1);
+            int end = start < 0 ? -1 : json.indexOf('"', start + 1);
+            if (start < 0 || end < 0) return;
+            URI skin = URI.create(json.substring(start + 1, end));
+
+            PlayerProfile profile = Bukkit.createPlayerProfile(
+                    UUID.nameUUIDFromBytes(encoded.getBytes(StandardCharsets.UTF_8)));
+            profile.getTextures().setSkin(skin);
+            try {
+                skull.getClass().getMethod("setPlayerProfile", PlayerProfile.class).invoke(skull, profile);
+            } catch (ReflectiveOperationException ignored) {
+                skull.getClass().getMethod("setOwnerProfile", PlayerProfile.class).invoke(skull, profile);
+            }
+        } catch (Exception ignored) {
+            // A malformed/unsupported custom head must not prevent the rest of the hub from pasting.
+        }
+    }
+
     private record Schematic(int width, int height, int length, BlockData[] palette,
-                             short[] blockIndices, int blockEntityCount) {
+                             short[] blockIndices, List<Map<String, Object>> blockEntities) {
     }
 
     private static final class SchematicLoadFailure extends RuntimeException {

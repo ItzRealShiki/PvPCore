@@ -17,6 +17,7 @@ public final class SpawnCommand implements CommandExecutor {
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (args.length == 0) {
             if (!(sender instanceof Player player)) return plugin.playerOnly(sender);
+            if (plugin.parkour().leaveToSpawn(player)) return true;
             if (!plugin.practice().leaveToSpawn(player)) {
                 plugin.worlds().teleportToSpawn(player);
             }
@@ -37,7 +38,8 @@ public final class SpawnCommand implements CommandExecutor {
             plugin.message(sender, "&cThat player is not online.");
             return true;
         }
-        if (!plugin.practice().leaveToSpawn(target)) {
+        if (!plugin.parkour().leaveToSpawn(target)
+                && !plugin.practice().leaveToSpawn(target)) {
             plugin.worlds().teleportToSpawn(target);
         }
         if (sender != target) plugin.message(sender, "&aTeleported &f" + target.getName() + " &ato spawn.");

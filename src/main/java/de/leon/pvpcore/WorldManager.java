@@ -402,6 +402,37 @@ public final class WorldManager {
         return world;
     }
 
+    public void configureDefaultWorldProperty() {
+        Path propertiesFile = Bukkit.getWorldContainer().toPath().resolve("server.properties");
+        if (!Files.isRegularFile(propertiesFile)) {
+            plugin.getLogger().warning("server.properties was not found; default world was not changed.");
+            return;
+        }
+
+        Path backup = propertiesFile.resolveSibling("server.properties.pvpcore-backup");
+        try {
+            if (!Files.exists(backup)) Files.copy(propertiesFile, backup);
+            String current = Files.readString(propertiesFile);
+            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("(?m)^\\s*level-name\\s*=.*$");
+            java.util.regex.Matcher matcher = pattern.matcher(current);
+            String updated;
+            if (matcher.find()) {
+                updated = matcher.replaceFirst("level-name=Spawn");
+            } else {
+                updated = current + (current.endsWith(System.lineSeparator()) ? "" : System.lineSeparator())
+                        + "level-name=Spawn" + System.lineSeparator();
+            }
+            if (!updated.equals(current)) {
+                Files.writeString(propertiesFile, updated);
+                plugin.getLogger().info("Set server.properties level-name=Spawn. The default world changes after the next full restart.");
+            } else {
+                plugin.getLogger().info("server.properties already uses Spawn as the default world.");
+            }
+        } catch (IOException exception) {
+            plugin.getLogger().warning("Could not update server.properties: " + exception.getMessage());
+        }
+    }
+
     private static final String SPAWN_WORLD_NAME = "Spawn";
 
     private static final class VoidSpawnGenerator extends ChunkGenerator {
@@ -419,8 +450,8 @@ public final class WorldManager {
     }
 
     /**
-     * Creates/loads the dedicated void hub world and pastes High Crown from
-     * the JAR resource. Existing normal world "world" is deliberately preserved.
+     * Creates/loads the dedicated void hub and installs the user's High Crown schematic.
+     * The local center platform (95,101,131) maps to the requested spawn at (-2.5,142,48).
      */
     public void installHighCrownSpawnOnce() {
         World spawnWorld = Bukkit.getWorld(SPAWN_WORLD_NAME);
@@ -441,34 +472,50 @@ public final class WorldManager {
         spawnWorld.setGameRule(GameRule.DO_DAYLIGHT_CYCLE, false);
         applyPermanentDay(spawnWorld);
 
-        if (plugin.getConfig().getBoolean("spawn.void-hub-installed", false)) {
-            plugin.getConfig().set("spawn.world", SPAWN_WORLD_NAME);
-            plugin.saveConfig();
-            return;
+        final int layoutVersion = 2;
+        if (plugin.getConfig().getInt("spawn.high-crown-layout-version", 0) < layoutVersion) {
+            try {
+                // Remove only the previous PvPCore hub footprint if an older plugin build
+                // already installed it at the former center (0,0), base Y=64.
+                if (plugin.getConfig().getBoolean("spawn.void-hub-installed", false)
+                        && SPAWN_WORLD_NAME.equalsIgnoreCase(
+                        plugin.getConfig().getString("spawn.world", SPAWN_WORLD_NAME))) {
+                    int oldBaseY = plugin.getConfig().getInt("spawn.high-crown-base-y", 64);
+                    for (int y = oldBaseY; y < oldBaseY + 196 && y < spawnWorld.getMaxHeight(); y++) {
+                        for (int z = -131; z < 132; z++) {
+                            for (int x = -95; x < 95; x++) {
+                                var block = spawnWorld.getBlockAt(x, y, z);
+                                if (!block.getType().isAir()) block.setType(Material.AIR, false);
+                            }
+                        }
+                    }
+                }
+
+                // Width/length center parameters make local block (95,131) land at
+                // world block (-3,48), matching the requested X/Z player coordinates.
+                SchematicLoader.paste(plugin, spawnWorld, "HIGH_CROWN_SPAWN",
+                        null, -3, 40, 48);
+
+                plugin.getConfig().set("spawn.high-crown-base-y", 40);
+                plugin.getConfig().set("spawn.high-crown-layout-version", layoutVersion);
+                plugin.getConfig().set("spawn.void-hub-installed", true);
+            } catch (IOException exception) {
+                plugin.getLogger().severe("Could not install High Crown spawn: " + exception.getMessage());
+                return;
+            }
         }
 
-        try {
-            final int baseY = 64;
-            SchematicLoader.paste(plugin, spawnWorld, "HIGH_CROWN_SPAWN",
-                    null, 0, baseY, 0);
+        // Exact player location and orientation supplied by the server owner.
+        plugin.getConfig().set("spawn.world", SPAWN_WORLD_NAME);
+        plugin.getConfig().set("spawn.x", -2.5D);
+        plugin.getConfig().set("spawn.y", 142.0D);
+        plugin.getConfig().set("spawn.z", 48.0D);
+        plugin.getConfig().set("spawn.yaw", -178.9D);
+        plugin.getConfig().set("spawn.pitch", 3.6D);
+        spawnWorld.setSpawnLocation(-3, 142, 48);
+        plugin.saveConfig();
 
-            // Center platform: local (95, 101, 131), bottom slab top at y=101.5.
-            Location center = new Location(spawnWorld, 0.5D, baseY + 101.5D, 0.5D, 0.0F, 0.0F);
-            plugin.getConfig().set("spawn.world", SPAWN_WORLD_NAME);
-            plugin.getConfig().set("spawn.x", center.getX());
-            plugin.getConfig().set("spawn.y", center.getY());
-            plugin.getConfig().set("spawn.z", center.getZ());
-            plugin.getConfig().set("spawn.yaw", center.getYaw());
-            plugin.getConfig().set("spawn.pitch", center.getPitch());
-            plugin.getConfig().set("spawn.high-crown-base-y", baseY);
-            plugin.getConfig().set("spawn.void-hub-installed", true);
-            spawnWorld.setSpawnLocation(0, baseY + 102, 0);
-            plugin.saveConfig();
-
-            plugin.getLogger().info("High Crown hub installed in void world 'Spawn' at X=0, Z=0.");
-        } catch (IOException exception) {
-            plugin.getLogger().severe("Could not install High Crown spawn: " + exception.getMessage());
-        }
+        plugin.getLogger().info("High Crown void hub ready in world 'Spawn' at -2.5, 142, 48 facing north.");
     }
 
     public void setSpawn(Player player) {

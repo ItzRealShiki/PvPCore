@@ -24,8 +24,9 @@ public final class LeaveCommand implements CommandExecutor {
             plugin.message(player, "&eUsage: /leave");
             return true;
         }
+        if (plugin.parkour().leaveToSpawn(player)) return true;
         if (!plugin.practice().leaveToSpawn(player)) {
-            plugin.message(player, "&cYou are not in a duel or practice room.");
+            plugin.message(player, "&cYou are not in a duel, practice room or parkour.");
         }
         return true;
     }
