@@ -1114,6 +1114,31 @@ public final class PracticeManager implements Listener {
                 world.getBlockAt(cx + offset, topY + 1, cz - arenaRadius).setType(wall, false);
                 world.getBlockAt(cx + offset, topY + 1, cz + arenaRadius).setType(wall, false);
             }
+
+            // Deep buttresses every eight blocks give the perimeter a layered,
+            // castle-like profile instead of one flat sheet of blocks.
+            if (Math.floorMod(offset + arenaRadius, 8) == 0) {
+                for (int y = 80; y <= topY + 1; y++) {
+                    Material support = y == 86 ? accent : wall;
+                    world.getBlockAt(cx - arenaRadius + 1, y, cz + offset).setType(support, false);
+                    world.getBlockAt(cx + arenaRadius - 1, y, cz + offset).setType(support, false);
+                    world.getBlockAt(cx + offset, y, cz - arenaRadius + 1).setType(support, false);
+                    world.getBlockAt(cx + offset, y, cz + arenaRadius - 1).setType(support, false);
+                }
+            }
+
+            // Inset lantern-like light blocks make the arena readable at night.
+            if (Math.floorMod(offset + arenaRadius, 12) == 0) {
+                Material light = switch (arenaMap(roomIndex)) {
+                    case "NETHER_FORTRESS" -> Material.SHROOMLIGHT;
+                    case "END_CITADEL" -> Material.SEA_LANTERN;
+                    default -> Material.GLOWSTONE;
+                };
+                world.getBlockAt(cx - arenaRadius + 1, 88, cz + offset).setType(light, false);
+                world.getBlockAt(cx + arenaRadius - 1, 88, cz + offset).setType(light, false);
+                world.getBlockAt(cx + offset, 88, cz - arenaRadius + 1).setType(light, false);
+                world.getBlockAt(cx + offset, 88, cz + arenaRadius - 1).setType(light, false);
+            }
         }
 
         // Three-block-wide corner towers strengthen the four arena corners.
