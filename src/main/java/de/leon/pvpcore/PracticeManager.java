@@ -114,45 +114,47 @@ public final class PracticeManager implements Listener {
             int index = fightRooms.getOrDefault(player.getUniqueId(), adminBoxVisits.getOrDefault(player.getUniqueId(),
                     plugin.getConfig().getInt("practice.players." + player.getUniqueId() + ".room", -1)));
             if (index < 0) continue;
+
             int cx = roomCenterX(index), cz = 128;
-            boolean nearby = player.getLocation().distanceSquared(new Location(world == null ? player.getWorld() : world, cx + 0.5, player.getLocation().getY(), cz + 0.5)) <= 90.0 * 90.0;
+            int arenaRadius = arenaForceFieldRadius(index);
+            boolean nearby = player.getLocation().distanceSquared(
+                    new Location(world, cx + 0.5, player.getLocation().getY(), cz + 0.5)) <= 100.0 * 100.0;
             if (!nearby) {
                 plugin.bots().removeOwned(player);
                 continue;
             }
+
             nearbyRooms.add(index);
-            int glassHeight = ARENA_WALL_HEIGHT;
-            int arenaRadius = isFighting(player) ? DUEL_ARENA_RADIUS : PRACTICE_ARENA_RADIUS;
             Integer previousGlassHeight = forceFieldHeights.get(index);
             Integer previousRadius = forceFieldRadii.get(index);
             if (!activeForceFields.contains(index)) {
-                // Migrate both old practice and duel glass cages (including old glass roofs).
-                int legacyHeight = mode(player) == Mode.SWORD ? 30 : selectedHeight(player) + 10;
-                removeForceField(cx, cz, legacyHeight, PRACTICE_ARENA_RADIUS);
-                removeForceField(cx, cz, legacyHeight, DUEL_ARENA_RADIUS);
-                buildForceField(cx, cz, glassHeight, arenaRadius);
+                removeForceField(cx, cz, ARENA_1_FORCE_FIELD_RADIUS);
+                removeForceField(cx, cz, ARENA_3_FORCE_FIELD_RADIUS);
+                buildForceField(cx, cz, ARENA_FORCE_FIELD_HEIGHT, arenaRadius);
                 activeForceFields.add(index);
-                forceFieldHeights.put(index, glassHeight);
+                forceFieldHeights.put(index, ARENA_FORCE_FIELD_HEIGHT);
                 forceFieldRadii.put(index, arenaRadius);
-            } else if (previousGlassHeight == null || previousGlassHeight != glassHeight
+            } else if (previousGlassHeight == null || previousGlassHeight != ARENA_FORCE_FIELD_HEIGHT
                     || previousRadius == null || previousRadius != arenaRadius) {
-                removeForceField(cx, cz, previousGlassHeight == null ? glassHeight : previousGlassHeight,
-                        previousRadius == null ? arenaRadius : previousRadius);
-                buildForceField(cx, cz, glassHeight, arenaRadius);
-                forceFieldHeights.put(index, glassHeight);
+                removeForceField(cx, cz, previousRadius == null ? arenaRadius : previousRadius);
+                buildForceField(cx, cz, ARENA_FORCE_FIELD_HEIGHT, arenaRadius);
+                forceFieldHeights.put(index, ARENA_FORCE_FIELD_HEIGHT);
                 forceFieldRadii.put(index, arenaRadius);
             }
+
             renderNearbyForceField(player, cx, cz, arenaRadius);
             if (!isFighting(player) && !adminBoxVisits.containsKey(player.getUniqueId())
-                    && mode(player) != Mode.CRYSTAL_ANCHOR && plugin.bots().isAvailable() && !plugin.bots().hasOwnedBot(player)) plugin.bots().spawn(player);
+                    && mode(player) != Mode.CRYSTAL_ANCHOR && plugin.bots().isAvailable()
+                    && !plugin.bots().hasOwnedBot(player)) plugin.bots().spawn(player);
             if (mode(player) == Mode.SWORD) recoverSwordBotAtEdge(player, cx, cz);
             updatePracticeBoard(player);
             updatePlayerVisibility(player);
         }
+
         for (int index : new HashSet<>(activeForceFields)) {
             if (nearbyRooms.contains(index)) continue;
-            removeForceField(roomCenterX(index), 128, forceFieldHeights.getOrDefault(index, 40),
-                    forceFieldRadii.getOrDefault(index, PRACTICE_ARENA_RADIUS));
+            removeForceField(roomCenterX(index), 128,
+                    forceFieldRadii.getOrDefault(index, arenaForceFieldRadius(index)));
             activeForceFields.remove(index);
             forceFieldHeights.remove(index);
             forceFieldRadii.remove(index);
@@ -189,25 +191,26 @@ public final class PracticeManager implements Listener {
             plugin.message(admin, "&cPractice world could not be loaded.");
             return;
         }
+
         String base = "practice.players." + owner.getUniqueId();
         int index = plugin.getConfig().getInt(base + ".room", -1);
         if (index < 0) {
             plugin.message(admin, "&cThat player has not created a practice box yet.");
             return;
         }
+
         ensureRoomBuilt(base, index, arenaMap(owner));
         adminBoxVisits.put(admin.getUniqueId(), index);
-        int height = ARENA_WALL_HEIGHT;
+        int radius = arenaForceFieldRadius(index);
         if (!activeForceFields.contains(index)) {
-            int legacyHeight = mode(owner) == Mode.SWORD ? 30 : selectedHeight(owner) + 10;
-            removeForceField(roomCenterX(index), 128, legacyHeight, PRACTICE_ARENA_RADIUS);
-            removeForceField(roomCenterX(index), 128, legacyHeight, DUEL_ARENA_RADIUS);
-            buildForceField(roomCenterX(index), 128, height, PRACTICE_ARENA_RADIUS);
+            removeForceField(roomCenterX(index), 128, ARENA_1_FORCE_FIELD_RADIUS);
+            removeForceField(roomCenterX(index), 128, ARENA_3_FORCE_FIELD_RADIUS);
+            buildForceField(roomCenterX(index), 128, ARENA_FORCE_FIELD_HEIGHT, radius);
             activeForceFields.add(index);
-            forceFieldHeights.put(index, height);
-            forceFieldRadii.put(index, PRACTICE_ARENA_RADIUS);
+            forceFieldHeights.put(index, ARENA_FORCE_FIELD_HEIGHT);
+            forceFieldRadii.put(index, radius);
         }
-        admin.teleport(new Location(world, roomCenterX(index) + 0.5, 82.0, 128.5));
+        admin.teleport(arenaSpawnLocation(index, 0, 0));
         Bukkit.getScheduler().runTask(plugin, () -> updatePlayerVisibility(admin));
         plugin.message(admin, "&aTeleported to &f" + owner.getName() + "&a's box.");
     }
@@ -237,11 +240,8 @@ public final class PracticeManager implements Listener {
             plugin.saveConfig();
         }
         int cx = roomCenterX(index), cz = 128;
-        clearPlatform(cx, cz, DUEL_ARENA_RADIUS);
+        clearPlatform(cx, cz);
         ensureRoomBuilt(base, index, arenaMap(challenger));
-        buildDuelObstacles(cx, cz, index);
-        buildDuelFoundation(cx, cz, index);
-        buildBackgroundLandscape(cx, cz, index);
         plugin.bots().removeOwned(challenger);
         plugin.bots().removeOwned(opponent);
         activeAttempts.remove(challenger.getUniqueId());
@@ -276,7 +276,10 @@ public final class PracticeManager implements Listener {
     }
 
     private Location fightSpawnLocation(int room, int offset) {
-        return new Location(world, roomCenterX(room) + 0.5 + offset, 81.0, 128.5, offset < 0 ? -90.0f : 90.0f, 0.0f);
+        Location spawn = arenaSpawnLocation(room, offset, 0);
+        spawn.setYaw(offset < 0 ? -90.0f : 90.0f);
+        spawn.setPitch(0.0f);
+        return spawn;
     }
 
     public void endFight(Player player, String reason) {
@@ -501,7 +504,7 @@ public final class PracticeManager implements Listener {
         }
 
         int cx = roomCenterX(index), cz = 128;
-        clearPlatform(cx, cz, PRACTICE_ARENA_RADIUS);
+        clearPlatform(cx, cz);
         ensureRoomBuilt(base, index, arenaMap(p));
         plugin.bots().removeOwned(p);
         p.setGameMode(GameMode.SURVIVAL);
@@ -535,18 +538,60 @@ public final class PracticeManager implements Listener {
         return switch (height) { case 10 -> "Easy"; case 20 -> "Normal"; case 30 -> "Hard"; default -> "Impossible"; };
     }
 
-    private Location startLocation(Player p, int height) {
-        int index = plugin.getConfig().getInt("practice.players." + p.getUniqueId() + ".room", 0);
-        int cx = roomCenterX(index), cz = 128;
-        // Sword practice starts directly on the arena floor; only Stun Slam uses an elevated spawn.
-        int spawnHeight = height > 0 ? height : 0;
-        return new Location(world, cx + 0.5, 81 + spawnHeight, cz + 0.5, 0.0f, height > 0 ? 90.0f : 0.0f);
+    private Location startLocation(Player player, int height) {
+        int index = plugin.getConfig().getInt("practice.players." + player.getUniqueId() + ".room", 0);
+        Location spawn = arenaSpawnLocation(index, 0, 0);
+        if (height > 0) spawn.add(0, height, 0);
+        spawn.setYaw(0.0f);
+        spawn.setPitch(height > 0 ? 90.0f : 0.0f);
+        return spawn;
     }
 
     public Location botSpawnLocation(Player owner) {
         int index = plugin.getConfig().getInt("practice.players." + owner.getUniqueId() + ".room", 0);
-        int cx = roomCenterX(index), cz = 128;
-        return new Location(world, cx + 0.5, 81, cz + 0.5);
+        return arenaSpawnLocation(index, 0, 0);
+    }
+
+    private Location arenaSpawnLocation(int roomIndex, int offsetX, int offsetZ) {
+        int targetX = roomCenterX(roomIndex) + offsetX;
+        int targetZ = 128 + offsetZ;
+
+        for (int radius = 0; radius <= 16; radius++) {
+            int bestX = targetX;
+            int bestZ = targetZ;
+            int bestY = Integer.MIN_VALUE;
+            int bestDistance = Integer.MAX_VALUE;
+
+            for (int dx = -radius; dx <= radius; dx++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dz)) != radius) continue;
+                    int x = targetX + dx;
+                    int z = targetZ + dz;
+                    int floorY = world.getHighestBlockYAt(x, z);
+                    if (floorY < world.getMinHeight() || floorY + 2 >= world.getMaxHeight()) continue;
+
+                    Block floor = world.getBlockAt(x, floorY, z);
+                    Block feet = world.getBlockAt(x, floorY + 1, z);
+                    Block head = world.getBlockAt(x, floorY + 2, z);
+                    if (!floor.getType().isSolid() || !feet.isPassable() || !head.isPassable()) continue;
+
+                    int distance = dx * dx + dz * dz;
+                    if (distance < bestDistance) {
+                        bestDistance = distance;
+                        bestX = x;
+                        bestZ = z;
+                        bestY = floorY;
+                    }
+                }
+            }
+
+            if (bestY != Integer.MIN_VALUE) {
+                return new Location(world, bestX + 0.5, bestY + 1.0, bestZ + 0.5);
+            }
+        }
+
+        int floorY = world.getHighestBlockYAt(targetX, targetZ);
+        return new Location(world, targetX + 0.5, floorY + 1.0, targetZ + 0.5);
     }
 
     private void ensureRoomBuilt(String base, int roomIndex, String selectedMap) {
@@ -558,7 +603,10 @@ public final class PracticeManager implements Listener {
         // Older versions may have generated fallback geometry instead of pasting Arena 1.
         // Preserve a real previous schematic ID so the loader can clear the complete old footprint.
         String previousMap = built
-                ? (ARENA_MAPS.contains(builtMap) ? builtMap : "LEGACY_GENERATED")
+                ? (builtVersion < SCHEMATIC_BUILD_VERSION && "ARENA_1".equals(builtMap)
+                        && "ARENA_1".equals(selectedMap)
+                        ? "LEGACY_GENERATED"
+                        : ARENA_MAPS.contains(builtMap) ? builtMap : "LEGACY_GENERATED")
                 : "";
 
         if (buildRoom(roomCenterX(roomIndex), 128, selectedMap, previousMap)) {
