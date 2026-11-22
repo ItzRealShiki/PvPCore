@@ -457,17 +457,57 @@ public final class PracticeManager implements Listener {
     private void recoverSwordBotAtEdge(Player owner, int centerX, int centerZ) {
         Player bot = plugin.bots().ownedBot(owner);
         if (bot == null || !bot.isValid() || bot.getWorld() != owner.getWorld()) return;
+
+        int roomIndex = plugin.getConfig().getInt("practice.players." + owner.getUniqueId() + ".room", -1);
+        if (roomIndex < 0) return;
+
         Location location = bot.getLocation();
-        double edgeX = Math.abs(location.getX() - centerX);
-        double edgeZ = Math.abs(location.getZ() - centerZ);
+        double relativeX = location.getX() - (centerX + 0.5);
+        double relativeZ = location.getZ() - 128.5;
+        double distance = Math.hypot(relativeX, relativeZ);
+        boolean touchingBarrier;
+
+        if (arenaMap(roomIndex).equals("ARENA_1")) {
+            touchingBarrier = distanceToArenaOneBarrier(relativeX, relativeZ) <= 1.0;
+        } else {
+            int radius = arenaForceFieldRadius(roomIndex);
+            touchingBarrier = distance >= radius - 1.0;
+        }
+        if (!touchingBarrier) return;
+
         org.bukkit.util.Vector velocity = bot.getVelocity();
-        if ((edgeX < 22.0 && edgeZ < 22.0)
-                || Math.hypot(velocity.getX(), velocity.getZ()) > 0.10) return;
-        org.bukkit.util.Vector towardCenter = new org.bukkit.util.Vector(
-                centerX + 0.5 - location.getX(), 0.0, centerZ + 0.5 - location.getZ());
+        org.bukkit.util.Vector towardCenter = new org.bukkit.util.Vector(-relativeX, 0.0, -relativeZ);
         if (towardCenter.lengthSquared() < 0.01) return;
-        towardCenter.normalize().multiply(1.35).setY(0.42);
+        towardCenter.normalize();
+
+        // Only intervene at the actual barrier collision line, and only if the bot is
+        // trying to move outward or has become stuck against the invisible blocks.
+        double outwardSpeed = velocity.getX() * -towardCenter.getX()
+                + velocity.getZ() * -towardCenter.getZ();
+        if (outwardSpeed < 0.02 && velocity.lengthSquared() > 0.06) return;
+
+        towardCenter.multiply(1.25).setY(Math.max(0.18, velocity.getY()));
         bot.setVelocity(towardCenter);
+    }
+
+    private double distanceToArenaOneBarrier(double x, double z) {
+        double closest = Double.MAX_VALUE;
+        for (int i = 0; i < ARENA_1_ICICLE_POINTS.length; i++) {
+            int[] start = ARENA_1_ICICLE_POINTS[i];
+            int[] end = ARENA_1_ICICLE_POINTS[(i + 1) % ARENA_1_ICICLE_POINTS.length];
+            closest = Math.min(closest, distanceToSegment(x, z, start[0], start[1], end[0], end[1]));
+        }
+        return closest;
+    }
+
+    private double distanceToSegment(double px, double pz, double ax, double az, double bx, double bz) {
+        double dx = bx - ax;
+        double dz = bz - az;
+        double lengthSquared = dx * dx + dz * dz;
+        if (lengthSquared < 0.0001) return Math.hypot(px - ax, pz - az);
+        double t = Math.max(0.0, Math.min(1.0,
+                ((px - ax) * dx + (pz - az) * dz) / lengthSquared));
+        return Math.hypot(px - (ax + t * dx), pz - (az + t * dz));
     }
 
     public void enforcePracticeFood() {
