@@ -475,20 +475,14 @@ public final class WorldManager {
         final int layoutVersion = 2;
         if (plugin.getConfig().getInt("spawn.high-crown-layout-version", 0) < layoutVersion) {
             try {
-                // Remove only the previous PvPCore hub footprint if an older plugin build
-                // already installed it at the former center (0,0), base Y=64.
+                // Remove the former PvPCore layout by reading only non-air coordinates
+                // from the same schematic, rather than scanning millions of empty blocks.
                 if (plugin.getConfig().getBoolean("spawn.void-hub-installed", false)
                         && SPAWN_WORLD_NAME.equalsIgnoreCase(
                         plugin.getConfig().getString("spawn.world", SPAWN_WORLD_NAME))) {
                     int oldBaseY = plugin.getConfig().getInt("spawn.high-crown-base-y", 64);
-                    for (int y = oldBaseY; y < oldBaseY + 196 && y < spawnWorld.getMaxHeight(); y++) {
-                        for (int z = -131; z < 132; z++) {
-                            for (int x = -95; x < 95; x++) {
-                                var block = spawnWorld.getBlockAt(x, y, z);
-                                if (!block.getType().isAir()) block.setType(Material.AIR, false);
-                            }
-                        }
-                    }
+                    SchematicLoader.clearFootprint(plugin, spawnWorld, "HIGH_CROWN_SPAWN",
+                            0, oldBaseY, 0);
                 }
 
                 // Width/length center parameters make local block (95,131) land at

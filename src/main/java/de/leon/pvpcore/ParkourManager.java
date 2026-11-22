@@ -212,8 +212,10 @@ public final class ParkourManager implements Listener {
 
     private boolean isStandingOnConfiguredPlate(Location feet) {
         if (!plugin.getConfig().contains("spawn.parkour-plate.x")) return false;
-        return isConfiguredPlate(new Location(feet.getWorld(),
-                feet.getBlockX(), feet.getBlockY() - 1, feet.getBlockZ()));
+        Location currentBlock = new Location(feet.getWorld(),
+                feet.getBlockX(), feet.getBlockY(), feet.getBlockZ());
+        Location blockBelow = currentBlock.clone().subtract(0, 1, 0);
+        return isConfiguredPlate(currentBlock) || isConfiguredPlate(blockBelow);
     }
 
     private void startPersonalParkour(Player player) {

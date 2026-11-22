@@ -39,6 +39,26 @@ final class SchematicLoader {
     private SchematicLoader() {
     }
 
+    static void clearFootprint(JavaPlugin plugin, World world, String arena,
+                               int centerX, int baseY, int centerZ) throws IOException {
+        Schematic schematic = load(plugin, arena);
+        int startX = centerX - schematic.width / 2;
+        int startZ = centerZ - schematic.length / 2;
+        int index = 0;
+        for (int y = 0; y < schematic.height; y++) {
+            int worldY = baseY + y;
+            for (int z = 0; z < schematic.length; z++) {
+                for (int x = 0; x < schematic.width; x++) {
+                    BlockData state = schematic.palette[schematic.blockIndices[index++] & 0xFFFF];
+                    if (state == null || state.getMaterial().isAir()
+                            || worldY < world.getMinHeight() || worldY >= world.getMaxHeight()) continue;
+                    var block = world.getBlockAt(startX + x, worldY, startZ + z);
+                    if (!block.getType().isAir()) block.setType(Material.AIR, false);
+                }
+            }
+        }
+    }
+
     static void paste(JavaPlugin plugin, World world, String arena, String previousArena,
                       int centerX, int baseY, int centerZ) throws IOException {
         if (world == null) throw new IOException("Practice world is not available.");
