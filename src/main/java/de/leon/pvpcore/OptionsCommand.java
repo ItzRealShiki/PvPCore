@@ -49,7 +49,7 @@ public final class OptionsCommand implements CommandExecutor, Listener {
 
     private void open(Player player) {
         Holder holder = new Holder();
-        Inventory inventory = Bukkit.createInventory(holder, 27, plugin.color("&8✦ ᴏᴘᴛɪᴏɴꜱ"));
+        Inventory inventory = Bukkit.createInventory(holder, 27, plugin.color("&8✦ ᴀʀᴇɴᴀ ᴏᴘᴛɪᴏɴꜱ"));
         holder.inventory = inventory;
         Material selected = plugin.practice().forceFieldMaterial();
         for (int index = 0; index < COLORS.size(); index++) {
@@ -61,7 +61,9 @@ public final class OptionsCommand implements CommandExecutor, Listener {
                     .map(part -> part.charAt(0) + part.substring(1).toLowerCase())
                     .reduce((a, b) -> a + " " + b).orElse("Glass");
             meta.setDisplayName(plugin.color((material == selected ? "&a✔ " : "&e") + name));
-            meta.setLore(List.of(plugin.color(material == selected ? "&7Currently selected" : "&eClick to select")));
+            meta.setLore(List.of(plugin.color(material == selected
+                    ? "&7Selected arena wall accent"
+                    : "&7Accent band on the low stadium wall."), plugin.color("&eClick to select")));
             item.setItemMeta(meta);
             inventory.setItem(index, item);
         }
@@ -72,9 +74,9 @@ public final class OptionsCommand implements CommandExecutor, Listener {
     private ItemStack arenaItem(Player player) {
         ItemStack item = new ItemStack(Material.GRASS_BLOCK);
         ItemMeta meta = item.getItemMeta();
-        meta.setDisplayName(plugin.color("&aArena Ground"));
+        meta.setDisplayName(plugin.color("&aArena Ground Theme"));
         meta.setLore(List.of(plugin.color("&7Current: &f" + plugin.practice().arenaTheme(player).replace('_', ' ')),
-                plugin.color("&eClick to change the arena theme")));
+                plugin.color("&eClick to change the ground style")));
         item.setItemMeta(meta);
         return item;
     }
@@ -122,7 +124,7 @@ public final class OptionsCommand implements CommandExecutor, Listener {
         if (slot < 0 || slot >= COLORS.size()) return;
         Material selected = COLORS.get(slot);
         plugin.practice().setForceFieldMaterial(selected);
-        plugin.message(player, "&aForcefield color set to &e" + selected.name().replace("_STAINED_GLASS", "").replace('_', ' ') + "&a.");
+        plugin.message(player, "&aArena wall accent set to &e" + selected.name().replace("_STAINED_GLASS", "").replace('_', ' ') + "&a.");
         open(player);
     }
 }
