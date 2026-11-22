@@ -25,6 +25,17 @@ Output: `target/PvPCore-1.0.0.jar`
 
 All in-game messages, menu titles, item names, and lore use Unicode small-caps styling. User-facing plugin text is English. `/pvp` is not registered as an alias.
 
+## Practice arenas
+
+Use `/prac` to open the practice menu and choose one of five arena layouts:
+- **Colosseum** — sandstone stadium towers and stepped spectator ledges.
+- **Ancient Ruins** — broken stone pillars and mossy walls.
+- **Overgrown** — trees and mossy cover around an open combat lane.
+- **Nether Fortress** — basalt towers and polished blackstone details.
+- **End Citadel** — purpur towers and End-rod accents.
+
+Each player receives a separate practice instance, so multiple arenas can run at the same time. A 1v1 uses the challenger's selected arena. Arenas have an open sky, low perimeter walls and gate openings instead of the old glass roof. The glass color option now changes the wall's accent band.
+
 ## Training NPC
 The `/bot` menu lets you configure and spawn a stationary training NPC. Left-click the Shield Reaction or Totem Refill setting to lower its difficulty; right-click to raise it. The selected level is shown in the item's lore:
 - **Inf. Totem** — enabled by default; the NPC triggers a totem effect instead of dying and never consumes a totem.
