@@ -2,6 +2,8 @@ package de.leon.pvpcore;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -9,6 +11,9 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.Display;
+import org.bukkit.entity.TextDisplay;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
@@ -21,11 +26,16 @@ import org.bukkit.event.player.PlayerBucketEmptyEvent;
 import org.bukkit.event.player.PlayerBucketFillEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.block.Action;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.inventory.EquipmentSlot;
 
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Locale;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -52,6 +62,11 @@ public final class ParkourManager implements Listener {
 
     private final PvPCore plugin;
     private final NamespacedKey entrancePlateKey;
+    private final NamespacedKey leaderboardToolKey;
+    private static final String LEADERBOARD_TAG = "pvpcore_parkour_leaderboard";
+    private TextDisplay leaderboardDisplay;
+
+    private record Leader(String name, int score) {}
     private final Map<UUID, Run> activeRuns = new ConcurrentHashMap<>();
     private final Random random = new Random();
 
@@ -76,6 +91,8 @@ public final class ParkourManager implements Listener {
     public ParkourManager(PvPCore plugin) {
         this.plugin = plugin;
         this.entrancePlateKey = new NamespacedKey(plugin, "parkour_entrance_plate");
+        this.leaderboardToolKey = new NamespacedKey(plugin, "parkour_leaderboard_tool");
+        Bukkit.getScheduler().runTaskTimer(plugin, this::refreshLeaderboard, 20L, 100L);
         // Polling makes the entrance reliable even if another plugin cancels or
         // modifies movement/physical-interaction events for weighted pressure plates.
         Bukkit.getScheduler().runTaskTimer(plugin, this::tickParkour, 1L, 2L);
@@ -101,6 +118,164 @@ public final class ParkourManager implements Listener {
             player.getWorld().dropItemNaturally(player.getLocation(), leftover);
         }
         plugin.message(player, "&aParkour entrance plate added to your inventory.");
+    }
+
+    public void giveLeaderboardTool(Player player) {
+        ItemStack item = new ItemStack(Material.PAPER);
+        ItemMeta meta = item.getItemMeta();
+        meta.setDisplayName(plugin.color("&6Parkour Leaderboard"));
+        meta.setLore(List.of(
+                plugin.color("&7Right-click a block in Spawn"),
+                plugin.color("&7to place or move the hologram."),
+                plugin.color("&7Updates automatically with highscores."),
+                plugin.color("&8Uses Text Display - no Armor Stands.")
+        ));
+        meta.getPersistentDataContainer().set(leaderboardToolKey, PersistentDataType.BYTE, (byte) 1);
+        item.setItemMeta(meta);
+        Map<Integer, ItemStack> leftovers = player.getInventory().addItem(item);
+        for (ItemStack leftover : leftovers.values()) {
+            player.getWorld().dropItemNaturally(player.getLocation(), leftover);
+        }
+        plugin.message(player, "&aParkour leaderboard tool added to your inventory.");
+    }
+
+    private boolean isLeaderboardTool(ItemStack item) {
+        return item != null && item.getType() == Material.PAPER && item.hasItemMeta()
+                && item.getItemMeta().getPersistentDataContainer()
+                .has(leaderboardToolKey, PersistentDataType.BYTE);
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onLeaderboardToolUse(PlayerInteractEvent event) {
+        if (event.getAction() != Action.RIGHT_CLICK_BLOCK
+                || event.getHand() != EquipmentSlot.HAND
+                || !isLeaderboardTool(event.getItem())) return;
+
+        Player player = event.getPlayer();
+        event.setCancelled(true);
+        if (!plugin.hasCore(player, "Admin.Core")) {
+            plugin.message(player, "&cOnly admins can place the leaderboard.");
+            return;
+        }
+        if (!isSpawnWorld(player.getWorld()) || event.getClickedBlock() == null) {
+            plugin.message(player, "&cPlace the leaderboard in the Spawn world.");
+            return;
+        }
+
+        removeLeaderboardAtConfiguredLocation();
+        Location location = event.getClickedBlock().getLocation().add(0.5D, 1.15D, 0.5D);
+        plugin.getConfig().set("parkour.leaderboard.world", SPAWN_WORLD);
+        plugin.getConfig().set("parkour.leaderboard.x", location.getX());
+        plugin.getConfig().set("parkour.leaderboard.y", location.getY());
+        plugin.getConfig().set("parkour.leaderboard.z", location.getZ());
+        plugin.saveConfig();
+        leaderboardDisplay = null;
+        refreshLeaderboard();
+        plugin.message(player, "&aParkour leaderboard placed. It will update automatically.");
+    }
+
+    private void removeLeaderboardAtConfiguredLocation() {
+        String worldName = plugin.getConfig().getString("parkour.leaderboard.world", "");
+        World world = worldName.isBlank() ? null : Bukkit.getWorld(worldName);
+        if (world == null || !plugin.getConfig().contains("parkour.leaderboard.x")) return;
+
+        double x = plugin.getConfig().getDouble("parkour.leaderboard.x");
+        double y = plugin.getConfig().getDouble("parkour.leaderboard.y");
+        double z = plugin.getConfig().getDouble("parkour.leaderboard.z");
+        world.getChunkAt(((int) Math.floor(x)) >> 4, ((int) Math.floor(z)) >> 4);
+        Location location = new Location(world, x, y, z);
+        for (Entity entity : world.getNearbyEntities(location, 2.0D, 4.0D, 2.0D)) {
+            if (entity instanceof TextDisplay display && display.getScoreboardTags().contains(LEADERBOARD_TAG)) {
+                display.remove();
+            }
+        }
+        leaderboardDisplay = null;
+    }
+
+    public void refreshLeaderboard() {
+        String worldName = plugin.getConfig().getString("parkour.leaderboard.world", "");
+        if (worldName.isBlank() || !plugin.getConfig().contains("parkour.leaderboard.x")) return;
+        World world = Bukkit.getWorld(worldName);
+        if (world == null) return;
+
+        double x = plugin.getConfig().getDouble("parkour.leaderboard.x");
+        double y = plugin.getConfig().getDouble("parkour.leaderboard.y");
+        double z = plugin.getConfig().getDouble("parkour.leaderboard.z");
+        world.getChunkAt(((int) Math.floor(x)) >> 4, ((int) Math.floor(z)) >> 4);
+        Location location = new Location(world, x, y, z);
+
+        if (leaderboardDisplay == null || !leaderboardDisplay.isValid()) {
+            for (Entity entity : world.getNearbyEntities(location, 2.0D, 4.0D, 2.0D)) {
+                if (entity instanceof TextDisplay display && display.getScoreboardTags().contains(LEADERBOARD_TAG)) {
+                    leaderboardDisplay = display;
+                    break;
+                }
+            }
+        }
+        if (leaderboardDisplay == null || !leaderboardDisplay.isValid()) {
+            leaderboardDisplay = world.spawn(location, TextDisplay.class, display -> {
+                display.addScoreboardTag(LEADERBOARD_TAG);
+                display.setPersistent(true);
+                display.setInvulnerable(true);
+                display.setGravity(false);
+                display.setSilent(true);
+                display.setBillboard(Display.Billboard.CENTER);
+                display.setAlignment(TextDisplay.TextAlignment.CENTER);
+                display.setLineWidth(360);
+                display.setSeeThrough(true);
+                display.setShadowed(true);
+                display.setBackgroundColor(org.bukkit.Color.fromARGB(0, 0, 0, 0));
+            });
+        }
+        leaderboardDisplay.text(buildLeaderboardText());
+    }
+
+    private Component buildLeaderboardText() {
+        List<Leader> leaders = new ArrayList<>();
+        var playersSection = plugin.getConfig().getConfigurationSection("parkour.players");
+        if (playersSection != null) {
+            for (String uuidText : playersSection.getKeys(false)) {
+                String path = "parkour.players." + uuidText;
+                int score = plugin.getConfig().getInt(path + ".highscore", 0);
+                if (score <= 0) continue;
+                String name = plugin.getConfig().getString(path + ".name");
+                if (name == null || name.isBlank()) {
+                    try {
+                        name = Bukkit.getOfflinePlayer(UUID.fromString(uuidText)).getName();
+                    } catch (IllegalArgumentException ignored) {
+                        name = null;
+                    }
+                }
+                if (name == null || name.isBlank()) name = "unknown";
+                leaders.add(new Leader(name, score));
+            }
+        }
+        leaders.sort(Comparator.comparingInt(Leader::score).reversed()
+                .thenComparing(leader -> leader.name().toLowerCase(Locale.ROOT)));
+
+        Component text = Component.text(SmallCaps.of("parkour leaderboard"), NamedTextColor.YELLOW)
+                .decorate(TextDecoration.BOLD)
+                .append(Component.newline())
+                .append(Component.text("-----", NamedTextColor.DARK_GRAY));
+
+        TextColor silver = TextColor.fromHexString("#C0C0C0");
+        TextColor bronze = TextColor.fromHexString("#83543B");
+        for (int index = 0; index < 10; index++) {
+            Leader leader = index < leaders.size() ? leaders.get(index) : new Leader("---", 0);
+            TextColor rankColor = switch (index) {
+                case 0 -> NamedTextColor.GOLD;
+                case 1 -> silver == null ? NamedTextColor.WHITE : silver;
+                case 2 -> bronze == null ? NamedTextColor.WHITE : bronze;
+                default -> NamedTextColor.WHITE;
+            };
+            Component row = Component.text("#" + (index + 1), rankColor)
+                    .append(Component.text(" - ", NamedTextColor.GRAY))
+                    .append(Component.text(SmallCaps.of(leader.name()), NamedTextColor.YELLOW))
+                    .append(Component.text(": ", NamedTextColor.YELLOW))
+                    .append(Component.text(Integer.toString(leader.score()), NamedTextColor.DARK_RED));
+            text = text.append(Component.newline()).append(row);
+        }
+        return text;
     }
 
     private boolean isEntrancePlate(ItemStack item) {
@@ -237,19 +412,20 @@ public final class ParkourManager implements Listener {
         }
 
         if (!player.isOnGround() || run.platforms.size() != 3) return;
-        Platform target = run.platforms.get(2);
+        Platform second = run.platforms.get(1);
+        Platform last = run.platforms.get(2);
         Location feet = player.getLocation();
         int supportY = (int) Math.floor(feet.getY() - 0.01D);
-        if (feet.getBlockX() != target.x() || feet.getBlockZ() != target.z()
-                || supportY != target.y()) return;
+        if (feet.getBlockX() != second.x() || feet.getBlockZ() != second.z()
+                || supportY != second.y()) return;
 
-        // The player reached the third/last available block: remove the oldest
-        // behind them and spawn one new block at the front, keeping exactly 3.
+        // Reaching the middle (second) platform rolls the course forward:
+        // remove the platform behind the player and add one beyond the old last.
         Platform oldest = run.platforms.remove(0);
         Block oldBlock = player.getWorld().getBlockAt(oldest.x(), oldest.y(), oldest.z());
         if (oldBlock.getType() == oldest.material()) oldBlock.setType(Material.AIR, false);
 
-        Platform next = createNextPlatform(target, run);
+        Platform next = createNextPlatform(last, run);
         player.getWorld().getChunkAt(next.x() >> 4, next.z() >> 4);
         player.getWorld().getBlockAt(next.x(), next.y(), next.z()).setType(next.material(), false);
         run.platforms.add(next);
@@ -261,6 +437,7 @@ public final class ParkourManager implements Listener {
         if (run.score > best) {
             best = run.score;
             plugin.getConfig().set(scorePath, best);
+            plugin.getConfig().set("parkour.players." + player.getUniqueId() + ".name", player.getName());
             plugin.saveConfig();
             player.sendMessage(plugin.color("&dNew Parkour highscore: &f" + best + " jumps!"));
         }
