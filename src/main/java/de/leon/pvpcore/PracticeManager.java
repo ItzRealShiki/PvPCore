@@ -157,7 +157,7 @@ public final class PracticeManager implements Listener {
             if (!isFighting(player) && !adminBoxVisits.containsKey(player.getUniqueId())
                     && mode(player) != Mode.CRYSTAL_ANCHOR && plugin.bots().isAvailable()
                     && !plugin.bots().hasOwnedBot(player)) plugin.bots().spawn(player);
-            if (mode(player) == Mode.SWORD) recoverSwordBotAtEdge(player, cx, cz);
+            if (mode(player) != Mode.CRYSTAL_ANCHOR) recoverBotAtBarrier(player, cx, cz);
             updatePracticeBoard(player);
             updatePlayerVisibility(player);
         }
@@ -454,7 +454,7 @@ public final class PracticeManager implements Listener {
         }
     }
 
-    private void recoverSwordBotAtEdge(Player owner, int centerX, int centerZ) {
+    private void recoverBotAtBarrier(Player owner, int centerX, int centerZ) {
         Player bot = plugin.bots().ownedBot(owner);
         if (bot == null || !bot.isValid() || bot.getWorld() != owner.getWorld()) return;
 
