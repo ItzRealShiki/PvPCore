@@ -180,9 +180,9 @@ public final class Menus implements Listener {
                 "&7Get the golden pressure plate entrance.",
                 "&7Place it in Spawn to activate parkour.",
                 "&7Every player gets a private course."));
-        inv.setItem(22, item(Material.PAPER, "&6Parkour Leaderboard",
-                "&7Get a placement tool for the leaderboard.",
-                "&7Right-click a block in Spawn to place it.",
+        inv.setItem(22, item(Material.GOLD_BLOCK, "&6Parkour Leaderboard",
+                "&7Get a special gold block for the leaderboard.",
+                "&7Place it in Spawn to create the hologram above it.",
                 "&7Shows the top 10 personal parkour highscores.",
                 "&7Uses a Text Display, never an Armor Stand."));
         inv.setItem(26, item(Material.ARROW, "&cBack"));
