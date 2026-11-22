@@ -782,7 +782,7 @@ public final class PracticeManager implements Listener {
                 world.getBlockAt(x, bridgeY + 1, z).setType(base, false);
             }
         }
-        // A clear 3-block passage remains between the gate pillars.
+        // A clear 5-block passage remains between the gate pillars.
     }
 
     private void buildAnubisRise(int cx, int cz, int arenaRadius) {
@@ -1153,7 +1153,7 @@ public final class PracticeManager implements Listener {
             if (Math.floorMod(offset + arenaRadius, 12) == 0) {
                 Material light = switch (arenaMap(roomIndex)) {
                     case "NETHER_FORTRESS" -> Material.SHROOMLIGHT;
-                    case "END_CITADEL" -> Material.SEA_LANTERN;
+                    case "END_CITADEL", "TINY_END_COLISEUM" -> Material.SEA_LANTERN;
                     default -> Material.GLOWSTONE;
                 };
                 world.getBlockAt(cx - arenaRadius + 1, 88, cz + offset).setType(light, false);
