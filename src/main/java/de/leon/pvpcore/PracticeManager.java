@@ -1222,6 +1222,21 @@ public final class PracticeManager implements Listener {
             }
         }
 
+        // Clear the 3x3 corner towers as well, otherwise their upper blocks would
+        // remain floating when an arena changes from practice size to duel size.
+        for (int xSign : new int[]{-1, 1}) {
+            for (int zSign : new int[]{-1, 1}) {
+                for (int dx = 0; dx <= 2; dx++) {
+                    for (int dz = 0; dz <= 2; dz++) {
+                        for (int y = 80; y <= 80 + ARENA_WALL_HEIGHT + 2; y++) {
+                            world.getBlockAt(cx + xSign * (arenaRadius - dx), y,
+                                    cz + zSign * (arenaRadius - dz)).setType(Material.AIR, false);
+                        }
+                    }
+                }
+            }
+        }
+
         // Delete the legacy glass roof at the former mode-specific height.
         int legacyRoofY = 80 + glassHeight;
         for (int x = -arenaRadius; x <= arenaRadius; x++) {
