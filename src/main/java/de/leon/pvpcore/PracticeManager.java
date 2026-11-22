@@ -76,6 +76,7 @@ public final class PracticeManager implements Listener {
 
     public PracticeManager(PvPCore plugin) {
         this.plugin = plugin;
+        this.world = Bukkit.getWorld(PRACTICE_WORLD);
         Bukkit.getScheduler().runTaskTimer(plugin, this::updateNearbyArenas, 1L, 10L);
     }
 
@@ -124,16 +125,20 @@ public final class PracticeManager implements Listener {
             int glassHeight = ARENA_WALL_HEIGHT;
             int arenaRadius = isFighting(player) ? DUEL_ARENA_RADIUS : PRACTICE_ARENA_RADIUS;
             Integer previousGlassHeight = forceFieldHeights.get(index);
+            Integer previousRadius = forceFieldRadii.get(index);
             if (!activeForceFields.contains(index)) {
-                // Clear the previous full-height forcefield from older plugin versions.
-                removeForceField(cx, cz, world.getMaxHeight() - 81, DUEL_ARENA_RADIUS);
+                // Migrate both old practice and duel glass cages (including old glass roofs).
+                int legacyHeight = mode(player) == Mode.SWORD ? 30 : selectedHeight(player) + 10;
+                removeForceField(cx, cz, legacyHeight, PRACTICE_ARENA_RADIUS);
+                removeForceField(cx, cz, legacyHeight, DUEL_ARENA_RADIUS);
                 buildForceField(cx, cz, glassHeight, arenaRadius);
                 activeForceFields.add(index);
                 forceFieldHeights.put(index, glassHeight);
                 forceFieldRadii.put(index, arenaRadius);
-            } else if (previousGlassHeight == null || previousGlassHeight != glassHeight) {
-                removeForceField(cx, cz, previousGlassHeight == null ? world.getMaxHeight() - 81 : previousGlassHeight,
-                        forceFieldRadii.getOrDefault(index, PRACTICE_ARENA_RADIUS));
+            } else if (previousGlassHeight == null || previousGlassHeight != glassHeight
+                    || previousRadius == null || previousRadius != arenaRadius) {
+                removeForceField(cx, cz, previousGlassHeight == null ? glassHeight : previousGlassHeight,
+                        previousRadius == null ? arenaRadius : previousRadius);
                 buildForceField(cx, cz, glassHeight, arenaRadius);
                 forceFieldHeights.put(index, glassHeight);
                 forceFieldRadii.put(index, arenaRadius);
@@ -186,7 +191,9 @@ public final class PracticeManager implements Listener {
         adminBoxVisits.put(admin.getUniqueId(), index);
         int height = ARENA_WALL_HEIGHT;
         if (!activeForceFields.contains(index)) {
-            removeForceField(roomCenterX(index), 128, world.getMaxHeight() - 81, DUEL_ARENA_RADIUS);
+            int legacyHeight = mode(owner) == Mode.SWORD ? 30 : selectedHeight(owner) + 10;
+            removeForceField(roomCenterX(index), 128, legacyHeight, PRACTICE_ARENA_RADIUS);
+            removeForceField(roomCenterX(index), 128, legacyHeight, DUEL_ARENA_RADIUS);
             buildForceField(roomCenterX(index), 128, height, PRACTICE_ARENA_RADIUS);
             activeForceFields.add(index);
             forceFieldHeights.put(index, height);
@@ -1140,15 +1147,23 @@ public final class PracticeManager implements Listener {
         if (world == null) return;
         // Remove the previous perimeter (including its accent band) before rebuilding it.
         for (int offset = -arenaRadius; offset <= arenaRadius; offset++) {
-            for (int y = 81; y <= 80 + ARENA_WALL_HEIGHT + 1; y++) {
-                world.getBlockAt(cx - arenaRadius, y, cz + offset).setType(Material.AIR, false);
-                world.getBlockAt(cx + arenaRadius, y, cz + offset).setType(Material.AIR, false);
-                world.getBlockAt(cx + offset, y, cz - arenaRadius).setType(Material.AIR, false);
-                world.getBlockAt(cx + offset, y, cz + arenaRadius).setType(Material.AIR, false);
+            for (int y = 81; y < world.getMaxHeight(); y++) {
+                Block[] perimeter = {
+                        world.getBlockAt(cx - arenaRadius, y, cz + offset),
+                        world.getBlockAt(cx + arenaRadius, y, cz + offset),
+                        world.getBlockAt(cx + offset, y, cz - arenaRadius),
+                        world.getBlockAt(cx + offset, y, cz + arenaRadius)
+                };
+                for (Block block : perimeter) {
+                    // Always clear the low arena wall; also remove any remaining tall legacy glass walls.
+                    if (y <= 80 + ARENA_WALL_HEIGHT + 1 || isArenaGlass(block.getType())) {
+                        block.setType(Material.AIR, false);
+                    }
+                }
             }
         }
 
-        // Delete any legacy glass roof left by a previous PvPCore version.
+        // Delete the legacy glass roof at the former mode-specific height.
         int legacyRoofY = 80 + glassHeight;
         for (int x = -arenaRadius; x <= arenaRadius; x++) {
             for (int z = -arenaRadius; z <= arenaRadius; z++) {
