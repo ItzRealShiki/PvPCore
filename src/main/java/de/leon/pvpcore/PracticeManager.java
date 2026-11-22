@@ -42,6 +42,12 @@ public final class PracticeManager implements Listener {
     private static final int ARENA_FORCE_FIELD_HEIGHT = 200;
     private static final Material FORCE_FIELD_BLOCK = Material.BARRIER;
     private static final int LEGACY_GLASS_HEIGHT = 12;
+    // Horizontal centers of the nine tall ice-spike groups detected in Arena 1's schematic.
+    // The wall is interpolated smoothly between these anchors, keeping it centered between spikes.
+    private static final int[][] ARENA_1_ICICLE_POINTS = {
+            {-46, -39}, {-10, -66}, {24, -64}, {64, -48}, {80, 0},
+            {60, 49}, {16, 64}, {-24, 50}, {-54, 9}
+    };
     private static final List<String> ARENA_MAPS = List.of("ARENA_1", "ARENA_3");
     private static final String PRACTICE_WORLD = "prac_void";
     private static final int SCHEMATIC_BUILD_VERSION = 3;
@@ -702,6 +708,35 @@ public final class PracticeManager implements Listener {
         int roomIndex = Math.floorDiv(cx - 128, ROOM_SPACING);
         int floorY = arenaFloorY(roomIndex);
         int topY = Math.min(world.getMaxHeight() - 1, floorY + ARENA_FORCE_FIELD_HEIGHT);
+
+        if (arenaMap(roomIndex).equals("ARENA_1")) {
+            for (int i = 0; i < ARENA_1_ICICLE_POINTS.length; i++) {
+                int[] start = ARENA_1_ICICLE_POINTS[i];
+                int[] end = ARENA_1_ICICLE_POINTS[(i + 1) % ARENA_1_ICICLE_POINTS.length];
+                int steps = Math.max(1, (int) Math.ceil(Math.hypot(end[0] - start[0], end[1] - start[1]) * 2.0));
+                for (int step = 0; step <= steps; step++) {
+                    double t = step / (double) steps;
+                    int x = cx + (int) Math.round(start[0] + (end[0] - start[0]) * t);
+                    int z = cz + (int) Math.round(start[1] + (end[1] - start[1]) * t);
+                    for (int y = floorY + 1; y <= topY; y++) {
+                        world.getBlockAt(x, y, z).setType(FORCE_FIELD_BLOCK, false);
+                    }
+                }
+            }
+            int minX = Arrays.stream(ARENA_1_ICICLE_POINTS).mapToInt(point -> point[0]).min().orElse(-80);
+            int maxX = Arrays.stream(ARENA_1_ICICLE_POINTS).mapToInt(point -> point[0]).max().orElse(80);
+            int minZ = Arrays.stream(ARENA_1_ICICLE_POINTS).mapToInt(point -> point[1]).min().orElse(-66);
+            int maxZ = Arrays.stream(ARENA_1_ICICLE_POINTS).mapToInt(point -> point[1]).max().orElse(66);
+            for (int dx = minX; dx <= maxX; dx++) {
+                for (int dz = minZ; dz <= maxZ; dz++) {
+                    if (insideArenaOneBarrierPolygon(dx, dz)) {
+                        world.getBlockAt(cx + dx, topY, cz + dz).setType(FORCE_FIELD_BLOCK, false);
+                    }
+                }
+            }
+            return;
+        }
+
         int steps = Math.max(240, arenaRadius * 12);
         for (int i = 0; i < steps; i++) {
             double angle = (Math.PI * 2.0 * i) / steps;
@@ -713,6 +748,17 @@ public final class PracticeManager implements Listener {
         for (int dx = -arenaRadius; dx <= arenaRadius; dx++) for (int dz = -arenaRadius; dz <= arenaRadius; dz++) {
             if (dx * dx + dz * dz <= radiusSquared) world.getBlockAt(cx + dx, topY, cz + dz).setType(FORCE_FIELD_BLOCK, false);
         }
+    }
+
+    private boolean insideArenaOneBarrierPolygon(int x, int z) {
+        boolean inside = false;
+        for (int i = 0, j = ARENA_1_ICICLE_POINTS.length - 1; i < ARENA_1_ICICLE_POINTS.length; j = i++) {
+            int xi = ARENA_1_ICICLE_POINTS[i][0], zi = ARENA_1_ICICLE_POINTS[i][1];
+            int xj = ARENA_1_ICICLE_POINTS[j][0], zj = ARENA_1_ICICLE_POINTS[j][1];
+            boolean crosses = (zi > z) != (zj > z);
+            if (crosses && x < (xj - xi) * (z - zi) / (double) (zj - zi) + xi) inside = !inside;
+        }
+        return inside;
     }
 
     private void renderNearbyForceField(Player player, int cx, int cz, int arenaRadius) {
@@ -765,6 +811,34 @@ public final class PracticeManager implements Listener {
                 if (block.getType() == Material.BARRIER || block.getType() == Material.LIGHT_BLUE_STAINED_GLASS) block.setType(Material.AIR, false);
             }
         }
+
+        // Also clear the custom icicle-to-icicle contour, regardless of which arena
+        // is selected now; this removes it when switching from Arena 1 to Arena 3.
+        for (int i = 0; i < ARENA_1_ICICLE_POINTS.length; i++) {
+            int[] start = ARENA_1_ICICLE_POINTS[i];
+            int[] end = ARENA_1_ICICLE_POINTS[(i + 1) % ARENA_1_ICICLE_POINTS.length];
+            int segmentSteps = Math.max(1, (int) Math.ceil(Math.hypot(end[0] - start[0], end[1] - start[1]) * 2.0));
+            for (int step = 0; step <= segmentSteps; step++) {
+                double t = step / (double) segmentSteps;
+                int x = cx + (int) Math.round(start[0] + (end[0] - start[0]) * t);
+                int z = cz + (int) Math.round(start[1] + (end[1] - start[1]) * t);
+                for (int y = floorY + 1; y <= topY; y++) {
+                    Block block = world.getBlockAt(x, y, z);
+                    if (block.getType() == Material.BARRIER) block.setType(Material.AIR, false);
+                }
+            }
+        }
+        int minX = Arrays.stream(ARENA_1_ICICLE_POINTS).mapToInt(point -> point[0]).min().orElse(-80);
+        int maxX = Arrays.stream(ARENA_1_ICICLE_POINTS).mapToInt(point -> point[0]).max().orElse(80);
+        int minZ = Arrays.stream(ARENA_1_ICICLE_POINTS).mapToInt(point -> point[1]).min().orElse(-66);
+        int maxZ = Arrays.stream(ARENA_1_ICICLE_POINTS).mapToInt(point -> point[1]).max().orElse(66);
+        for (int dx = minX; dx <= maxX; dx++) for (int dz = minZ; dz <= maxZ; dz++) {
+            if (!insideArenaOneBarrierPolygon(dx, dz)) continue;
+            Block block = world.getBlockAt(cx + dx, topY, cz + dz);
+            if (block.getType() == Material.BARRIER) block.setType(Material.AIR, false);
+        }
+
+        // Remove any old 12-block blue-glass circular wall from earlier plugin versions.
         int legacyTop = Math.min(world.getMaxHeight() - 1, floorY + LEGACY_GLASS_HEIGHT);
         for (int dx = -arenaRadius - 2; dx <= arenaRadius + 2; dx++) {
             for (int dz = -arenaRadius - 2; dz <= arenaRadius + 2; dz++) {
@@ -775,6 +849,7 @@ public final class PracticeManager implements Listener {
                 }
             }
         }
+
         int radiusSquared = arenaRadius * arenaRadius;
         for (int dx = -arenaRadius; dx <= arenaRadius; dx++) for (int dz = -arenaRadius; dz <= arenaRadius; dz++) {
             if (dx * dx + dz * dz > radiusSquared) continue;
