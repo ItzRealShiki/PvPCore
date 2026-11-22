@@ -33,12 +33,12 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Protected Spawn_Void lobby and an endless, private three-platform parkour course.
+ * Protected Spawn lobby and an endless, private three-platform parkour course.
  * Each run chooses one colour family; every platform uses a different block
  * selected from that same family. Only three platforms exist ahead at a time.
  */
 public final class ParkourManager implements Listener {
-    private static final String SPAWN_WORLD = "Spawn_Void";
+    private static final String SPAWN_WORLD = "Spawn";
     private static final int COURSE_START_Y = 180;
     private static final int PLOT_SPACING = 10_000;
 
@@ -86,7 +86,7 @@ public final class ParkourManager implements Listener {
         ItemMeta meta = item.getItemMeta();
         meta.setDisplayName(plugin.color("&6Parkour Entrance"));
         meta.setLore(List.of(
-                plugin.color("&7Place this in the Spawn_Void world."),
+                plugin.color("&7Place this in the Spawn world."),
                 plugin.color("&7Players step on it to enter their"),
                 plugin.color("&7own private endless parkour course.")
         ));
@@ -271,7 +271,7 @@ public final class ParkourManager implements Listener {
     private void startPersonalParkour(Player player) {
         World spawn = Bukkit.getWorld(SPAWN_WORLD);
         if (spawn == null) {
-            plugin.message(player, "&cThe Spawn_Void world is not available.");
+            plugin.message(player, "&cThe Spawn world is not available.");
             return;
         }
 
