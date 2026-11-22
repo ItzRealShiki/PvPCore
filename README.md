@@ -34,7 +34,7 @@ Use `/prac` to open the practice menu and choose one of five arena layouts:
 - **Nether Fortress** — basalt towers and polished blackstone details.
 - **End Citadel** — purpur towers and End-rod accents.
 
-Each player receives a separate practice instance, so multiple arenas can run at the same time. A 1v1 uses the challenger's selected arena. Arenas have an open sky, low perimeter walls and gate openings instead of the old glass roof. The glass color option now changes the wall's accent band.
+Each player receives a separate practice instance, so multiple arenas can run at the same time. A 1v1 uses the challenger's selected arena. Arenas have an open sky and 12-block-high solid perimeter walls with battlements and reinforced corner towers. The old glass roof and cage are removed. A cyan particle forcefield appears only for players within the configured `practice.forcefield.activation-distance` (default 6 blocks) of the inner boundary; movement is stopped at that boundary. The glass color option changes the decorative wall accent band.
 
 ## Training NPC
 The `/bot` menu lets you configure and spawn a stationary training NPC. Left-click the Shield Reaction or Totem Refill setting to lower its difficulty; right-click to raise it. The selected level is shown in the item's lore:
