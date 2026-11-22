@@ -1256,7 +1256,7 @@ public final class PracticeManager implements Listener {
     }
 
     public void applyKitToInventory(Player player, Inventory editor) {
-        applyKitToInventory(player, selectedMode, editor);
+        applyKitToInventory(player, mode(player), editor);
     }
 
     public void applyKitToInventory(Player player, Mode selectedMode, Inventory editor) {
