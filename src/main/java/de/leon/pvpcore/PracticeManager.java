@@ -1156,22 +1156,6 @@ public final class PracticeManager implements Listener {
             }
         }
     }
-    public Material forceFieldMaterial() {
-        Material material = Material.matchMaterial(plugin.getConfig().getString("practice.forcefield.material", "GLASS"));
-        return material != null && (material == Material.GLASS || material.name().endsWith("_STAINED_GLASS"))
-                ? material : Material.GLASS;
-    }
-
-    public void setForceFieldMaterial(Material material) {
-        if (material != Material.GLASS && !material.name().endsWith("_STAINED_GLASS")) return;
-        plugin.getConfig().set("practice.forcefield.material", material.name());
-        plugin.saveConfig();
-        for (int index : activeForceFields) {
-            int cx = roomCenterX(index), cz = 128;
-            buildForceField(cx, cz, forceFieldHeights.getOrDefault(index, 40), forceFieldRadii.getOrDefault(index, PRACTICE_ARENA_RADIUS));
-        }
-    }
-
     private void removeForceField(int cx, int cz, int glassHeight, int arenaRadius) {
         if (world == null) return;
         // Remove the previous perimeter (including its accent band) before rebuilding it.
