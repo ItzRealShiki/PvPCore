@@ -161,7 +161,7 @@ public final class ParkourManager implements Listener {
             int z = plugin.getConfig().getInt("parkour.leaderboard.z");
             world.getChunkAt(x >> 4, z >> 4);
             Block oldBlock = world.getBlockAt(x, y, z);
-            Location hologramLocation = oldBlock.getLocation().add(0.5D, 1.15D, 0.5D);
+            Location hologramLocation = oldBlock.getLocation().add(0.5D, 2.15D, 0.5D);
             removeLeaderboardDisplayOnly(world, hologramLocation);
             if (oldBlock.getType() == Material.GOLD_BLOCK) oldBlock.setType(Material.AIR, false);
         }
@@ -182,7 +182,7 @@ public final class ParkourManager implements Listener {
         int blockZ = plugin.getConfig().getInt("parkour.leaderboard.z");
         world.getChunkAt(blockX >> 4, blockZ >> 4);
         Block baseBlock = world.getBlockAt(blockX, blockY, blockZ);
-        Location location = baseBlock.getLocation().add(0.5D, 1.15D, 0.5D);
+        Location location = baseBlock.getLocation().add(0.5D, 2.15D, 0.5D);
 
         // The hologram is only active while its gold-block base still exists.
         if (baseBlock.getType() != Material.GOLD_BLOCK) {
@@ -337,7 +337,7 @@ public final class ParkourManager implements Listener {
                 event.setCancelled(true);
                 return;
             }
-            Location hologramLocation = event.getBlock().getLocation().add(0.5D, 1.15D, 0.5D);
+            Location hologramLocation = event.getBlock().getLocation().add(0.5D, 2.15D, 0.5D);
             removeLeaderboardDisplayOnly(event.getBlock().getWorld(), hologramLocation);
             plugin.getConfig().set("parkour.leaderboard", null);
             plugin.saveConfig();

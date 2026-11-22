@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'de.leon'
-version = '1.0.11' // Parkour gold-block leaderboard and second-platform rollover
+version = '1.0.13' // High Crown spawn schematic and raised parkour leaderboard
 
 repositories {
     mavenCentral()
