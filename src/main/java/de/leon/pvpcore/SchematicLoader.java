@@ -23,6 +23,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.zip.GZIPInputStream;
 
@@ -338,7 +339,7 @@ final class SchematicLoader {
 
             PlayerProfile profile = Bukkit.createPlayerProfile(
                     UUID.nameUUIDFromBytes(encoded.getBytes(StandardCharsets.UTF_8)));
-            profile.getTextures().setSkin(skin);
+            profile.getTextures().setSkin(skin.toURL());
             try {
                 skull.getClass().getMethod("setPlayerProfile", PlayerProfile.class).invoke(skull, profile);
             } catch (ReflectiveOperationException ignored) {
