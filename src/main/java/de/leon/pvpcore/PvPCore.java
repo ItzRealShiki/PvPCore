@@ -30,6 +30,9 @@ public final class PvPCore extends JavaPlugin implements Listener {
     @Override public void onEnable() {
         saveDefaultConfig();
         worlds = new WorldManager(this);
+        // Run the one-time, whitelist-only world reset before PracticeManager caches
+        // a reference to prac_void. No normal server world is included in this cleanup.
+        worlds.initializeWorldsOnce();
         for (World world : Bukkit.getWorlds()) worlds.applyPermanentDay(world);
         menus = new Menus(this);
         bots = new BotManager(this);
