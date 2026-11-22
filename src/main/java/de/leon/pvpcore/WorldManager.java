@@ -314,15 +314,16 @@ public final class WorldManager {
 
         // The holding world is only disposable when it is not the configured server spawn.
         String configuredSpawn = plugin.getConfig().getString("spawn.world", "");
-        if (!"pvpcore_regeneration_holding".equalsIgnoreCase(configuredSpawn)) {
-            candidates.add("pvpcore_regeneration_holding");
-        } else {
-            plugin.getLogger().info("Preserving pvpcore_regeneration_holding because it is configured as the server spawn.");
-        }
+        candidates.add("pvpcore_regeneration_holding");
 
         Path worldContainer = Bukkit.getWorldContainer().toPath().toAbsolutePath().normalize();
         boolean complete = true;
         for (String name : candidates) {
+            if (!configuredSpawn.isBlank() && name.equalsIgnoreCase(configuredSpawn)) {
+                plugin.getLogger().warning("Preserving " + name
+                        + " because it is configured as the server spawn world.");
+                continue;
+            }
             Path folder = worldContainer.resolve(name).normalize();
             if (!worldContainer.equals(folder.getParent())) {
                 plugin.getLogger().warning("Skipping unsafe PvPCore world path: " + name);
