@@ -740,7 +740,7 @@ public final class PracticeManager implements Listener {
     private void removeForceField(int cx, int cz, int arenaRadius) {
         if (world == null) return;
         int roomIndex = Math.floorDiv(cx - 128, ROOM_SPACING);
-        int floorY = arenaFloorCache.getOrDefault(roomIndex, Math.max(world.getMinHeight(), world.getHighestBlockYAt(cx, cz) - 1));
+        int floorY = arenaFloorY(roomIndex);
         int topY = Math.min(world.getMaxHeight() - 1, floorY + ARENA_FORCE_FIELD_HEIGHT);
         int steps = Math.max(240, arenaRadius * 12);
         for (int i = 0; i < steps; i++) {
