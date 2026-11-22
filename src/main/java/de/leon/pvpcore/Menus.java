@@ -168,7 +168,30 @@ public final class Menus implements Listener {
                 "&7Allow duel players to break arena blocks.", "&7Default: OFF", "&eClick to toggle"));
         inv.setItem(20, item(Material.COMPARATOR, "&dPlugin Settings", "&7Reload PvPCore configuration."));
         inv.setItem(22, item(Material.BARRIER, "&cClose", "&7Close this menu."));
+        inv.setItem(24, item(Material.IRON_PICKAXE, "&ePractice Block Breaking",
+                "&7Configure block breaking separately", "&7for Anchor, Stun Slam and Sword."));
         p.openInventory(inv);
+    }
+
+    public void openPracticeBlockSettings(Player p) {
+        Inventory inv = create("practice-block-breaking", "&8ᴘʀᴀᴄᴛɪᴄᴇ · ʙʟᴏᴄᴋ ʙʀᴇᴀᴋɪɴɢ", 27);
+        boolean anchor = plugin.practice().isPracticeBlockBreakingAllowed(PracticeManager.Mode.CRYSTAL_ANCHOR);
+        boolean stun = plugin.practice().isPracticeBlockBreakingAllowed(PracticeManager.Mode.STUN_SLAM);
+        boolean sword = plugin.practice().isPracticeBlockBreakingAllowed(PracticeManager.Mode.SWORD);
+        inv.setItem(10, practiceBreakItem(Material.RESPAWN_ANCHOR, "Crystal Anchor", anchor,
+                "Breaking blocks in Anchor practice."));
+        inv.setItem(13, practiceBreakItem(Material.MACE, "Stun Slam", stun,
+                "Breaking blocks in Stun Slam practice."));
+        inv.setItem(16, practiceBreakItem(Material.DIAMOND_SWORD, "Sword", sword,
+                "Breaking blocks in Sword practice."));
+        inv.setItem(22, item(Material.ARROW, "&cBack", "&7Return to administration."));
+        p.openInventory(inv);
+    }
+
+    private ItemStack practiceBreakItem(Material material, String label, boolean allowed, String description) {
+        return item(material, (allowed ? "&a" : "&c") + label + ": " + (allowed ? "ALLOWED" : "DENIED"),
+                "&7" + description, "&7Current setting: " + (allowed ? "&aAllowed" : "&cDenied"),
+                "&eClick to toggle");
     }
 
     public void openGamemode(Player p) {
@@ -259,6 +282,7 @@ public final class Menus implements Listener {
                     }
                     case 20 -> { plugin.reloadConfig(); plugin.message(p, "&aConfiguration reloaded."); p.closeInventory(); }
                     case 22 -> p.closeInventory();
+                    case 24 -> openPracticeBlockSettings(p);
                     default -> { }
                 }
             }
@@ -293,6 +317,19 @@ public final class Menus implements Listener {
                 if (slot == 10) openAdminKitEditor(p, PracticeManager.Mode.SWORD);
                 else if (slot == 16) openAdminKitEditor(p, PracticeManager.Mode.STUN_SLAM);
                 else if (slot == 22) openAdmin(p);
+            }
+            case "practice-block-breaking" -> {
+                if (!plugin.hasCore(p, "Admin.Core")) return;
+                PracticeManager.Mode selected = switch (slot) {
+                    case 10 -> PracticeManager.Mode.CRYSTAL_ANCHOR;
+                    case 13 -> PracticeManager.Mode.STUN_SLAM;
+                    case 16 -> PracticeManager.Mode.SWORD;
+                    default -> null;
+                };
+                if (selected != null) {
+                    plugin.practice().togglePracticeBlockBreaking(selected);
+                    openPracticeBlockSettings(p);
+                } else if (slot == 22) openAdmin(p);
             }
             case "gm" -> {
                 if (!plugin.hasCore(p, "Admin.Core")) return;

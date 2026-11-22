@@ -1144,9 +1144,25 @@ public final class PracticeManager implements Listener {
 
     @EventHandler public void onBreak(BlockBreakEvent event) {
         if (!event.getBlock().getWorld().equals(world)) return;
-        boolean duelBreaking = isFighting(event.getPlayer())
-                && plugin.getConfig().getBoolean("duels.block-breaking.enabled", false);
-        if (!duelBreaking) event.setCancelled(true);
+        Player player = event.getPlayer();
+        if (isFighting(player)) {
+            if (!plugin.getConfig().getBoolean("duels.block-breaking.enabled", false)) {
+                event.setCancelled(true);
+            }
+            return;
+        }
+        if (!isPracticeBlockBreakingAllowed(mode(player))) event.setCancelled(true);
+    }
+
+    public boolean isPracticeBlockBreakingAllowed(Mode mode) {
+        boolean defaultAllowed = mode == Mode.CRYSTAL_ANCHOR;
+        return plugin.getConfig().getBoolean("practice.block-breaking." + mode.name(), defaultAllowed);
+    }
+
+    public void togglePracticeBlockBreaking(Mode mode) {
+        String path = "practice.block-breaking." + mode.name();
+        plugin.getConfig().set(path, !isPracticeBlockBreakingAllowed(mode));
+        plugin.saveConfig();
     }
 
     @EventHandler public void onPlace(BlockPlaceEvent event) {

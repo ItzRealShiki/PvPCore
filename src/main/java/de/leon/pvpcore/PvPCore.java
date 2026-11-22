@@ -109,6 +109,7 @@ public final class PvPCore extends JavaPlugin implements Listener {
     private void register(String name, CommandExecutor executor) {
         PluginCommand command = Objects.requireNonNull(getCommand(name), "Missing command " + name);
         command.setExecutor(executor);
+        if (executor instanceof TabCompleter tabCompleter) command.setTabCompleter(tabCompleter);
     }
     public Menus menus() { return menus; }
     public BotManager bots() { return bots; }

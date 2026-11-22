@@ -1,16 +1,26 @@
 package de.leon.pvpcore;
 
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.command.*;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataType;
 
-public final class AdminCommand implements CommandExecutor {
-    private static final String BARRIER_VIEWER_NAME = "§bBarrier Visibility";
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+
+public final class AdminCommand implements CommandExecutor, TabCompleter {
     private final PvPCore plugin;
+    private final NamespacedKey barrierViewerKey;
 
-    public AdminCommand(PvPCore plugin) { this.plugin = plugin; }
+    public AdminCommand(PvPCore plugin) {
+        this.plugin = plugin;
+        this.barrierViewerKey = new NamespacedKey(plugin, "barrier_viewer");
+    }
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
@@ -19,47 +29,98 @@ public final class AdminCommand implements CommandExecutor {
             plugin.message(player, "&cYou do not have permission.");
             return true;
         }
-        if (args.length > 0 && args[0].equalsIgnoreCase("barrier")) {
-            if (isViewerItem(player.getInventory().getItemInOffHand())) {
-                player.getInventory().setItemInOffHand(null);
-                plugin.message(player, "&eBarrier visibility item removed.");
-                return true;
-            }
-            int viewerSlot = findViewerItem(player);
-            if (viewerSlot >= 0) {
-                player.getInventory().setItem(viewerSlot, null);
-                plugin.message(player, "&eBarrier visibility item removed.");
-                return true;
-            }
 
-            int emptySlot = player.getInventory().firstEmpty();
-            if (emptySlot < 0) {
-                plugin.message(player, "&cYour inventory is full. Make one slot free first.");
-                return true;
-            }
-            ItemStack viewer = new ItemStack(Material.BARRIER);
-            ItemMeta meta = viewer.getItemMeta();
-            meta.setDisplayName(BARRIER_VIEWER_NAME);
-            viewer.setItemMeta(meta);
-            player.getInventory().setItem(emptySlot, viewer);
-            plugin.message(player, "&aBarrier viewer added. Hold it in your main hand or offhand to see barrier blocks.");
+        if (args.length > 0 && args[0].equalsIgnoreCase("barrier")) {
+            toggleBarrierViewer(player);
             return true;
         }
+        if (args.length > 0 && (args[0].equalsIgnoreCase("practiceblocks")
+                || args[0].equalsIgnoreCase("blocks"))) {
+            plugin.menus().openPracticeBlockSettings(player);
+            return true;
+        }
+
         plugin.menus().openAdmin(player);
         return true;
     }
 
-    private boolean isViewerItem(ItemStack item) {
-        return item != null && item.getType() == Material.BARRIER && item.hasItemMeta()
-                && BARRIER_VIEWER_NAME.equals(item.getItemMeta().getDisplayName());
+    private void toggleBarrierViewer(Player player) {
+        PlayerInventory inventory = player.getInventory();
+        ItemStack mainHand = inventory.getItemInMainHand();
+
+        // The client only renders invisible barrier blocks while the Barrier item
+        // is actively held. Keeping it in a random inventory slot is not enough.
+        if (isViewer(mainHand)) {
+            inventory.setItemInMainHand(null);
+            plugin.message(player, "&eBarrier visibility disabled.");
+            return;
+        }
+
+        ItemStack viewer = inventory.getItemInOffHand();
+        boolean fromOffhand = isViewer(viewer);
+        int fromSlot = fromOffhand ? -1 : findViewerSlot(inventory);
+
+        if (fromOffhand) {
+            inventory.setItemInOffHand(null);
+        } else if (fromSlot >= 0) {
+            viewer = inventory.getItem(fromSlot).clone();
+            inventory.setItem(fromSlot, null);
+        } else {
+            viewer = createViewer();
+        }
+
+        if (mainHand != null && !mainHand.getType().isAir()) {
+            int emptySlot = inventory.firstEmpty();
+            if (emptySlot >= 0) {
+                inventory.setItem(emptySlot, mainHand.clone());
+            } else if (inventory.getItemInOffHand().getType().isAir()) {
+                inventory.setItemInOffHand(mainHand.clone());
+            } else {
+                // Put the viewer back where we found it if there is no safe place
+                // for the currently held item.
+                if (fromOffhand) inventory.setItemInOffHand(viewer);
+                else if (fromSlot >= 0) inventory.setItem(fromSlot, viewer);
+                plugin.message(player, "&cMake one inventory slot free before enabling Barrier visibility.");
+                return;
+            }
+        }
+
+        inventory.setItemInMainHand(viewer);
+        player.updateInventory();
+        plugin.message(player, "&aBarrier viewer enabled. Keep the Barrier in your main hand to see Barrier blocks. Use /admin barrier again to disable it.");
     }
 
-    private int findViewerItem(Player player) {
-        ItemStack[] contents = player.getInventory().getStorageContents();
+    private ItemStack createViewer() {
+        ItemStack item = new ItemStack(Material.BARRIER);
+        ItemMeta meta = item.getItemMeta();
+        meta.setDisplayName("§bBarrier Visibility");
+        meta.getPersistentDataContainer().set(barrierViewerKey, PersistentDataType.BYTE, (byte) 1);
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    private boolean isViewer(ItemStack item) {
+        return item != null && item.getType() == Material.BARRIER && item.hasItemMeta()
+                && item.getItemMeta().getPersistentDataContainer().has(barrierViewerKey, PersistentDataType.BYTE);
+    }
+
+    private int findViewerSlot(PlayerInventory inventory) {
+        ItemStack[] contents = inventory.getStorageContents();
         for (int slot = 0; slot < contents.length; slot++) {
-            ItemStack item = contents[slot];
-            if (isViewerItem(item)) return slot;
+            if (isViewer(contents[slot])) return slot;
         }
         return -1;
+    }
+
+    @Override
+    public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        if (!(sender instanceof Player player) || !plugin.hasCore(player, "Admin.Core")) return List.of();
+        if (args.length != 1) return List.of();
+        String input = args[0].toLowerCase(Locale.ROOT);
+        List<String> suggestions = new ArrayList<>();
+        for (String option : List.of("barrier", "practiceblocks")) {
+            if (option.startsWith(input)) suggestions.add(option);
+        }
+        return suggestions;
     }
 }
