@@ -26,12 +26,9 @@ import org.bukkit.event.player.PlayerBucketEmptyEvent;
 import org.bukkit.event.player.PlayerBucketFillEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.event.player.PlayerInteractEvent;
-import org.bukkit.event.block.Action;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
-import org.bukkit.inventory.EquipmentSlot;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -121,12 +118,12 @@ public final class ParkourManager implements Listener {
     }
 
     public void giveLeaderboardTool(Player player) {
-        ItemStack item = new ItemStack(Material.PAPER);
+        ItemStack item = new ItemStack(Material.GOLD_BLOCK);
         ItemMeta meta = item.getItemMeta();
         meta.setDisplayName(plugin.color("&6Parkour Leaderboard"));
         meta.setLore(List.of(
-                plugin.color("&7Right-click a block in Spawn"),
-                plugin.color("&7to place or move the hologram."),
+                plugin.color("&7Place this gold block in Spawn."),
+                plugin.color("&7The hologram appears above it."),
                 plugin.color("&7Updates automatically with highscores."),
                 plugin.color("&8Uses Text Display - no Armor Stands.")
         ));
@@ -140,50 +137,13 @@ public final class ParkourManager implements Listener {
     }
 
     private boolean isLeaderboardTool(ItemStack item) {
-        return item != null && item.getType() == Material.PAPER && item.hasItemMeta()
+        return item != null && item.getType() == Material.GOLD_BLOCK && item.hasItemMeta()
                 && item.getItemMeta().getPersistentDataContainer()
                 .has(leaderboardToolKey, PersistentDataType.BYTE);
     }
 
-    @EventHandler(ignoreCancelled = true)
-    public void onLeaderboardToolUse(PlayerInteractEvent event) {
-        if (event.getAction() != Action.RIGHT_CLICK_BLOCK
-                || event.getHand() != EquipmentSlot.HAND
-                || !isLeaderboardTool(event.getItem())) return;
-
-        Player player = event.getPlayer();
-        event.setCancelled(true);
-        if (!plugin.hasCore(player, "Admin.Core")) {
-            plugin.message(player, "&cOnly admins can place the leaderboard.");
-            return;
-        }
-        if (!isSpawnWorld(player.getWorld()) || event.getClickedBlock() == null) {
-            plugin.message(player, "&cPlace the leaderboard in the Spawn world.");
-            return;
-        }
-
-        removeLeaderboardAtConfiguredLocation();
-        Location location = event.getClickedBlock().getLocation().add(0.5D, 1.15D, 0.5D);
-        plugin.getConfig().set("parkour.leaderboard.world", SPAWN_WORLD);
-        plugin.getConfig().set("parkour.leaderboard.x", location.getX());
-        plugin.getConfig().set("parkour.leaderboard.y", location.getY());
-        plugin.getConfig().set("parkour.leaderboard.z", location.getZ());
-        plugin.saveConfig();
-        leaderboardDisplay = null;
-        refreshLeaderboard();
-        plugin.message(player, "&aParkour leaderboard placed. It will update automatically.");
-    }
-
-    private void removeLeaderboardAtConfiguredLocation() {
-        String worldName = plugin.getConfig().getString("parkour.leaderboard.world", "");
-        World world = worldName.isBlank() ? null : Bukkit.getWorld(worldName);
-        if (world == null || !plugin.getConfig().contains("parkour.leaderboard.x")) return;
-
-        double x = plugin.getConfig().getDouble("parkour.leaderboard.x");
-        double y = plugin.getConfig().getDouble("parkour.leaderboard.y");
-        double z = plugin.getConfig().getDouble("parkour.leaderboard.z");
-        world.getChunkAt(((int) Math.floor(x)) >> 4, ((int) Math.floor(z)) >> 4);
-        Location location = new Location(world, x, y, z);
+    private void removeLeaderboardDisplayOnly(World world, Location location) {
+        if (world == null || location == null) return;
         for (Entity entity : world.getNearbyEntities(location, 2.0D, 4.0D, 2.0D)) {
             if (entity instanceof TextDisplay display && display.getScoreboardTags().contains(LEADERBOARD_TAG)) {
                 display.remove();
@@ -192,17 +152,43 @@ public final class ParkourManager implements Listener {
         leaderboardDisplay = null;
     }
 
+    private void removeLeaderboardAtConfiguredLocation() {
+        String worldName = plugin.getConfig().getString("parkour.leaderboard.world", "");
+        World world = worldName.isBlank() ? null : Bukkit.getWorld(worldName);
+        if (world != null && plugin.getConfig().contains("parkour.leaderboard.x")) {
+            int x = plugin.getConfig().getInt("parkour.leaderboard.x");
+            int y = plugin.getConfig().getInt("parkour.leaderboard.y");
+            int z = plugin.getConfig().getInt("parkour.leaderboard.z");
+            world.getChunkAt(x >> 4, z >> 4);
+            Block oldBlock = world.getBlockAt(x, y, z);
+            Location hologramLocation = oldBlock.getLocation().add(0.5D, 1.15D, 0.5D);
+            removeLeaderboardDisplayOnly(world, hologramLocation);
+            if (oldBlock.getType() == Material.GOLD_BLOCK) oldBlock.setType(Material.AIR, false);
+        }
+        plugin.getConfig().set("parkour.leaderboard", null);
+        plugin.saveConfig();
+        leaderboardDisplay = null;
+    }
+
     public void refreshLeaderboard() {
         String worldName = plugin.getConfig().getString("parkour.leaderboard.world", "");
-        if (worldName.isBlank() || !plugin.getConfig().contains("parkour.leaderboard.x")) return;
+        if (!SPAWN_WORLD.equalsIgnoreCase(worldName)
+                || !plugin.getConfig().contains("parkour.leaderboard.x")) return;
         World world = Bukkit.getWorld(worldName);
         if (world == null) return;
 
-        double x = plugin.getConfig().getDouble("parkour.leaderboard.x");
-        double y = plugin.getConfig().getDouble("parkour.leaderboard.y");
-        double z = plugin.getConfig().getDouble("parkour.leaderboard.z");
-        world.getChunkAt(((int) Math.floor(x)) >> 4, ((int) Math.floor(z)) >> 4);
-        Location location = new Location(world, x, y, z);
+        int blockX = plugin.getConfig().getInt("parkour.leaderboard.x");
+        int blockY = plugin.getConfig().getInt("parkour.leaderboard.y");
+        int blockZ = plugin.getConfig().getInt("parkour.leaderboard.z");
+        world.getChunkAt(blockX >> 4, blockZ >> 4);
+        Block baseBlock = world.getBlockAt(blockX, blockY, blockZ);
+        Location location = baseBlock.getLocation().add(0.5D, 1.15D, 0.5D);
+
+        // The hologram is only active while its gold-block base still exists.
+        if (baseBlock.getType() != Material.GOLD_BLOCK) {
+            removeLeaderboardDisplayOnly(world, location);
+            return;
+        }
 
         if (leaderboardDisplay == null || !leaderboardDisplay.isValid()) {
             for (Entity entity : world.getNearbyEntities(location, 2.0D, 4.0D, 2.0D)) {
@@ -227,6 +213,7 @@ public final class ParkourManager implements Listener {
                 display.setBackgroundColor(org.bukkit.Color.fromARGB(0, 0, 0, 0));
             });
         }
+        leaderboardDisplay.teleport(location);
         leaderboardDisplay.text(buildLeaderboardText());
     }
 
@@ -291,11 +278,37 @@ public final class ParkourManager implements Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onSpawnBlockPlace(BlockPlaceEvent event) {
+        Player player = event.getPlayer();
+
+        // The special gold-block item is the leaderboard placement tool.
+        if (isLeaderboardTool(event.getItemInHand())) {
+            if (!plugin.hasCore(player, "Admin.Core")) {
+                event.setCancelled(true);
+                plugin.message(player, "&cOnly admins can place the leaderboard.");
+                return;
+            }
+            if (!isSpawnWorld(event.getBlockPlaced().getWorld())) {
+                event.setCancelled(true);
+                plugin.message(player, "&cThe leaderboard must be placed in Spawn.");
+                return;
+            }
+
+            removeLeaderboardAtConfiguredLocation();
+            Block placed = event.getBlockPlaced();
+            plugin.getConfig().set("parkour.leaderboard.world", SPAWN_WORLD);
+            plugin.getConfig().set("parkour.leaderboard.x", placed.getX());
+            plugin.getConfig().set("parkour.leaderboard.y", placed.getY());
+            plugin.getConfig().set("parkour.leaderboard.z", placed.getZ());
+            plugin.saveConfig();
+            leaderboardDisplay = null;
+            Bukkit.getScheduler().runTask(plugin, this::refreshLeaderboard);
+            plugin.message(player, "&aParkour leaderboard placed above the gold block.");
+            return;
+        }
+
         if (!isSpawnWorld(event.getBlockPlaced().getWorld())) return;
 
-        // Accept the module item by its PDC, and also accept an admin-placed gold
-        // pressure plate directly. The placed block type is more reliable than
-        // BlockPlaceEvent#getItemInHand across client hands and server builds.
+        // Accept an admin-placed weighted gold pressure plate for the parkour entrance.
         boolean weightedPlate = event.getBlockPlaced().getType() == Material.LIGHT_WEIGHTED_PRESSURE_PLATE;
         if (weightedPlate) {
             Player player = event.getPlayer();
@@ -320,6 +333,18 @@ public final class ParkourManager implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void onSpawnBlockBreak(BlockBreakEvent event) {
         if (!isSpawnWorld(event.getBlock().getWorld())) return;
+        if (isConfiguredLeaderboardBlock(event.getBlock().getLocation())) {
+            if (!plugin.hasCore(event.getPlayer(), "Admin.Core")) {
+                event.setCancelled(true);
+                return;
+            }
+            Location hologramLocation = event.getBlock().getLocation().add(0.5D, 1.15D, 0.5D);
+            removeLeaderboardDisplayOnly(event.getBlock().getWorld(), hologramLocation);
+            plugin.getConfig().set("parkour.leaderboard", null);
+            plugin.saveConfig();
+            plugin.message(event.getPlayer(), "&eParkour leaderboard removed.");
+            return;
+        }
         if (isConfiguredPlate(event.getBlock().getLocation())
                 && plugin.hasCore(event.getPlayer(), "Admin.Core")) {
             plugin.getConfig().set("spawn.parkour-plate", null);
@@ -365,6 +390,13 @@ public final class ParkourManager implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void onSpawnBlockBurn(BlockBurnEvent event) {
         if (isSpawnWorld(event.getBlock().getWorld())) event.setCancelled(true);
+    }
+
+    private boolean isConfiguredLeaderboardBlock(Location location) {
+        return SPAWN_WORLD.equalsIgnoreCase(plugin.getConfig().getString("parkour.leaderboard.world", ""))
+                && location.getBlockX() == plugin.getConfig().getInt("parkour.leaderboard.x", Integer.MIN_VALUE)
+                && location.getBlockY() == plugin.getConfig().getInt("parkour.leaderboard.y", Integer.MIN_VALUE)
+                && location.getBlockZ() == plugin.getConfig().getInt("parkour.leaderboard.z", Integer.MIN_VALUE);
     }
 
     private boolean isConfiguredPlate(Location location) {
