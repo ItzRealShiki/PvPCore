@@ -20,6 +20,11 @@ public final class AdminCommand implements CommandExecutor {
             return true;
         }
         if (args.length > 0 && args[0].equalsIgnoreCase("barrier")) {
+            if (isViewerItem(player.getInventory().getItemInOffHand())) {
+                player.getInventory().setItemInOffHand(null);
+                plugin.message(player, "&eBarrier visibility item removed.");
+                return true;
+            }
             int viewerSlot = findViewerItem(player);
             if (viewerSlot >= 0) {
                 player.getInventory().setItem(viewerSlot, null);
@@ -44,12 +49,16 @@ public final class AdminCommand implements CommandExecutor {
         return true;
     }
 
+    private boolean isViewerItem(ItemStack item) {
+        return item != null && item.getType() == Material.BARRIER && item.hasItemMeta()
+                && BARRIER_VIEWER_NAME.equals(item.getItemMeta().getDisplayName());
+    }
+
     private int findViewerItem(Player player) {
         ItemStack[] contents = player.getInventory().getStorageContents();
         for (int slot = 0; slot < contents.length; slot++) {
             ItemStack item = contents[slot];
-            if (item == null || item.getType() != Material.BARRIER || !item.hasItemMeta()) continue;
-            if (BARRIER_VIEWER_NAME.equals(item.getItemMeta().getDisplayName())) return slot;
+            if (isViewerItem(item)) return slot;
         }
         return -1;
     }

@@ -734,11 +734,14 @@ public final class PracticeManager implements Listener {
         Particle.DustOptions energy = new Particle.DustOptions(Color.fromRGB(65, 205, 255), 1.15f);
         double angle = Math.atan2(relativeZ, relativeX);
         double arcHalfWidth = 8.0 / Math.max(1.0, arenaRadius);
+        int particleBottom = Math.max(floorY + 1, player.getLocation().getBlockY() - 2);
+        int particleTop = Math.min(floorY + ARENA_FORCE_FIELD_HEIGHT,
+                player.getLocation().getBlockY() + 3);
         for (int step = -8; step <= 8; step++) {
             double arcAngle = angle + arcHalfWidth * step / 8.0;
             int x = cx + (int) Math.round(Math.cos(arcAngle) * arenaRadius);
             int z = cz + (int) Math.round(Math.sin(arcAngle) * arenaRadius);
-            for (int y = floorY + 1; y <= floorY + ARENA_FORCE_FIELD_HEIGHT; y++) {
+            for (int y = particleBottom; y <= particleTop; y++) {
                 world.spawnParticle(Particle.DUST, List.of(player), player,
                         x + 0.5, y + 0.5, z + 0.5, 1, 0, 0, 0, 0, energy);
             }
