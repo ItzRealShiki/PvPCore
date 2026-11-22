@@ -417,29 +417,29 @@ public final class WorldManager {
             java.util.regex.Matcher matcher = pattern.matcher(current);
             String updated;
             if (matcher.find()) {
-                updated = matcher.replaceFirst("level-name=Spawn_Void");
+                updated = matcher.replaceFirst("level-name=Spawn");
             } else {
                 updated = current + (current.endsWith(System.lineSeparator()) ? "" : System.lineSeparator())
-                        + "level-name=Spawn_Void" + System.lineSeparator();
+                        + "level-name=Spawn" + System.lineSeparator();
             }
             if (!updated.equals(current)) {
                 Files.writeString(propertiesFile, updated);
-                plugin.getLogger().info("Set server.properties level-name=Spawn_Void. The default world changes after the next full restart.");
+                plugin.getLogger().info("Set server.properties level-name=Spawn. The default world changes after the next full restart.");
             } else {
-                plugin.getLogger().info("server.properties already uses Spawn_Void as the default world.");
+                plugin.getLogger().info("server.properties already uses Spawn as the default world.");
             }
         } catch (IOException exception) {
             plugin.getLogger().warning("Could not update server.properties: " + exception.getMessage());
         }
     }
 
-    private static final String SPAWN_WORLD_NAME = "Spawn_Void";
+    private static final String SPAWN_WORLD_NAME = "Spawn";
 
     private static final class VoidSpawnGenerator extends ChunkGenerator {
         @Override
         public void generateNoise(org.bukkit.generator.WorldInfo worldInfo, Random random,
                                   int chunkX, int chunkZ, ChunkData chunkData) {
-            // Deliberately empty: the Spawn_Void world is a true void world.
+            // Deliberately empty: the Spawn world is a true void world.
         }
         @Override public boolean shouldGenerateNoise() { return false; }
         @Override public boolean shouldGenerateSurface() { return false; }
@@ -449,11 +449,77 @@ public final class WorldManager {
         @Override public boolean shouldGenerateStructures() { return false; }
     }
 
+    private final Set<UUID> spawnMigrationPlayers = new LinkedHashSet<>();
+
+    /**
+     * Preserve the pre-plugin default world as a backup, then create a fresh
+     * Spawn world with the void generator. The server loads level-name before
+     * plugin generators can be attached, so the old folder must be moved aside.
+     */
+    private boolean migrateSpawnWorldToVoid() {
+        if (plugin.getConfig().getBoolean("spawn.void-world-migrated", false)) return true;
+        World oldSpawn = Bukkit.getWorld(SPAWN_WORLD_NAME);
+        World holding = Bukkit.getWorld("pvpcore_void_migration_hold");
+        if (holding == null) {
+            holding = new WorldCreator("pvpcore_void_migration_hold")
+                    .environment(World.Environment.NORMAL)
+                    .generator(new VoidSpawnGenerator())
+                    .generateStructures(false).createWorld();
+        }
+        if (holding == null) {
+            plugin.getLogger().severe("Could not create temporary holding world; Spawn migration was cancelled.");
+            return false;
+        }
+        if (oldSpawn != null) {
+            for (Player player : new ArrayList<>(oldSpawn.getPlayers())) {
+                spawnMigrationPlayers.add(player.getUniqueId());
+                player.teleport(holding.getSpawnLocation());
+            }
+            if (!Bukkit.unloadWorld(oldSpawn, false)) {
+                plugin.getLogger().severe("Could not unload the old Spawn world; keeping it unchanged.");
+                for (UUID id : spawnMigrationPlayers) {
+                    Player player = Bukkit.getPlayer(id);
+                    if (player != null) player.teleport(oldSpawn.getSpawnLocation());
+                }
+                spawnMigrationPlayers.clear();
+                return false;
+            }
+        }
+        Path worldFolder = Bukkit.getWorldContainer().toPath().resolve(SPAWN_WORLD_NAME);
+        if (Files.exists(worldFolder)) {
+            Path backup = worldFolder.resolveSibling("Spawn_legacy_backup");
+            int suffix = 1;
+            while (Files.exists(backup)) backup = worldFolder.resolveSibling("Spawn_legacy_backup_" + suffix++);
+            try {
+                Files.move(worldFolder, backup);
+                plugin.getLogger().warning("Preserved the previous Spawn world at " + backup.getFileName());
+            } catch (IOException error) {
+                plugin.getLogger().severe("Could not back up the previous Spawn world: " + error.getMessage());
+                return false;
+            }
+        }
+        World freshSpawn = new WorldCreator(SPAWN_WORLD_NAME)
+                .environment(World.Environment.NORMAL)
+                .generator(new VoidSpawnGenerator())
+                .generateStructures(false).createWorld();
+        if (freshSpawn == null) {
+            plugin.getLogger().severe("Could not create the new void Spawn world.");
+            return false;
+        }
+        plugin.getConfig().set("spawn.void-world-migrated", true);
+        plugin.getConfig().set("spawn.high-crown-layout-version", 0);
+        plugin.getConfig().set("spawn.void-hub-installed", false);
+        plugin.saveConfig();
+        plugin.getLogger().info("Created a fresh void Spawn world; the previous world is safely backed up.");
+        return true;
+    }
+
     /**
      * Creates/loads the dedicated void hub and installs the user's High Crown schematic.
      * The local center platform (95,101,131) maps to the requested spawn at (-2.5,142,48).
      */
     public void installHighCrownSpawnOnce() {
+        if (!migrateSpawnWorldToVoid()) return;
         World spawnWorld = Bukkit.getWorld(SPAWN_WORLD_NAME);
         if (spawnWorld == null) {
             spawnWorld = new WorldCreator(SPAWN_WORLD_NAME)
@@ -464,7 +530,7 @@ public final class WorldManager {
                     .createWorld();
         }
         if (spawnWorld == null) {
-            plugin.getLogger().severe("Could not create the void Spawn_Void world.");
+            plugin.getLogger().severe("Could not create the void Spawn world.");
             return;
         }
 
@@ -509,7 +575,16 @@ public final class WorldManager {
         spawnWorld.setSpawnLocation(-3, 142, 48);
         plugin.saveConfig();
 
-        plugin.getLogger().info("High Crown void hub ready in world 'Spawn_Void' at -2.5, 142, 48 facing north.");
+        for (UUID id : new ArrayList<>(spawnMigrationPlayers)) {
+            Player player = Bukkit.getPlayer(id);
+            if (player != null) teleportToSpawn(player);
+        }
+        spawnMigrationPlayers.clear();
+        World holdingAfterMigration = Bukkit.getWorld("pvpcore_void_migration_hold");
+        if (holdingAfterMigration != null && holdingAfterMigration.getPlayers().isEmpty()) {
+            Bukkit.unloadWorld(holdingAfterMigration, false);
+        }
+        plugin.getLogger().info("High Crown void hub ready in world 'Spawn' at -2.5, 142, 48 facing north.");
     }
 
     public void setSpawn(Player player) {
