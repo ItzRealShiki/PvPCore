@@ -663,36 +663,6 @@ public final class PracticeManager implements Listener {
         plugin.getConfig().set(path, true); plugin.saveConfig();
     }
 
-    public String arenaTheme(Player player) {
-        return plugin.getConfig().getString("practice.players." + player.getUniqueId() + ".box-theme", "PLAINS").toUpperCase(Locale.ROOT);
-    }
-
-    private String arenaTheme(int roomIndex) {
-        var players = plugin.getConfig().getConfigurationSection("practice.players");
-        if (players != null) {
-            for (String uuid : players.getKeys(false)) {
-                if (plugin.getConfig().getInt("practice.players." + uuid + ".room", -1) == roomIndex) {
-                    return plugin.getConfig().getString("practice.players." + uuid + ".box-theme", "PLAINS").toUpperCase(Locale.ROOT);
-                }
-            }
-        }
-        return "PLAINS";
-    }
-
-    public void setArenaTheme(Player player, String theme) {
-        String normalized = theme.toUpperCase(Locale.ROOT);
-        if (!List.of("DESERT", "PLAINS", "END", "NETHER", "BADLANDS", "PALE_GARDEN",
-                "CHERRY_BLOSSOM", "WARPED", "CRIMSON", "FLOWER_PLAINS").contains(normalized)) return;
-        String base = "practice.players." + player.getUniqueId();
-        plugin.getConfig().set(base + ".box-theme", normalized);
-        plugin.saveConfig();
-        if (world == null) world = Bukkit.getWorld(PRACTICE_WORLD);
-        int room = plugin.getConfig().getInt(base + ".room", -1);
-        if (world != null && room >= 0) buildArenaPlatform(roomCenterX(room), 128,
-                isFighting(player) ? DUEL_ARENA_RADIUS : PRACTICE_ARENA_RADIUS);
-        plugin.message(player, "&aYour box design is now &e" + normalized.replace('_', ' ') + "&a.");
-    }
-
     public String arenaMap(Player player) {
         return normalizeArenaMap(plugin.getConfig().getString(
                 "practice.players." + player.getUniqueId() + ".arena-map", "COLOSSEUM"));
@@ -726,10 +696,22 @@ public final class PracticeManager implements Listener {
 
     private Material arenaWallMaterial(int roomIndex) {
         return switch (arenaMap(roomIndex)) {
+            case "COLOSSEUM" -> Material.SMOOTH_SANDSTONE;
             case "RUINS" -> Material.MOSSY_STONE_BRICKS;
             case "FOREST" -> Material.MOSSY_COBBLESTONE;
             case "NETHER_FORTRESS" -> Material.POLISHED_BLACKSTONE_BRICKS;
             case "END_CITADEL" -> Material.PURPUR_BLOCK;
+            default -> Material.STONE_BRICKS;
+        };
+    }
+
+    private Material arenaAccentMaterial(int roomIndex) {
+        return switch (arenaMap(roomIndex)) {
+            case "COLOSSEUM" -> Material.CHISELED_SANDSTONE;
+            case "RUINS" -> Material.CRACKED_STONE_BRICKS;
+            case "FOREST" -> Material.MOSS_BLOCK;
+            case "NETHER_FORTRESS" -> Material.NETHER_BRICKS;
+            case "END_CITADEL" -> Material.PURPUR_PILLAR;
             default -> Material.STONE_BRICKS;
         };
     }
@@ -844,17 +826,27 @@ public final class PracticeManager implements Listener {
     }
 
     private Material[] arenaPalette(int roomIndex) {
-        return switch (arenaTheme(roomIndex)) {
-            case "DESERT" -> new Material[]{Material.SAND, Material.SANDSTONE, Material.SMOOTH_SANDSTONE, Material.CUT_SANDSTONE, Material.DEAD_BUSH};
-            case "END" -> new Material[]{Material.END_STONE, Material.END_STONE, Material.END_STONE, Material.END_STONE, Material.CHORUS_FLOWER};
-            case "NETHER" -> new Material[]{Material.NETHERRACK, Material.NETHERRACK, Material.BASALT, Material.BLACKSTONE, Material.FIRE};
-            case "BADLANDS" -> new Material[]{Material.RED_SAND, Material.RED_SANDSTONE, Material.TERRACOTTA, Material.ORANGE_TERRACOTTA, Material.DEAD_BUSH};
-            case "PALE_GARDEN" -> new Material[]{Material.PALE_MOSS_BLOCK, Material.PALE_MOSS_BLOCK, Material.PALE_OAK_PLANKS, Material.PALE_OAK_LOG, Material.PALE_HANGING_MOSS};
-            case "CHERRY_BLOSSOM" -> new Material[]{Material.GRASS_BLOCK, Material.DIRT, Material.CHERRY_LOG, Material.CHERRY_PLANKS, Material.PINK_PETALS};
-            case "WARPED" -> new Material[]{Material.WARPED_NYLIUM, Material.NETHERRACK, Material.WARPED_STEM, Material.WARPED_WART_BLOCK, Material.WARPED_FUNGUS};
-            case "CRIMSON" -> new Material[]{Material.CRIMSON_NYLIUM, Material.NETHERRACK, Material.CRIMSON_STEM, Material.NETHER_WART_BLOCK, Material.CRIMSON_FUNGUS};
-            case "FLOWER_PLAINS" -> new Material[]{Material.GRASS_BLOCK, Material.DIRT, Material.ROOTED_DIRT, Material.MOSS_BLOCK, Material.PINK_PETALS};
-            default -> new Material[]{Material.GRASS_BLOCK, Material.DIRT, Material.DIRT, Material.STONE, Material.SHORT_GRASS};
+        // The selected arena is a complete preset: its floor layers, wall material,
+        // accent blocks and surrounding details all come from the same map choice.
+        return switch (arenaMap(roomIndex)) {
+            case "COLOSSEUM" -> new Material[]{
+                    Material.SMOOTH_SANDSTONE, Material.SANDSTONE,
+                    Material.CUT_SANDSTONE, Material.CHISELED_SANDSTONE};
+            case "RUINS" -> new Material[]{
+                    Material.STONE_BRICKS, Material.CRACKED_STONE_BRICKS,
+                    Material.MOSSY_STONE_BRICKS, Material.COBBLESTONE};
+            case "FOREST" -> new Material[]{
+                    Material.GRASS_BLOCK, Material.DIRT,
+                    Material.ROOTED_DIRT, Material.MOSS_BLOCK};
+            case "NETHER_FORTRESS" -> new Material[]{
+                    Material.POLISHED_BLACKSTONE_BRICKS, Material.BLACKSTONE,
+                    Material.BASALT, Material.NETHER_BRICKS};
+            case "END_CITADEL" -> new Material[]{
+                    Material.END_STONE_BRICKS, Material.END_STONE,
+                    Material.PURPUR_BLOCK, Material.PURPUR_PILLAR};
+            default -> new Material[]{
+                    Material.SMOOTH_SANDSTONE, Material.SANDSTONE,
+                    Material.CUT_SANDSTONE, Material.CHISELED_SANDSTONE};
         };
     }
 
@@ -901,7 +893,7 @@ public final class PracticeManager implements Listener {
     private void buildArenaPlatform(int cx, int cz, int arenaRadius) {
         if (world == null) return;
         int roomIndex = Math.floorDiv(cx - 128, ROOM_SPACING);
-        String theme = arenaTheme(roomIndex);
+        String theme = arenaMap(roomIndex);
         Material[] palette = arenaPalette(roomIndex);
         Random decorationRandom = new Random();
         List<Block> timedLeaves = new ArrayList<>();
@@ -925,8 +917,7 @@ public final class PracticeManager implements Listener {
                     else if (terrainNoise > 1.15) height = 1;
                 }
 
-                // Never touch the outermost ring: it contains the forcefield wall.
-                // Clearing y=81..85 there would remove the bottom glass rows.
+                // Never touch the outermost ring: it contains the arena wall and buttresses.
                 if (edge > arenaRadius) {
                     for (int y = 80; y <= 90; y++) world.getBlockAt(cx + x, y, cz + z).setType(Material.AIR, false);
                     continue;
@@ -934,8 +925,8 @@ public final class PracticeManager implements Listener {
                 if (edge == arenaRadius) continue;
 
                 // Clear old decoration and raised terrain before rebuilding the tile.
-                // Clear the full decoration height, including persistent cherry leaves and logs
-                // from the previous theme. The interior bounds keep the glass forcefield untouched.
+                // Clear the full decoration height so changing presets removes old floor features
+                // and the new material palette can rebuild a clean arena floor.
                 for (int y = 81; y <= 90; y++) {
                     world.getBlockAt(cx + x, y, cz + z).setType(Material.AIR, false);
                 }
@@ -952,55 +943,32 @@ public final class PracticeManager implements Listener {
                     int plantRoll = decorationRandom.nextInt(17);
                     Material groundDetail = null;
                     switch (theme) {
-                        case "CHERRY_BLOSSOM" -> {
-                            if (plantRoll <= 3) groundDetail = Material.PINK_PETALS;
-                            else if (plantRoll == 4) groundDetail = Material.SHORT_GRASS;
-                            else if (plantRoll == 5) groundDetail = Material.FERN;
+                        case "COLOSSEUM" -> {
+                            if (plantRoll <= 2) groundDetail = Material.SANDSTONE_SLAB;
+                            else if (plantRoll == 3) groundDetail = Material.CUT_SANDSTONE;
+                            else if (plantRoll == 4) groundDetail = Material.CHISELED_SANDSTONE;
+                        }
+                        case "RUINS" -> {
+                            if (plantRoll <= 4) groundDetail = Material.MOSS_CARPET;
+                            else if (plantRoll == 5) groundDetail = Material.CRACKED_STONE_BRICKS;
+                            else if (plantRoll == 6) groundDetail = Material.MOSSY_COBBLESTONE;
+                        }
+                        case "FOREST" -> {
+                            if (plantRoll <= 3) groundDetail = Material.SHORT_GRASS;
+                            else if (plantRoll <= 5) groundDetail = Material.FERN;
                             else if (plantRoll == 6) groundDetail = Material.MOSS_CARPET;
+                            else if (plantRoll == 7) groundDetail = Material.AZURE_BLUET;
                         }
-                        case "FLOWER_PLAINS" -> {
-                            if (plantRoll <= 2) groundDetail = Material.POPPY;
-                            else if (plantRoll <= 4) groundDetail = Material.DANDELION;
-                            else if (plantRoll == 5) groundDetail = Material.AZURE_BLUET;
-                            else if (plantRoll == 6) groundDetail = Material.OXEYE_DAISY;
-                            else if (plantRoll == 7) groundDetail = Material.CORNFLOWER;
-                            else if (plantRoll == 8) groundDetail = Material.SHORT_GRASS;
-                            else if (plantRoll == 9) groundDetail = Material.FERN;
-                            else if (plantRoll == 10) groundDetail = Material.MOSS_CARPET;
-                        }
-                        case "PLAINS" -> {
-                            if (plantRoll <= 4) groundDetail = Material.SHORT_GRASS;
-                            else if (plantRoll <= 6) groundDetail = Material.FERN;
-                            else if (plantRoll == 7) groundDetail = Material.POPPY;
-                            else if (plantRoll == 8) groundDetail = Material.DANDELION;
-                            else if (plantRoll == 9) groundDetail = Material.MOSS_CARPET;
-                        }
-                        case "PALE_GARDEN" -> {
-                            if (plantRoll <= 3) groundDetail = Material.PALE_MOSS_CARPET;
-                            else if (plantRoll <= 5) groundDetail = Material.PALE_HANGING_MOSS;
-                            else if (plantRoll == 6) groundDetail = Material.FERN;
-                            else if (plantRoll == 7) groundDetail = Material.SHORT_GRASS;
-                        }
-                        case "WARPED" -> {
-                            if (plantRoll <= 2) groundDetail = Material.WARPED_ROOTS;
-                            else if (plantRoll <= 4) groundDetail = Material.NETHER_SPROUTS;
-                            else if (plantRoll == 5) groundDetail = Material.WARPED_FUNGUS;
-                        }
-                        case "CRIMSON" -> {
-                            if (plantRoll <= 2) groundDetail = Material.CRIMSON_ROOTS;
-                            else if (plantRoll <= 4) groundDetail = Material.NETHER_SPROUTS;
-                            else if (plantRoll == 5) groundDetail = Material.CRIMSON_FUNGUS;
-                        }
-                        case "NETHER" -> {
+                        case "NETHER_FORTRESS" -> {
                             if (plantRoll <= 2) groundDetail = Material.NETHER_SPROUTS;
                             else if (plantRoll == 3) groundDetail = Material.CRIMSON_ROOTS;
                             else if (plantRoll == 4) groundDetail = Material.WARPED_ROOTS;
+                            else if (plantRoll == 5) groundDetail = Material.NETHER_BRICKS;
                         }
-                        case "END" -> {
+                        case "END_CITADEL" -> {
                             if (plantRoll <= 2) groundDetail = Material.CHORUS_FLOWER;
-                        }
-                        case "DESERT", "BADLANDS" -> {
-                            if (plantRoll == 0) groundDetail = Material.DEAD_BUSH;
+                            else if (plantRoll == 3) groundDetail = Material.END_ROD;
+                            else if (plantRoll == 4) groundDetail = Material.PURPUR_SLAB;
                         }
                     }
                     if (groundDetail != null) {
@@ -1008,45 +976,20 @@ public final class PracticeManager implements Listener {
                     }
 
                     // A few subtle ground patches add texture between the plants.
-                    if ((theme.equals("PLAINS") || theme.equals("FLOWER_PLAINS")
-                            || theme.equals("CHERRY_BLOSSOM"))
+                    if ((theme.equals("FOREST") || theme.equals("RUINS"))
                             && Math.floorMod(x * 43 + z * 67, 31) == 0) {
                         world.getBlockAt(cx + x, topY + 1, cz + z).setType(Material.MOSS_CARPET, false);
                     }
                 }
 
-                // Compact ornamental cherry trees with a tapered, rounded canopy.
-                // They stay near the perimeter and their leaves are temporary accents.
-                if (theme.equals("CHERRY_BLOSSOM")
-                        && edge >= arenaRadius * 0.75 && edge <= arenaRadius * 0.92
-                        && decorationRandom.nextInt(173) == 0) {
-                    int trunkBase = topY + 1;
-                    for (int trunkY = 0; trunkY < 3; trunkY++) {
-                        world.getBlockAt(cx + x, trunkBase + trunkY, cz + z)
-                                .setType(Material.CHERRY_LOG, false);
-                    }
-
-                    // Broad lower canopy with clipped corners.
-                    for (int dx = -2; dx <= 2; dx++) {
-                        for (int dz = -2; dz <= 2; dz++) {
-                            if (Math.abs(dx) == 2 && Math.abs(dz) == 2) continue;
-                            addTimedCherryLeaves(cx + x + dx, trunkBase + 3, cz + z + dz, timedLeaves);
-                        }
-                    }
-                    // Smaller upper canopy creates a soft, rounded crown.
-                    for (int dx = -1; dx <= 1; dx++) {
-                        for (int dz = -1; dz <= 1; dz++) {
-                            addTimedCherryLeaves(cx + x + dx, trunkBase + 4, cz + z + dz, timedLeaves);
-                        }
-                    }
-                    addTimedCherryLeaves(cx + x, trunkBase + 5, cz + z, timedLeaves);
-                }
+                // Forest canopy and structural landmarks are generated by the map preset
+                // outside the central combat lane.
             }
         }
 
-        // The END theme gets a few compact ruins around the perimeter. The central
+        // The End Citadel gets a few compact ruins around the perimeter. The central
         // combat area remains completely open and the shulkers are display-only.
-        if (theme.equals("END")) {
+        if (theme.equals("END_CITADEL")) {
             clearEndDecorativeShulkers(roomIndex);
             buildEndRuin(cx - 15, cz - 14, roomIndex, 0);
             buildEndRuin(cx + 15, cz - 14, roomIndex, 1);
@@ -1056,7 +999,7 @@ public final class PracticeManager implements Listener {
             clearEndDecorativeShulkers(roomIndex);
         }
 
-        // Decorative frame inside the arena, using the selected theme's accent block.
+        // Decorative frame uses the selected arena's own floor trim material.
         Material trim = palette[3];
         for (int offset = -arenaRadius + 1; offset <= arenaRadius - 1; offset++) {
             world.getBlockAt(cx - arenaRadius + 1, 80, cz + offset).setType(trim, false);
@@ -1092,7 +1035,7 @@ public final class PracticeManager implements Listener {
         if (world == null) return;
         int roomIndex = Math.floorDiv(cx - 128, ROOM_SPACING);
         Material wall = arenaWallMaterial(roomIndex);
-        Material accent = forceFieldMaterial();
+        Material accent = arenaAccentMaterial(roomIndex);
         int topY = 80 + ARENA_WALL_HEIGHT;
 
         // Full-height arena walls: no open sides or roof. Players are teleported into
