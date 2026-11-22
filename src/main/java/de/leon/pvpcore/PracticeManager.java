@@ -41,7 +41,7 @@ public final class PracticeManager implements Listener {
     private static final int ROOM_SPACING = 1024;
     private static final int DUEL_ARENA_RADIUS = 48;
     private static final int PRACTICE_ARENA_RADIUS = 24;
-    private static final int ARENA_WALL_HEIGHT = 5;
+    private static final int ARENA_WALL_HEIGHT = 12;
     private static final List<String> ARENA_MAPS = List.of(
             "COLOSSEUM", "RUINS", "FOREST", "NETHER_FORTRESS", "END_CITADEL");
     private static final String PRACTICE_WORLD = "prac_void";
@@ -63,6 +63,7 @@ public final class PracticeManager implements Listener {
     private final Set<Integer> activeForceFields = new HashSet<>();
     private final Map<Integer, Integer> forceFieldHeights = new HashMap<>();
     private final Map<Integer, Integer> forceFieldRadii = new HashMap<>();
+    private final Map<UUID, Long> forceFieldRenderTicks = new HashMap<>();
     private final Map<UUID, Integer> fightRooms = new HashMap<>();
     private final Map<UUID, Integer> fightSpawnOffsets = new HashMap<>();
     private final Map<UUID, Mode> fightModes = new HashMap<>();
@@ -143,6 +144,7 @@ public final class PracticeManager implements Listener {
                 forceFieldHeights.put(index, glassHeight);
                 forceFieldRadii.put(index, arenaRadius);
             }
+            renderNearbyForceField(player, cx, cz, arenaRadius);
             if (!isFighting(player) && !adminBoxVisits.containsKey(player.getUniqueId())
                     && mode(player) != Mode.CRYSTAL_ANCHOR && plugin.bots().isAvailable() && !plugin.bots().hasOwnedBot(player)) plugin.bots().spawn(player);
             if (mode(player) == Mode.SWORD) recoverSwordBotAtEdge(player, cx, cz);
@@ -1093,40 +1095,97 @@ public final class PracticeManager implements Listener {
         Material accent = forceFieldMaterial();
         int topY = 80 + ARENA_WALL_HEIGHT;
 
-        // Open-air stadium walls replace the old full-height glass cage and roof.
-        // Four 3-block-wide gates keep the arena visually open; the movement guard
-        // still prevents players from leaving the assigned private arena.
+        // Full-height arena walls: no open sides or roof. Players are teleported into
+        // the arena, and the temporary forcefield marks the inner no-exit boundary.
         for (int offset = -arenaRadius; offset <= arenaRadius; offset++) {
-            boolean gate = Math.abs(offset) <= 1;
-
-            // A solid foundation ring anchors the low stadium wall.
-            world.getBlockAt(cx - arenaRadius, 80, cz + offset).setType(wall, false);
-            world.getBlockAt(cx + arenaRadius, 80, cz + offset).setType(wall, false);
-            world.getBlockAt(cx + offset, 80, cz - arenaRadius).setType(wall, false);
-            world.getBlockAt(cx + offset, 80, cz + arenaRadius).setType(wall, false);
-
-            for (int y = 81; y <= topY; y++) {
-                if (gate && y < topY) continue;
-                Material block = y == 83 ? accent : wall;
-                if (Math.floorMod(offset, 8) == 0 && y < topY) block = wall;
+            for (int y = 80; y <= topY; y++) {
+                Material block = wall;
+                if (y == 85 || y == 90) block = accent;
                 world.getBlockAt(cx - arenaRadius, y, cz + offset).setType(block, false);
                 world.getBlockAt(cx + arenaRadius, y, cz + offset).setType(block, false);
                 world.getBlockAt(cx + offset, y, cz - arenaRadius).setType(block, false);
                 world.getBlockAt(cx + offset, y, cz + arenaRadius).setType(block, false);
             }
+
+            // Stone battlements along the top edge create a proper arena silhouette.
+            if (Math.floorMod(offset, 3) != 1) {
+                world.getBlockAt(cx - arenaRadius, topY + 1, cz + offset).setType(wall, false);
+                world.getBlockAt(cx + arenaRadius, topY + 1, cz + offset).setType(wall, false);
+                world.getBlockAt(cx + offset, topY + 1, cz - arenaRadius).setType(wall, false);
+                world.getBlockAt(cx + offset, topY + 1, cz + arenaRadius).setType(wall, false);
+            }
         }
 
-        // Solid corner piers and a continuous open sky; there is deliberately no roof.
+        // Three-block-wide corner towers strengthen the four arena corners.
         for (int xSign : new int[]{-1, 1}) {
             for (int zSign : new int[]{-1, 1}) {
-                for (int y = 81; y <= topY + 1; y++) {
-                    world.getBlockAt(cx + xSign * arenaRadius, y, cz + zSign * arenaRadius)
-                            .setType(wall, false);
+                for (int dx = 0; dx <= 2; dx++) {
+                    for (int dz = 0; dz <= 2; dz++) {
+                        int x = cx + xSign * (arenaRadius - dx);
+                        int z = cz + zSign * (arenaRadius - dz);
+                        for (int y = 80; y <= topY + 2; y++) {
+                            world.getBlockAt(x, y, z).setType(y == 86 ? accent : wall, false);
+                        }
+                    }
                 }
             }
         }
     }
 
+    private void renderNearbyForceField(Player player, int cx, int cz, int arenaRadius) {
+        if (world == null || !player.isOnline()) return;
+        long now = world.getGameTime();
+        long previous = forceFieldRenderTicks.getOrDefault(player.getUniqueId(), Long.MIN_VALUE / 2);
+        if (now - previous < 5L) return;
+        forceFieldRenderTicks.put(player.getUniqueId(), now);
+
+        double centerX = cx + 0.5;
+        double centerZ = cz + 0.5;
+        double limit = arenaRadius - 1.5;
+        double relativeX = player.getLocation().getX() - centerX;
+        double relativeZ = player.getLocation().getZ() - centerZ;
+        double activationDistance = Math.max(2.0,
+                plugin.getConfig().getDouble("practice.forcefield.activation-distance", 6.0));
+
+        Particle.DustOptions energy = new Particle.DustOptions(Color.fromRGB(65, 205, 255), 1.15f);
+        boolean shown = false;
+        if (limit - relativeX <= activationDistance) {
+            drawForceFieldPlane(player, cx, cz, true, centerX + limit, relativeZ, arenaRadius, energy);
+            shown = true;
+        }
+        if (limit + relativeX <= activationDistance) {
+            drawForceFieldPlane(player, cx, cz, true, centerX - limit, relativeZ, arenaRadius, energy);
+            shown = true;
+        }
+        if (limit - relativeZ <= activationDistance) {
+            drawForceFieldPlane(player, cx, cz, false, centerZ + limit, relativeX, arenaRadius, energy);
+            shown = true;
+        }
+        if (limit + relativeZ <= activationDistance) {
+            drawForceFieldPlane(player, cx, cz, false, centerZ - limit, relativeX, arenaRadius, energy);
+            shown = true;
+        }
+        if (shown) {
+            world.spawnParticle(Particle.END_ROD, player.getLocation().add(0, 1.0, 0),
+                    2, 0.25, 0.35, 0.25, 0.01, player);
+        }
+    }
+
+    private void drawForceFieldPlane(Player player, int cx, int cz, boolean fixedX,
+                                     double fixedCoordinate, double playerAlong, int arenaRadius,
+                                     Particle.DustOptions energy) {
+        double from = Math.max(-arenaRadius + 3.0, playerAlong - 8.0);
+        double to = Math.min(arenaRadius - 3.0, playerAlong + 8.0);
+
+        for (double along = from; along <= to; along += 1.0) {
+            for (double y = 81.5; y <= 80 + ARENA_WALL_HEIGHT - 0.5; y += 1.0) {
+                Location point = fixedX
+                        ? new Location(world, fixedCoordinate, y, cz + 0.5 + along)
+                        : new Location(world, cx + 0.5 + along, y, fixedCoordinate);
+                world.spawnParticle(Particle.DUST, point, 1, 0, 0, 0, 0, energy, player);
+            }
+        }
+    }
     public Material forceFieldMaterial() {
         Material material = Material.matchMaterial(plugin.getConfig().getString("practice.forcefield.material", "GLASS"));
         return material != null && (material == Material.GLASS || material.name().endsWith("_STAINED_GLASS"))
@@ -1293,19 +1352,19 @@ public final class PracticeManager implements Listener {
             int cz = 128;
             int arenaRadius = isFighting(p) ? DUEL_ARENA_RADIUS : PRACTICE_ARENA_RADIUS;
             Location to = event.getTo();
-            // Only teleport after the player's position has passed beyond the outer edge
-            // of the glass wall (at +/-48), not while approaching or touching its inner face.
-            if (to.getX() < cx - arenaRadius - 0.5 || to.getX() > cx + arenaRadius + 0.5
-                    || to.getZ() < cz - arenaRadius - 0.5 || to.getZ() > cz + arenaRadius + 0.5) {
-                p.setFallDistance(0);
+            double centerX = cx + 0.5;
+            double centerZ = cz + 0.5;
+            double limit = arenaRadius - 1.5;
+            double relativeX = to.getX() - centerX;
+            double relativeZ = to.getZ() - centerZ;
+
+            renderNearbyForceField(p, cx, cz, arenaRadius);
+
+            // Stop at the invisible boundary, just inside the solid arena wall.
+            // Do not teleport players to the center when they touch the forcefield.
+            if (Math.abs(relativeX) >= limit || Math.abs(relativeZ) >= limit) {
+                event.setTo(event.getFrom());
                 p.setVelocity(new org.bukkit.util.Vector(0, 0, 0));
-                if (isFighting(p)) p.teleport(fightSpawnLocation(roomIndex, fightSpawnOffsets.getOrDefault(p.getUniqueId(), 0)));
-                else if (adminBoxVisits.containsKey(p.getUniqueId())) p.teleport(new Location(world, cx + 0.5, 82.0, cz + 0.5));
-                else {
-                    int height = mode(p) == Mode.STUN_SLAM && activeAttempts.contains(p.getUniqueId())
-                            ? selectedHeight(p) : 0;
-                    p.teleport(startLocation(p, height));
-                }
                 return;
             }
         }
@@ -1443,11 +1502,13 @@ public final class PracticeManager implements Listener {
         swordSwingSequence.remove(id); swordHitSwingSequence.remove(id);
         selectedHeights.remove(id); swordSwings.remove(id); swordHits.remove(id);
         activeAttempts.remove(id); resetting.remove(id);
+        forceFieldRenderTicks.remove(id);
     }
 
     @EventHandler public void onWorldChange(PlayerChangedWorldEvent event) {
         UUID id = event.getPlayer().getUniqueId();
         activeAttempts.remove(id); resetting.remove(id);
+        forceFieldRenderTicks.remove(id);
         if (isFighting(event.getPlayer()) && !event.getPlayer().getWorld().equals(world)) {
             endFight(event.getPlayer(), "&cA player left the arena.");
         }
