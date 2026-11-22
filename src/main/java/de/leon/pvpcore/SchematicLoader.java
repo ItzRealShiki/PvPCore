@@ -43,17 +43,34 @@ final class SchematicLoader {
     static void clearFootprint(JavaPlugin plugin, World world, String arena,
                                int centerX, int baseY, int centerZ) throws IOException {
         Schematic schematic = load(plugin, arena);
-        int startX = centerX - schematic.width / 2;
-        int startZ = centerZ - schematic.length / 2;
+        clearSchematicBlocks(world, schematic, centerX - schematic.width / 2,
+                baseY, centerZ - schematic.length / 2);
+    }
+
+    private static void clearSchematicBlocks(World world, Schematic schematic,
+                                             int startX, int baseY, int startZ) {
         int index = 0;
         for (int y = 0; y < schematic.height; y++) {
             int worldY = baseY + y;
+            boolean validY = worldY >= world.getMinHeight() && worldY < world.getMaxHeight();
             for (int z = 0; z < schematic.length; z++) {
                 for (int x = 0; x < schematic.width; x++) {
                     BlockData state = schematic.palette[schematic.blockIndices[index++] & 0xFFFF];
-                    if (state == null || state.getMaterial().isAir()
-                            || worldY < world.getMinHeight() || worldY >= world.getMaxHeight()) continue;
+                    if (!validY || state == null || state.getMaterial().isAir()) continue;
                     var block = world.getBlockAt(startX + x, worldY, startZ + z);
+                    if (!block.getType().isAir()) block.setType(Material.AIR, false);
+                }
+            }
+        }
+    }
+
+    private static void clearLegacyGeneratedRoom(World world, int centerX, int baseY, int centerZ) {
+        int minY = Math.max(world.getMinHeight(), baseY);
+        int maxY = Math.min(world.getMaxHeight(), baseY + 128);
+        for (int y = minY; y < maxY; y++) {
+            for (int z = centerZ - LEGACY_ARENA_RADIUS; z <= centerZ + LEGACY_ARENA_RADIUS; z++) {
+                for (int x = centerX - LEGACY_ARENA_RADIUS; x <= centerX + LEGACY_ARENA_RADIUS; x++) {
+                    var block = world.getBlockAt(x, y, z);
                     if (!block.getType().isAir()) block.setType(Material.AIR, false);
                 }
             }
@@ -67,52 +84,24 @@ final class SchematicLoader {
         Schematic schematic = load(plugin, arena);
         Schematic previous = null;
         boolean clearLegacyGeneratedArena = false;
-        if (previousArena != null && !previousArena.isBlank() && !previousArena.equals(arena)) {
+        if (previousArena != null && !previousArena.isBlank()) {
             try {
+                // Load even when the selected map has not changed. This is needed to
+                // rebuild a missing room after a world-folder reset or stale config flag.
                 previous = load(plugin, previousArena);
             } catch (IOException ignored) {
-                // Older generated rooms have no bundled schematic resource.
                 clearLegacyGeneratedArena = true;
             }
         }
 
         int schematicX = centerX - schematic.width / 2;
         int schematicZ = centerZ - schematic.length / 2;
-        boolean clearExistingRoom = previousArena != null && !previousArena.isBlank();
-
-        // A legacy generated floor is small; do not scan Arena 1's 22-million-block bounds
-        // just to remove the former 97x97 generated room.
-        int clearMinX = schematicX;
-        int clearMinZ = schematicZ;
-        int clearMaxX = schematicX + schematic.width;
-        int clearMaxZ = schematicZ + schematic.length;
-        int clearHeight = schematic.height + 32;
         if (previous != null) {
             int previousX = centerX - previous.width / 2;
             int previousZ = centerZ - previous.length / 2;
-            clearMinX = Math.min(clearMinX, previousX);
-            clearMinZ = Math.min(clearMinZ, previousZ);
-            clearMaxX = Math.max(clearMaxX, previousX + previous.width);
-            clearMaxZ = Math.max(clearMaxZ, previousZ + previous.length);
-            clearHeight = Math.max(clearHeight, previous.height + 32);
-        }
-        if (clearLegacyGeneratedArena) {
-            clearMinX = centerX - LEGACY_ARENA_RADIUS;
-            clearMinZ = centerZ - LEGACY_ARENA_RADIUS;
-            clearMaxX = centerX + LEGACY_ARENA_RADIUS + 1;
-            clearMaxZ = centerZ + LEGACY_ARENA_RADIUS + 1;
-            clearHeight = 128;
-        }
-        if (clearExistingRoom) {
-            int maxY = Math.min(world.getMaxHeight(), baseY + clearHeight);
-            for (int y = Math.max(world.getMinHeight(), baseY); y < maxY; y++) {
-                for (int z = clearMinZ; z < clearMaxZ; z++) {
-                    for (int x = clearMinX; x < clearMaxX; x++) {
-                        var block = world.getBlockAt(x, y, z);
-                        if (!block.getType().isAir()) block.setType(Material.AIR, false);
-                    }
-                }
-            }
+            clearSchematicBlocks(world, previous, previousX, baseY, previousZ);
+        } else if (clearLegacyGeneratedArena) {
+            clearLegacyGeneratedRoom(world, centerX, baseY, centerZ);
         }
 
         int index = 0;
@@ -126,8 +115,6 @@ final class SchematicLoader {
                 for (int x = 0; x < schematic.width; x++) {
                     BlockData state = schematic.palette[schematic.blockIndices[index++] & 0xFFFF];
                     if (state == null || state.getMaterial().isAir()) continue;
-                    // Decorative foliage should remain exactly as pasted, even if the source
-                    // schematic's leaf distance metadata was calculated for another tree layout.
                     if (state instanceof Leaves leaves) leaves.setPersistent(true);
                     world.getBlockAt(schematicX + x, worldY, schematicZ + z).setBlockData(state, false);
                 }

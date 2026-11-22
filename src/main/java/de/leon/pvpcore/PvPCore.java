@@ -43,6 +43,9 @@ public final class PvPCore extends JavaPlugin implements Listener {
         bots = new BotManager(this);
         practice = new PracticeManager(this);
         parkour = new ParkourManager(this);
+        // Create the private Practice world at startup as a second managed world.
+        // It uses a void generator and does not depend on the Spawn default world.
+        Bukkit.getScheduler().runTaskLater(this, practice::initializePracticeWorld, 6L);
         Bukkit.getPluginManager().registerEvents(practice, this);
         Bukkit.getPluginManager().registerEvents(parkour, this);
         Bukkit.getScheduler().runTaskTimer(this, practice::enforcePracticeFood, 1L, 1L);

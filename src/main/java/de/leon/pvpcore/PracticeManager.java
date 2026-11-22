@@ -50,10 +50,11 @@ public final class PracticeManager implements Listener {
     };
     private static final List<String> ARENA_MAPS = List.of("ARENA_1", "ARENA_3");
     private static final String PRACTICE_WORLD = "prac_void";
-    private static final int SCHEMATIC_BUILD_VERSION = 3;
+    private static final int SCHEMATIC_BUILD_VERSION = 4;
 
     private final PvPCore plugin;
     private World world;
+    private final Set<String> builtRoomsThisSession = new HashSet<>();
     private final Map<UUID, Integer> stunCombos = new HashMap<>();
     private final Map<UUID, Integer> swordCombos = new HashMap<>();
     private final Map<UUID, Long> lastSwordHitTicks = new HashMap<>();
@@ -101,6 +102,25 @@ public final class PracticeManager implements Listener {
             }
         };
         return new WorldCreator(PRACTICE_WORLD).generator(voidGenerator).createWorld();
+    }
+
+    public void initializePracticeWorld() {
+        if (world == null) {
+            world = Bukkit.getWorld(PRACTICE_WORLD);
+            if (world == null) world = createVoidWorld();
+        }
+        if (world == null) {
+            plugin.getLogger().severe("Could not create the private Practice void world.");
+            return;
+        }
+        world.setGameRule(GameRule.DO_MOB_SPAWNING, false);
+        world.setGameRule(GameRule.DO_DAYLIGHT_CYCLE, false);
+        try {
+            world.setTime(1000L);
+        } catch (IllegalArgumentException ignored) {
+            // Some Paper dimensions do not expose a regular world clock.
+        }
+        plugin.getLogger().info("Private Practice world is ready: " + world.getName());
     }
 
     private void updatePlayerVisibility(Player player) {
@@ -584,15 +604,8 @@ public final class PracticeManager implements Listener {
     public void enter(Player p, int height) {
         int challengeHeight = mode(p) == Mode.STUN_SLAM ? height : 0;
         if (challengeHeight > 0) setSelectedHeight(p, challengeHeight);
-        if (world == null) {
-            world = Bukkit.getWorld(PRACTICE_WORLD);
-            if (world == null) world = createVoidWorld();
-        }
+        initializePracticeWorld();
         if (world == null) { plugin.message(p, "&cPractice world could not be loaded."); return; }
-
-        world.setGameRule(GameRule.DO_MOB_SPAWNING, false);
-        world.setGameRule(GameRule.DO_DAYLIGHT_CYCLE, false);
-        world.setTime(1000L);
 
         String base = "practice.players." + p.getUniqueId();
         int index;
@@ -606,7 +619,10 @@ public final class PracticeManager implements Listener {
 
         int cx = roomCenterX(index), cz = 128;
         clearPlatform(cx, cz);
-        ensureRoomBuilt(base, index, arenaMap(p));
+        if (!ensureRoomBuilt(base, index, arenaMap(p))) {
+            plugin.message(p, "&cYour arena could not be loaded. Please contact an administrator; the console contains the loader error.");
+            return;
+        }
         plugin.bots().removeOwned(p);
         p.setGameMode(GameMode.SURVIVAL);
         p.setFallDistance(0);
@@ -762,29 +778,37 @@ public final class PracticeManager implements Listener {
                 && feet.isPassable() && head.isPassable();
     }
 
-    private void ensureRoomBuilt(String base, int roomIndex, String selectedMap) {
+    private boolean ensureRoomBuilt(String base, int roomIndex, String selectedMap) {
         String builtMap = plugin.getConfig().getString(base + ".built-map", "");
         boolean built = plugin.getConfig().getBoolean(base + ".built", false);
         int builtVersion = plugin.getConfig().getInt(base + ".built-schematic-version", 0);
-        if (built && builtVersion == SCHEMATIC_BUILD_VERSION && selectedMap.equals(builtMap)) return;
+        String sessionKey = roomIndex + ":" + selectedMap;
 
-        // Older versions may have generated fallback geometry instead of pasting Arena 1.
-        // Preserve a real previous schematic ID so the loader can clear the complete old footprint.
-        String previousMap = built
-                ? (builtVersion < SCHEMATIC_BUILD_VERSION && "ARENA_1".equals(builtMap)
-                        ? "LEGACY_GENERATED"
-                        : ARENA_MAPS.contains(builtMap) ? builtMap : "LEGACY_GENERATED")
-                : "";
+        // The void Practice world is created separately from the server's default
+        // Spawn world. Re-paste each personal arena once per plugin session so a
+        // stale config flag can never leave a newly created prac_void world empty.
+        if (builtRoomsThisSession.contains(sessionKey)
+                && built && builtVersion == SCHEMATIC_BUILD_VERSION && selectedMap.equals(builtMap)) {
+            return true;
+        }
+
+        // Clear the exact previously imported schematic when possible. Old generated
+        // placeholder rooms are handled by the loader's small legacy-room cleanup.
+        String previousMap = ARENA_MAPS.contains(builtMap) ? builtMap : "LEGACY_GENERATED";
 
         if (buildRoom(roomCenterX(roomIndex), 128, selectedMap, previousMap)) {
             plugin.getConfig().set(base + ".built", true);
             plugin.getConfig().set(base + ".built-map", selectedMap);
             plugin.getConfig().set(base + ".built-schematic-version", SCHEMATIC_BUILD_VERSION);
-        } else {
-            // Keep the old version marker so a later entry retries loading the imported schematic.
-            plugin.getConfig().set(base + ".built-schematic-version", 0);
+            builtRoomsThisSession.add(sessionKey);
+            plugin.saveConfig();
+            return true;
         }
+
+        plugin.getConfig().set(base + ".built", false);
+        plugin.getConfig().set(base + ".built-schematic-version", 0);
         plugin.saveConfig();
+        return false;
     }
 
     private boolean buildRoom(int cx, int cz, String map, String previousMap) {
