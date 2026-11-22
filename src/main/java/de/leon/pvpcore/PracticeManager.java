@@ -62,6 +62,7 @@ public final class PracticeManager implements Listener {
     private final Set<Integer> activeForceFields = new HashSet<>();
     private final Map<Integer, Integer> forceFieldHeights = new HashMap<>();
     private final Map<Integer, Integer> forceFieldRadii = new HashMap<>();
+    private final Map<Integer, Integer> arenaFloorCache = new HashMap<>();
     private final Map<UUID, Long> forceFieldRenderTicks = new HashMap<>();
     private final Map<UUID, Integer> fightRooms = new HashMap<>();
     private final Map<UUID, Integer> fightSpawnOffsets = new HashMap<>();
@@ -604,7 +605,6 @@ public final class PracticeManager implements Listener {
         // Preserve a real previous schematic ID so the loader can clear the complete old footprint.
         String previousMap = built
                 ? (builtVersion < SCHEMATIC_BUILD_VERSION && "ARENA_1".equals(builtMap)
-                        && "ARENA_1".equals(selectedMap)
                         ? "LEGACY_GENERATED"
                         : ARENA_MAPS.contains(builtMap) ? builtMap : "LEGACY_GENERATED")
                 : "";
@@ -640,6 +640,7 @@ public final class PracticeManager implements Listener {
         activeForceFields.remove(roomIndex);
         forceFieldHeights.remove(roomIndex);
         forceFieldRadii.remove(roomIndex);
+        arenaFloorCache.remove(roomIndex);
     }
 
     public String arenaMap(Player player) {
@@ -677,10 +678,15 @@ public final class PracticeManager implements Listener {
                 ? ARENA_3_FORCE_FIELD_RADIUS : ARENA_1_FORCE_FIELD_RADIUS;
     }
 
+    private int arenaFloorY(int roomIndex) {
+        return arenaFloorCache.computeIfAbsent(roomIndex,
+                index -> arenaSpawnLocation(index, 0, 0).getBlockY() - 1);
+    }
+
     private void buildForceField(int cx, int cz, int glassHeight, int arenaRadius) {
         if (world == null) return;
         int roomIndex = Math.floorDiv(cx - 128, ROOM_SPACING);
-        int floorY = arenaSpawnLocation(roomIndex, 0, 0).getBlockY() - 1;
+        int floorY = arenaFloorY(roomIndex);
         int steps = Math.max(180, arenaRadius * 8);
         for (int i = 0; i < steps; i++) {
             double angle = (Math.PI * 2.0 * i) / steps;
@@ -707,7 +713,7 @@ public final class PracticeManager implements Listener {
                 plugin.getConfig().getDouble("practice.forcefield.activation-distance", 6.0));
         if (remaining > activationDistance) return;
 
-        int floorY = arenaSpawnLocation(Math.floorDiv(cx - 128, ROOM_SPACING), 0, 0).getBlockY() - 1;
+        int floorY = arenaFloorY(Math.floorDiv(cx - 128, ROOM_SPACING));
         Particle.DustOptions energy = new Particle.DustOptions(Color.fromRGB(65, 205, 255), 1.15f);
         double angle = Math.atan2(relativeZ, relativeX);
         double arcHalfWidth = 8.0 / Math.max(1.0, arenaRadius);
@@ -869,7 +875,10 @@ public final class PracticeManager implements Listener {
 
         if (!activeAttempts.contains(p.getUniqueId())) return;
         if (event.getTo().getY() >= event.getFrom().getY()) return;
-        if (event.getTo().getY() <= 81.0) retry(p, false);
+        int attemptRoom = plugin.getConfig().getInt("practice.players." + p.getUniqueId() + ".room", -1);
+        if (attemptRoom < 0) return;
+        double arenaFloorSpawnY = arenaFloorY(attemptRoom) + 1.0;
+        if (event.getTo().getY() <= arenaFloorSpawnY) retry(p, false);
     }
 
     @EventHandler
