@@ -1,0 +1,31 @@
+name: Build AIAdmin
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ai-administrator/**'
+      - '.github/workflows/build-aiadmin.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Build standalone plugin
+        working-directory: ai-administrator
+        run: mvn --batch-mode --no-transfer-progress clean package
+      - name: Upload plugin JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: AIAdmin
+          path: ai-administrator/target/AIAdmin-*.jar
+          if-no-files-found: error
+          retention-days: 14
