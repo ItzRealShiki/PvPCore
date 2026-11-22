@@ -1,0 +1,15 @@
+name: CustomGuiTest
+version: '${project.version}'
+main: de.leon.customguitest.CustomGuiTestPlugin
+api-version: '26.2'
+author: ItzRealShiki
+description: Standalone custom inventory GUI and title test plugin.
+commands:
+  test:
+    description: Opens the custom GUI test menu.
+    usage: /test [open|info|close|theme|help]
+    aliases: [testgui]
+permissions:
+  customguitest.use:
+    description: Allows use of the custom GUI test menu.
+    default: true
