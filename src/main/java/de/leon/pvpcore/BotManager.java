@@ -197,6 +197,9 @@ public final class BotManager implements Listener {
                 boolean shieldDisabled = shieldDisabledUntil.getOrDefault(ownerId, 0L) > System.currentTimeMillis();
                 fake.setShieldRaised(shieldEnabled && !shieldDisabled);
                 fake.tick();
+                if (owner.getWorld().getName().equals("prac_void")) {
+                    plugin.practice().enforceBotInsideArena(owner);
+                }
             }
         } catch (LinkageError error) {
             disableFeature(error);

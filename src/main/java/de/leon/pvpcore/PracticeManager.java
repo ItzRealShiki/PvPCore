@@ -60,6 +60,7 @@ public final class PracticeManager implements Listener {
     private final Map<UUID, Long> pendingBotHitTicks = new HashMap<>();
     private final Map<UUID, Mode> pendingBotHitModes = new HashMap<>();
     private final Map<UUID, Long> lastBotComboScoreTicks = new HashMap<>();
+    private final Map<UUID, Long> lastStunSlamScoreTicks = new HashMap<>();
     private final Map<UUID, Integer> swordSwingSequence = new HashMap<>();
     private final Map<UUID, Integer> swordHitSwingSequence = new HashMap<>();
     private final Map<UUID, Integer> selectedHeights = new HashMap<>();
@@ -157,7 +158,6 @@ public final class PracticeManager implements Listener {
             if (!isFighting(player) && !adminBoxVisits.containsKey(player.getUniqueId())
                     && mode(player) != Mode.CRYSTAL_ANCHOR && plugin.bots().isAvailable()
                     && !plugin.bots().hasOwnedBot(player)) plugin.bots().spawn(player);
-            if (mode(player) != Mode.CRYSTAL_ANCHOR) recoverBotAtBarrier(player, cx, cz);
             updatePracticeBoard(player);
             updatePlayerVisibility(player);
         }
@@ -454,42 +454,52 @@ public final class PracticeManager implements Listener {
         }
     }
 
-    private void recoverBotAtBarrier(Player owner, int centerX, int centerZ) {
-        Player bot = plugin.bots().ownedBot(owner);
-        if (bot == null || !bot.isValid() || bot.getWorld() != owner.getWorld()) return;
+    /**
+     * Keeps the training bot inside its practice arena.
+     * Called after every fake-player tick so tangential movement cannot leave it
+     * pressed against a barrier for several server ticks.
+     */
+    public void enforceBotInsideArena(Player owner) {
+        if (world == null || owner == null || !owner.isOnline()
+                || !owner.getWorld().equals(world) || isFighting(owner)) return;
 
-        int roomIndex = plugin.getConfig().getInt("practice.players." + owner.getUniqueId() + ".room", -1);
+        Player bot = plugin.bots().ownedBot(owner);
+        if (bot == null || !bot.isValid() || !bot.getWorld().equals(world)) return;
+
+        int roomIndex = plugin.getConfig().getInt(
+                "practice.players." + owner.getUniqueId() + ".room", -1);
         if (roomIndex < 0) return;
 
         Location location = bot.getLocation();
+        int centerX = roomCenterX(roomIndex);
+        int centerZ = 128;
         double relativeX = location.getX() - (centerX + 0.5);
-        double relativeZ = location.getZ() - 128.5;
+        double relativeZ = location.getZ() - (centerZ + 0.5);
         double distance = Math.hypot(relativeX, relativeZ);
-        boolean touchingBarrier;
 
+        boolean nearBarrier;
         if (arenaMap(roomIndex).equals("ARENA_1")) {
-            touchingBarrier = distanceToArenaOneBarrier(relativeX, relativeZ) <= 1.0;
+            nearBarrier = distanceToArenaOneBarrier(relativeX, relativeZ) <= 2.75;
         } else {
-            int radius = arenaForceFieldRadius(roomIndex);
-            touchingBarrier = distance >= radius - 1.0;
+            nearBarrier = distance >= arenaForceFieldRadius(roomIndex) - 2.75;
         }
-        if (!touchingBarrier) return;
+        if (!nearBarrier) return;
+
+        org.bukkit.util.Vector inward = new org.bukkit.util.Vector(-relativeX, 0.0, -relativeZ);
+        if (inward.lengthSquared() < 0.01) return;
+        inward.normalize();
 
         org.bukkit.util.Vector velocity = bot.getVelocity();
-        org.bukkit.util.Vector towardCenter = new org.bukkit.util.Vector(-relativeX, 0.0, -relativeZ);
-        if (towardCenter.lengthSquared() < 0.01) return;
-        towardCenter.normalize();
+        double currentInwardSpeed = velocity.getX() * inward.getX()
+                + velocity.getZ() * inward.getZ();
 
-        // Only intervene at the actual barrier collision line, and only if the bot is
-        // trying to move outward or has become stuck against the invisible blocks.
-        double outwardSpeed = velocity.getX() * -towardCenter.getX()
-                + velocity.getZ() * -towardCenter.getZ();
-        double horizontalSpeedSquared = velocity.getX() * velocity.getX()
-                + velocity.getZ() * velocity.getZ();
-        if (outwardSpeed < 0.02 && horizontalSpeedSquared > 0.06) return;
-
-        towardCenter.multiply(1.25).setY(velocity.getY());
-        bot.setVelocity(towardCenter);
+        // Ensure a clear inward component even when the bot is moving parallel to the wall.
+        // Preserve its vertical motion and any tangential component.
+        double requiredInwardSpeed = 0.95;
+        if (currentInwardSpeed < requiredInwardSpeed) {
+            velocity.add(inward.multiply(requiredInwardSpeed - currentInwardSpeed));
+            bot.setVelocity(velocity);
+        }
     }
 
     private double distanceToArenaOneBarrier(double x, double z) {
@@ -619,42 +629,99 @@ public final class PracticeManager implements Listener {
         int targetX = roomCenterX(roomIndex) + offsetX;
         int targetZ = 128 + offsetZ;
 
-        for (int radius = 0; radius <= 16; radius++) {
-            int bestX = targetX;
-            int bestZ = targetZ;
-            int bestY = Integer.MIN_VALUE;
-            int bestDistance = Integer.MAX_VALUE;
+        List<Integer> nearbyFloorHeights = new ArrayList<>();
+        for (int dx = -4; dx <= 4; dx++) {
+            for (int dz = -4; dz <= 4; dz++) {
+                int x = targetX + dx;
+                int z = targetZ + dz;
+                if (!insideSafeArenaSpawnArea(roomIndex, x, z)) continue;
+                int y = highestArenaSurfaceY(x, z);
+                if (isSafeArenaSpawnSurface(x, y, z)) nearbyFloorHeights.add(y);
+            }
+        }
+        nearbyFloorHeights.sort(Integer::compareTo);
+        Integer referenceFloorY = nearbyFloorHeights.isEmpty()
+                ? null : nearbyFloorHeights.get(nearbyFloorHeights.size() / 2);
 
+        int bestX = targetX;
+        int bestZ = targetZ;
+        int bestY = Integer.MIN_VALUE;
+        double bestScore = Double.MAX_VALUE;
+
+        for (int radius = 0; radius <= 16; radius++) {
             for (int dx = -radius; dx <= radius; dx++) {
                 for (int dz = -radius; dz <= radius; dz++) {
                     if (Math.max(Math.abs(dx), Math.abs(dz)) != radius) continue;
+
                     int x = targetX + dx;
                     int z = targetZ + dz;
+                    if (!insideSafeArenaSpawnArea(roomIndex, x, z)) continue;
+
                     int floorY = highestArenaSurfaceY(x, z);
-                    if (floorY < world.getMinHeight() || floorY + 2 >= world.getMaxHeight()) continue;
+                    if (!isSafeArenaSpawnSurface(x, floorY, z)) continue;
+                    if (referenceFloorY != null
+                            && (floorY > referenceFloorY + 3 || floorY < referenceFloorY - 12)) continue;
 
-                    Block floor = world.getBlockAt(x, floorY, z);
-                    Block feet = world.getBlockAt(x, floorY + 1, z);
-                    Block head = world.getBlockAt(x, floorY + 2, z);
-                    if (!floor.getType().isSolid() || !feet.isPassable() || !head.isPassable()) continue;
-
-                    int distance = dx * dx + dz * dz;
-                    if (distance < bestDistance) {
-                        bestDistance = distance;
+                    double horizontalDistance = dx * dx + dz * dz;
+                    double verticalDifference = referenceFloorY == null
+                            ? 0.0 : Math.abs(floorY - referenceFloorY);
+                    double score = horizontalDistance + verticalDifference * 4.0;
+                    if (score < bestScore) {
+                        bestScore = score;
                         bestX = x;
                         bestZ = z;
                         bestY = floorY;
                     }
                 }
             }
+        }
 
-            if (bestY != Integer.MIN_VALUE) {
-                return new Location(world, bestX + 0.5, bestY + 1.0, bestZ + 0.5);
+        if (bestY == Integer.MIN_VALUE) {
+            double nearest = Double.MAX_VALUE;
+            for (int dx = -16; dx <= 16; dx++) {
+                for (int dz = -16; dz <= 16; dz++) {
+                    int x = targetX + dx;
+                    int z = targetZ + dz;
+                    if (!insideSafeArenaSpawnArea(roomIndex, x, z)) continue;
+                    int floorY = highestArenaSurfaceY(x, z);
+                    if (!isSafeArenaSpawnSurface(x, floorY, z)) continue;
+                    double distance = dx * dx + dz * dz;
+                    if (distance < nearest) {
+                        nearest = distance;
+                        bestX = x;
+                        bestZ = z;
+                        bestY = floorY;
+                    }
+                }
             }
         }
 
-        int floorY = highestArenaSurfaceY(targetX, targetZ);
-        return new Location(world, targetX + 0.5, floorY + 1.0, targetZ + 0.5);
+        if (bestY == Integer.MIN_VALUE) {
+            int floorY = Math.max(world.getMinHeight(), highestArenaSurfaceY(targetX, targetZ));
+            return new Location(world, targetX + 0.5, floorY + 1.0, targetZ + 0.5);
+        }
+        return new Location(world, bestX + 0.5, bestY + 1.0, bestZ + 0.5);
+    }
+
+    private boolean insideSafeArenaSpawnArea(int roomIndex, int x, int z) {
+        double relativeX = x - roomCenterX(roomIndex);
+        double relativeZ = z - 128.0;
+        if (arenaMap(roomIndex).equals("ARENA_1")) {
+            return insideArenaOneBarrierPolygon(x - roomCenterX(roomIndex), z - 128)
+                    && distanceToArenaOneBarrier(relativeX, relativeZ) >= 2.25;
+        }
+        return Math.hypot(relativeX, relativeZ) <= arenaForceFieldRadius(roomIndex) - 2.25;
+    }
+
+    private boolean isSafeArenaSpawnSurface(int x, int floorY, int z) {
+        if (floorY <= world.getMinHeight() || floorY + 2 >= world.getMaxHeight()) return false;
+        Block floor = world.getBlockAt(x, floorY, z);
+        Block feet = world.getBlockAt(x, floorY + 1, z);
+        Block head = world.getBlockAt(x, floorY + 2, z);
+        Material floorType = floor.getType();
+        return floorType.isSolid() && floorType != Material.BARRIER
+                && floorType != Material.LIGHT_BLUE_STAINED_GLASS
+                && feet.isPassable() && head.isPassable();
     }
 
     private void ensureRoomBuilt(String base, int roomIndex, String selectedMap) {
@@ -902,19 +969,28 @@ public final class PracticeManager implements Listener {
 
     private void retry(Player p, boolean success) {
         UUID id = p.getUniqueId();
-        if (!resetting.add(id)) return;
-        activeAttempts.remove(id);
+
         if (success) {
-            if (world != null) lastBotComboScoreTicks.put(id, world.getGameTime());
-            stunCombos.merge(id, 1, Integer::sum);
-            updateHighScore(p, Mode.STUN_SLAM, score(p));
-            updatePracticeBoard(p);
-            plugin.message(p, "&a+1 combo! &7Combo: &e" + score(p));
+            long now = world == null ? 0L : world.getGameTime();
+            Long alreadyScoredAt = lastStunSlamScoreTicks.get(id);
+            if (alreadyScoredAt == null || alreadyScoredAt != now) {
+                lastStunSlamScoreTicks.put(id, now);
+                if (world != null) lastBotComboScoreTicks.put(id, now);
+                stunCombos.merge(id, 1, Integer::sum);
+                updateHighScore(p, Mode.STUN_SLAM, score(p));
+                updatePracticeBoard(p);
+                plugin.message(p, "&a+1 combo! &7Combo: &e" + score(p));
+            }
         } else {
+            if (resetting.contains(id)) return;
             stunCombos.put(id, 0);
             updatePracticeBoard(p);
             plugin.message(p, "&cMissed! &7Combo reset. Current combo: &e" + score(p));
         }
+
+        // Scoring above is deliberately not blocked by an already-running reset.
+        if (!resetting.add(id)) return;
+        activeAttempts.remove(id);
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             resetting.remove(id);
             if (!p.isOnline() || p.getWorld() != world) return;
@@ -1020,7 +1096,7 @@ public final class PracticeManager implements Listener {
         if (hitTick == null || hitMode == null) return;
 
         long now = world.getGameTime();
-        if (now < hitTick || now - hitTick > 2L) {
+        if (now < hitTick || now - hitTick > 5L) {
             pendingBotHitTicks.remove(id);
             pendingBotHitModes.remove(id);
             return;
@@ -1030,7 +1106,7 @@ public final class PracticeManager implements Listener {
         lastBotComboScoreTicks.put(id, now);
 
         if (hitMode == Mode.STUN_SLAM && mode(owner) == Mode.STUN_SLAM
-                && activeAttempts.contains(id)) {
+                && (activeAttempts.contains(id) || resetting.contains(id))) {
             retry(owner, true);
             return;
         }
@@ -1249,6 +1325,7 @@ public final class PracticeManager implements Listener {
         swordSwingSequence.remove(id); swordHitSwingSequence.remove(id);
         selectedHeights.remove(id); swordSwings.remove(id); swordHits.remove(id);
         activeAttempts.remove(id); resetting.remove(id);
+        lastStunSlamScoreTicks.remove(id);
         forceFieldRenderTicks.remove(id);
     }
 
