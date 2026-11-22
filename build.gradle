@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'de.leon'
-version = '1.0.8' // Endless parkour and practice arena rebuild
+version = '1.0.9' // Dedicated void spawn world migration
 
 repositories {
     mavenCentral()
