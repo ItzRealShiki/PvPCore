@@ -9,9 +9,9 @@ Standalone Paper plugin for PvP training, separate flat practice worlds, and GUI
 
 ## Build
 ```bash
-mvn clean package
+gradle clean build
 ```
-Output: `target/PvPCore-1.0.0.jar`
+Output: `build/libs/PvPCore-1.0.4.jar`
 
 ## Commands
 - `/bot` — Opens the training NPC menu.
