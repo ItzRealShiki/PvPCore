@@ -557,6 +557,16 @@ public final class PracticeManager implements Listener {
         return arenaSpawnLocation(index, 0, 0);
     }
 
+    private int highestArenaSurfaceY(int x, int z) {
+        int y = world.getHighestBlockYAt(x, z);
+        while (y > world.getMinHeight()) {
+            Material type = world.getBlockAt(x, y, z).getType();
+            if (type != Material.BARRIER && type != Material.LIGHT_BLUE_STAINED_GLASS) break;
+            y--;
+        }
+        return y;
+    }
+
     private Location arenaSpawnLocation(int roomIndex, int offsetX, int offsetZ) {
         int targetX = roomCenterX(roomIndex) + offsetX;
         int targetZ = 128 + offsetZ;
@@ -572,7 +582,7 @@ public final class PracticeManager implements Listener {
                     if (Math.max(Math.abs(dx), Math.abs(dz)) != radius) continue;
                     int x = targetX + dx;
                     int z = targetZ + dz;
-                    int floorY = world.getHighestBlockYAt(x, z);
+                    int floorY = highestArenaSurfaceY(x, z);
                     if (floorY < world.getMinHeight() || floorY + 2 >= world.getMaxHeight()) continue;
 
                     Block floor = world.getBlockAt(x, floorY, z);
@@ -595,7 +605,7 @@ public final class PracticeManager implements Listener {
             }
         }
 
-        int floorY = world.getHighestBlockYAt(targetX, targetZ);
+        int floorY = highestArenaSurfaceY(targetX, targetZ);
         return new Location(world, targetX + 0.5, floorY + 1.0, targetZ + 0.5);
     }
 
@@ -753,12 +763,14 @@ public final class PracticeManager implements Listener {
             }
         }
         int legacyTop = Math.min(world.getMaxHeight() - 1, floorY + LEGACY_GLASS_HEIGHT);
-        for (int y = floorY + 1; y <= legacyTop; y++) for (int i = 0; i < steps; i++) {
-            double angle = (Math.PI * 2.0 * i) / steps;
-            int x = cx + (int) Math.round(Math.cos(angle) * arenaRadius);
-            int z = cz + (int) Math.round(Math.sin(angle) * arenaRadius);
-            Block block = world.getBlockAt(x, y, z);
-            if (block.getType() == Material.LIGHT_BLUE_STAINED_GLASS) block.setType(Material.AIR, false);
+        for (int dx = -arenaRadius - 2; dx <= arenaRadius + 2; dx++) {
+            for (int dz = -arenaRadius - 2; dz <= arenaRadius + 2; dz++) {
+                if (Math.abs(Math.hypot(dx, dz) - arenaRadius) > 1.75) continue;
+                for (int y = floorY + 1; y <= legacyTop; y++) {
+                    Block block = world.getBlockAt(cx + dx, y, cz + dz);
+                    if (block.getType() == Material.LIGHT_BLUE_STAINED_GLASS) block.setType(Material.AIR, false);
+                }
+            }
         }
         int radiusSquared = arenaRadius * arenaRadius;
         for (int dx = -arenaRadius; dx <= arenaRadius; dx++) for (int dz = -arenaRadius; dz <= arenaRadius; dz++) {
@@ -810,7 +822,7 @@ public final class PracticeManager implements Listener {
             // event for a successful hit. Allow the hit event to arrive first, including
             // when both events happen during the same server tick.
             Long lastHitTick = lastSwordHitTicks.get(id);
-            boolean hitThisSwing = lastHitTick != null && lastHitTick >= swingTick;
+            boolean hitThisSwing = lastHitTick != null && lastHitTick >= swingTick - 2L;
             if (swordSwingSequence.getOrDefault(id, 0) == swing && !hitThisSwing) {
                 resetSwordCombo(player);
             }
