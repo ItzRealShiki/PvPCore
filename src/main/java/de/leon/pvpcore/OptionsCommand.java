@@ -53,11 +53,8 @@ public final class OptionsCommand implements CommandExecutor, Listener {
 
         String arena = plugin.practice().arenaMap(player);
         Material icon = switch (arena) {
-            case "RUINS" -> Material.MOSSY_STONE_BRICKS;
-            case "FOREST" -> Material.OAK_LEAVES;
-            case "NETHER_FORTRESS" -> Material.POLISHED_BLACKSTONE_BRICKS;
-            case "END_CITADEL" -> Material.PURPUR_BLOCK;
-            default -> Material.SMOOTH_SANDSTONE;
+            case "TINY_END_COLISEUM" -> Material.PURPUR_PILLAR;
+            default -> Material.CHISELED_SANDSTONE;
         };
         inventory.setItem(11, item(icon, "&aSelected Arena: &f" + arena.replace('_', ' '),
                 "&7This preset controls the entire arena:",
