@@ -176,7 +176,7 @@ public final class CustomMenu {
                 .decoration(TextDecoration.ITALIC, false));
 
         List<Component> lore = Arrays.stream(loreLines)
-                .map(line -> Component.text(line, color(0xB8C7DD))
+                .map(line -> (Component) Component.text(line, color(0xB8C7DD))
                         .decoration(TextDecoration.ITALIC, false))
                 .toList();
         meta.lore(lore);
