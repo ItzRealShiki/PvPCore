@@ -633,8 +633,12 @@ public final class PracticeManager implements Listener {
 
     private void buildBackgroundLandscape(int cx, int cz, int roomIndex) {
         if (world == null || !plugin.getConfig().getBoolean("duels.landscape.enabled", true)) return;
-        String path = "duels.rooms." + roomIndex + ".landscape-built";
+        String path = "duels.rooms." + roomIndex + ".landscape-built-v2";
         if (plugin.getConfig().getBoolean(path, false)) return;
+        boolean endTheme = arenaMap(roomIndex).equals("TINY_END_COLISEUM");
+        Material deep = endTheme ? Material.END_STONE_BRICKS : Material.SANDSTONE;
+        Material middle = endTheme ? Material.END_STONE : Material.RED_SANDSTONE;
+        Material surface = endTheme ? Material.END_STONE : Material.SAND;
         Random random = new Random(731942L + roomIndex * 7919L);
         for (int hill = 0; hill < 22; hill++) {
             double angle = Math.PI * 2.0 * hill / 22.0 + random.nextDouble() * 0.18;
@@ -645,25 +649,22 @@ public final class PracticeManager implements Listener {
             for (int dx = -radius; dx <= radius; dx++) for (int dz = -radius; dz <= radius; dz++) {
                 double norm = Math.sqrt(dx * dx + dz * dz) / radius;
                 if (norm > 1.0) continue;
-                int surface = 77 + Math.max(1, (int) Math.round(peak * (1.0 - norm * norm)));
-                for (int y = 76; y < surface - 1; y++) world.getBlockAt(hx + dx, y, hz + dz).setType(Material.STONE, false);
-                world.getBlockAt(hx + dx, surface - 1, hz + dz).setType(Material.DIRT, false);
-                world.getBlockAt(hx + dx, surface, hz + dz).setType(Material.GRASS_BLOCK, false);
+                int top = 77 + Math.max(1, (int) Math.round(peak * (1.0 - norm * norm)));
+                for (int y = 76; y < top - 1; y++) world.getBlockAt(hx + dx, y, hz + dz).setType(deep, false);
+                world.getBlockAt(hx + dx, top - 1, hz + dz).setType(middle, false);
+                world.getBlockAt(hx + dx, top, hz + dz).setType(surface, false);
             }
             if (hill % 2 == 0) {
                 int tx = hx + random.nextInt(Math.max(1, radius / 2)) - radius / 4;
                 int tz = hz + random.nextInt(Math.max(1, radius / 2)) - radius / 4;
-                int ground = 77 + peak, trunk = 5 + random.nextInt(3);
-                for (int y = 1; y <= trunk; y++) world.getBlockAt(tx, ground + y, tz).setType(Material.SPRUCE_LOG, false);
-                for (int layer = 0; layer < 4; layer++) {
-                    int spread = 3 - layer / 2;
-                    for (int dx = -spread; dx <= spread; dx++) for (int dz = -spread; dz <= spread; dz++)
-                        if (Math.abs(dx) + Math.abs(dz) <= spread + 1)
-                            world.getBlockAt(tx + dx, ground + trunk - 2 + layer, tz + dz).setType(Material.SPRUCE_LEAVES, false);
-                }
+                placeArenaColumn(tx, tz, 6,
+                        endTheme ? Material.OBSIDIAN : Material.RED_SANDSTONE,
+                        endTheme ? Material.PURPUR_PILLAR : Material.SANDSTONE_BRICKS,
+                        endTheme ? Material.PURPUR_BLOCK : Material.CHISELED_SANDSTONE);
             }
         }
-        plugin.getConfig().set(path, true); plugin.saveConfig();
+        plugin.getConfig().set(path, true);
+        plugin.saveConfig();
     }
 
     public String arenaMap(Player player) {
@@ -681,7 +682,7 @@ public final class PracticeManager implements Listener {
                 }
             }
         }
-        return "COLOSSEUM";
+        return "ANUBIS_RISE";
     }
 
     private String normalizeArenaMap(String value) {
@@ -772,7 +773,7 @@ public final class PracticeManager implements Listener {
         int rightBaseY = world.getHighestBlockYAt(rightX, rightZ) + 1;
         placeArenaColumn(leftX, leftZ, height, base, body, cap);
         placeArenaColumn(rightX, rightZ, height, base, body, cap);
-        int bridgeY = Math.max(leftBaseY, rightBaseY) + height;
+        int bridgeY = Math.max(leftBaseY, rightBaseY) + height - 1;
         for (int offset = -4; offset <= 4; offset++) {
             int x = alongX ? centerX + offset : centerX;
             int z = alongX ? centerZ : centerZ + offset;
@@ -799,7 +800,7 @@ public final class PracticeManager implements Listener {
                 int x = cx + sx * reach;
                 int z = cz + sz * reach;
                 placeArenaColumn(x, z, 8, red, sandstone, chiseled);
-                int y = world.getHighestBlockYAt(x, z) + 8;
+                int y = world.getHighestBlockYAt(x, z) + 1;
                 world.getBlockAt(x, y, z).setType(gold, false);
                 world.getBlockAt(x + 1, y - 2, z).setType(dark, false);
                 world.getBlockAt(x - 1, y - 2, z).setType(dark, false);
@@ -814,13 +815,19 @@ public final class PracticeManager implements Listener {
         buildArenaGate(cx, cz, cx + gateReach, cz, false, red, sandstone, gold, 7);
 
         // A stepped temple facade stands behind the north entrance.
+        // Its broad central doorway stays open so it is a visual landmark, not a choke point.
         int templeZ = cz - Math.max(10, arenaRadius - 13);
+        int templeBaseY = world.getHighestBlockYAt(cx, templeZ) + 1;
         for (int layer = 0; layer < 3; layer++) {
             int halfWidth = 8 - layer * 2;
-            int y = 81 + layer;
+            int y = templeBaseY + layer;
             for (int x = -halfWidth; x <= halfWidth; x++) {
+                if (Math.abs(x) <= 3) continue;
                 world.getBlockAt(cx + x, y, templeZ + layer).setType(layer == 2 ? chiseled : sandstone, false);
                 world.getBlockAt(cx + x, y, templeZ + layer + 2).setType(layer == 2 ? chiseled : cut, false);
+            }
+            for (int x : new int[]{-3, 3}) {
+                world.getBlockAt(cx + x, y, templeZ + layer + 1).setType(layer == 2 ? gold : dark, false);
             }
         }
         for (int x : new int[]{-6, -3, 3, 6}) {
@@ -864,7 +871,7 @@ public final class PracticeManager implements Listener {
                 int x = cx + sx * reach;
                 int z = cz + sz * reach;
                 placeArenaColumn(x, z, 8, obsidian, endAccent, purpur);
-                int top = world.getHighestBlockYAt(x, z) + 8;
+                int top = world.getHighestBlockYAt(x, z) + 1;
                 world.getBlockAt(x, top, z).setType(light, false);
                 world.getBlockAt(x, top + 1, z).setType(Material.END_ROD, false);
             }
@@ -909,27 +916,14 @@ public final class PracticeManager implements Listener {
     }
 
     private Material[] arenaPalette(int roomIndex) {
-        // The selected arena is a complete preset: its floor layers, wall material,
-        // accent blocks and surrounding details all come from the same map choice.
+        // Full test presets: each map supplies its own top floor, foundation layers and trim.
         return switch (arenaMap(roomIndex)) {
-            case "COLOSSEUM" -> new Material[]{
-                    Material.SMOOTH_SANDSTONE, Material.SANDSTONE,
-                    Material.CUT_SANDSTONE, Material.CHISELED_SANDSTONE};
-            case "RUINS" -> new Material[]{
-                    Material.STONE_BRICKS, Material.CRACKED_STONE_BRICKS,
-                    Material.MOSSY_STONE_BRICKS, Material.COBBLESTONE};
-            case "FOREST" -> new Material[]{
-                    Material.GRASS_BLOCK, Material.DIRT,
-                    Material.ROOTED_DIRT, Material.MOSS_BLOCK};
-            case "NETHER_FORTRESS" -> new Material[]{
-                    Material.POLISHED_BLACKSTONE_BRICKS, Material.BLACKSTONE,
-                    Material.BASALT, Material.NETHER_BRICKS};
-            case "END_CITADEL" -> new Material[]{
+            case "TINY_END_COLISEUM" -> new Material[]{
                     Material.END_STONE_BRICKS, Material.END_STONE,
                     Material.PURPUR_BLOCK, Material.PURPUR_PILLAR};
             default -> new Material[]{
-                    Material.SMOOTH_SANDSTONE, Material.SANDSTONE,
-                    Material.CUT_SANDSTONE, Material.CHISELED_SANDSTONE};
+                    Material.SAND, Material.SANDSTONE,
+                    Material.RED_SANDSTONE, Material.CUT_SANDSTONE};
         };
     }
 
