@@ -659,7 +659,7 @@ public final class PracticeManager implements Listener {
                 int tz = hz + random.nextInt(Math.max(1, radius / 2)) - radius / 4;
                 placeArenaColumn(tx, tz, 6,
                         endTheme ? Material.OBSIDIAN : Material.RED_SANDSTONE,
-                        endTheme ? Material.PURPUR_PILLAR : Material.SANDSTONE_BRICKS,
+                        endTheme ? Material.PURPUR_PILLAR : Material.SMOOTH_SANDSTONE,
                         endTheme ? Material.PURPUR_BLOCK : Material.CHISELED_SANDSTONE);
             }
         }
@@ -705,9 +705,9 @@ public final class PracticeManager implements Listener {
 
     private Material arenaWallMaterial(int roomIndex) {
         return switch (arenaMap(roomIndex)) {
-            case "ANUBIS_RISE" -> Material.SANDSTONE_BRICKS;
+            case "ANUBIS_RISE" -> Material.SMOOTH_SANDSTONE;
             case "TINY_END_COLISEUM" -> Material.END_STONE_BRICKS;
-            default -> Material.SANDSTONE_BRICKS;
+            default -> Material.SMOOTH_SANDSTONE;
         };
     }
 
@@ -786,7 +786,7 @@ public final class PracticeManager implements Listener {
     }
 
     private void buildAnubisRise(int cx, int cz, int arenaRadius) {
-        Material sandstone = Material.SANDSTONE_BRICKS;
+        Material sandstone = Material.SMOOTH_SANDSTONE;
         Material cut = Material.CUT_SANDSTONE;
         Material chiseled = Material.CHISELED_SANDSTONE;
         Material red = Material.RED_SANDSTONE;
