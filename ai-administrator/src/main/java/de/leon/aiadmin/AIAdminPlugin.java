@@ -164,7 +164,7 @@ public final class AIAdminPlugin extends JavaPlugin {
 
         int index = 1;
         for (AIAnalysis.Finding finding : analysis.findings()) {
-            String message = ChatColor.YELLOW + index++ + ". " + ChatColor.WHITE + finding.title()
+            String message = ChatColor.YELLOW + String.valueOf(index++) + ". " + ChatColor.WHITE + finding.title()
                     + ChatColor.GRAY + " | Beleg: " + finding.evidence()
                     + " | Erklärung: " + finding.explanation()
                     + " | Empfehlung: " + finding.recommendation();
