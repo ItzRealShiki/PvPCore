@@ -1237,8 +1237,12 @@ public final class PracticeManager implements Listener {
                 Block[] perimeter = {
                         world.getBlockAt(cx - arenaRadius, y, cz + offset),
                         world.getBlockAt(cx + arenaRadius, y, cz + offset),
+                        world.getBlockAt(cx - arenaRadius + 1, y, cz + offset),
+                        world.getBlockAt(cx + arenaRadius - 1, y, cz + offset),
                         world.getBlockAt(cx + offset, y, cz - arenaRadius),
-                        world.getBlockAt(cx + offset, y, cz + arenaRadius)
+                        world.getBlockAt(cx + offset, y, cz + arenaRadius),
+                        world.getBlockAt(cx + offset, y, cz - arenaRadius + 1),
+                        world.getBlockAt(cx + offset, y, cz + arenaRadius - 1)
                 };
                 for (Block block : perimeter) {
                     // Always clear the low arena wall; also remove any remaining tall legacy glass walls.
