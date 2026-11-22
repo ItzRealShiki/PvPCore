@@ -578,6 +578,9 @@ public final class PracticeManager implements Listener {
     }
 
     private void buildDuelObstacles(int cx, int cz, int roomIndex) {
+        // Each test arena has its own themed pillars, gates and floor emblem.
+        // Do not overlay the former generic stone/copper obstacle set.
+        if (ARENA_MAPS.contains(arenaMap(roomIndex))) return;
         Material[] pillars = {Material.STONE_BRICKS, Material.MOSSY_STONE_BRICKS, Material.POLISHED_ANDESITE, Material.COBBLED_DEEPSLATE};
         int[][] positions = {
                 {-14, -12, 3}, {14, -12, 2}, {-14, 12, 2}, {14, 12, 3},
@@ -765,10 +768,11 @@ public final class PracticeManager implements Listener {
         int leftZ = alongX ? centerZ : centerZ - 4;
         int rightX = alongX ? centerX + 4 : centerX;
         int rightZ = alongX ? centerZ : centerZ + 4;
+        int leftBaseY = world.getHighestBlockYAt(leftX, leftZ) + 1;
+        int rightBaseY = world.getHighestBlockYAt(rightX, rightZ) + 1;
         placeArenaColumn(leftX, leftZ, height, base, body, cap);
         placeArenaColumn(rightX, rightZ, height, base, body, cap);
-        int bridgeY = Math.max(world.getHighestBlockYAt(leftX, leftZ),
-                world.getHighestBlockYAt(rightX, rightZ)) + height;
+        int bridgeY = Math.max(leftBaseY, rightBaseY) + height;
         for (int offset = -4; offset <= 4; offset++) {
             int x = alongX ? centerX + offset : centerX;
             int z = alongX ? centerZ : centerZ + offset;
@@ -1022,6 +1026,16 @@ public final class PracticeManager implements Listener {
                     int plantRoll = decorationRandom.nextInt(17);
                     Material groundDetail = null;
                     switch (theme) {
+                        case "ANUBIS_RISE" -> {
+                            if (plantRoll <= 2) groundDetail = Material.CUT_SANDSTONE;
+                            else if (plantRoll == 3) groundDetail = Material.RED_SANDSTONE;
+                            else if (plantRoll == 4) groundDetail = Material.CHISELED_SANDSTONE;
+                        }
+                        case "TINY_END_COLISEUM" -> {
+                            if (plantRoll <= 2) groundDetail = Material.PURPUR_SLAB;
+                            else if (plantRoll == 3) groundDetail = Material.END_STONE_BRICKS;
+                            else if (plantRoll == 4) groundDetail = Material.CHORUS_FLOWER;
+                        }
                         case "COLOSSEUM" -> {
                             if (plantRoll <= 2) groundDetail = Material.SANDSTONE_SLAB;
                             else if (plantRoll == 3) groundDetail = Material.CUT_SANDSTONE;
@@ -1066,17 +1080,9 @@ public final class PracticeManager implements Listener {
             }
         }
 
-        // The End Citadel gets a few compact ruins around the perimeter. The central
-        // combat area remains completely open and the shulkers are display-only.
-        if (theme.equals("END_CITADEL")) {
-            clearEndDecorativeShulkers(roomIndex);
-            buildEndRuin(cx - 15, cz - 14, roomIndex, 0);
-            buildEndRuin(cx + 15, cz - 14, roomIndex, 1);
-            buildEndRuin(cx - 15, cz + 14, roomIndex, 2);
-            buildEndRuin(cx + 15, cz + 14, roomIndex, 3);
-        } else {
-            clearEndDecorativeShulkers(roomIndex);
-        }
+        // Remove any legacy display shulkers left by the earlier End Citadel test.
+        // The Tiny End Coliseum now uses block-built gatehouses and corner towers.
+        clearEndDecorativeShulkers(roomIndex);
 
         // Decorative frame uses the selected arena's own floor trim material.
         Material trim = palette[3];
