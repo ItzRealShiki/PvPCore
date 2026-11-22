@@ -1,19 +1,11 @@
 package de.leon.customguitest.gui;
 
 import de.leon.customguitest.CustomGuiTestPlugin;
+import de.leon.customguitest.art.MapArtwork;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.TextColor;
-import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
-import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
-import org.bukkit.inventory.ItemFlag;
-import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
-
-import java.util.Arrays;
-import java.util.List;
 
 public final class CustomMenu {
     private static final int MENU_SIZE = 54;
@@ -25,39 +17,39 @@ public final class CustomMenu {
 
     public void openMain(Player player) {
         GuiHolder holder = new GuiHolder(GuiPage.MAIN);
-        Inventory inventory = Bukkit.createInventory(holder, MENU_SIZE, mainTitle());
+        Inventory inventory = Bukkit.createInventory(holder, MENU_SIZE, Component.empty());
         holder.bind(inventory);
 
-        fillBackground(inventory);
-        inventory.setItem(4, item(Material.NETHER_STAR, "✦  NOVA INTERFACE  ✦", 0xE5D9FF,
-                "A custom inventory experience.",
-                "Designed, colored and controlled by the plugin."));
-        inventory.setItem(13, item(Material.HEART_OF_THE_SEA, "SYSTEM ONLINE", 0x78F2D2,
-                "Welcome to the Nova interface.",
-                "Choose a module below to explore the GUI test."));
+        fillCanvas(inventory);
+        addNovaTitle(inventory);
 
-        inventory.setItem(20, item(Material.DIAMOND, "PROFILE PREVIEW", 0x76DFFF,
-                "PERSONAL AREA",
-                "A small interactive profile demo.",
-                "Click to test a custom button response."));
-        inventory.setItem(22, item(Material.WRITABLE_BOOK, "DESIGN LAB", 0xC5A5FF,
+        inventory.setItem(13, plugin.artwork().item(MapArtwork.STATUS, "SYSTEM ONLINE", 0x80F0D1,
+                "NOVA INTERFACE",
+                "All visual buttons are server-rendered map art.",
+                "No resource pack or client download required."));
+
+        inventory.setItem(20, plugin.artwork().item(MapArtwork.PROFILE, "PROFILE", 0x81DEFF,
+                "PERSONAL MODULE",
+                "A custom pixel-art button.",
+                "Click to test the profile interaction."));
+        inventory.setItem(22, plugin.artwork().item(MapArtwork.DESIGN, "DESIGN LAB", 0xC8AEFF,
                 "INTERFACE INFORMATION",
-                "See how the title and layout are built.",
-                "Opens a second page with a different title."));
-        inventory.setItem(24, item(Material.AMETHYST_SHARD, "COLOR ATMOSPHERE", 0xE5A8FF,
-                "LIVE THEME SWITCH",
-                "Switch between Aurora Cyan and Violet.",
-                "The border is redrawn immediately."));
-
-        inventory.setItem(31, item(Material.ENDER_EYE, "INTERACTION TEST", 0x83F0C8,
-                "INPUT DETECTED",
-                "Click to send a custom action-bar message.",
-                "Menu clicks are handled and protected by the plugin."));
-        inventory.setItem(40, item(Material.GLOW_INK_SAC, "CURRENT PALETTE", 0x83CFFF,
-                plugin.isAlternateTheme() ? "VIOLET / ORCHID" : "AURORA / CYAN",
-                "The menu theme is currently active."));
-        inventory.setItem(49, item(Material.BARRIER, "CLOSE INTERFACE", 0xFF8585,
-                "Leave the Nova interface."));
+                "View the custom title and drawing system.",
+                "Opens a second page with its own graphic title."));
+        inventory.setItem(24, plugin.artwork().item(MapArtwork.THEME, "COLOR ATMOSPHERE", 0xE3A7FF,
+                "LIVE VISUAL THEME",
+                plugin.isAlternateTheme() ? "Current palette: VIOLET" : "Current palette: AURORA",
+                "Click to switch the frame and background artwork."));
+        inventory.setItem(31, plugin.artwork().item(MapArtwork.INTERACTION, "INTERACTION TEST", 0x8CF0C9,
+                "CUSTOM INPUT",
+                "Click to trigger a custom action-bar message.",
+                "All inventory interaction is handled by the plugin."));
+        inventory.setItem(40, plugin.artwork().item(MapArtwork.INFO, "ABOUT NOVA", 0xB7CBFF,
+                "SERVER-SIDE GRAPHICS",
+                "Custom map textures are delivered as map pixels.",
+                "The vanilla window frame itself cannot be replaced without a pack."));
+        inventory.setItem(49, plugin.artwork().item(MapArtwork.CLOSE, "CLOSE INTERFACE", 0xFF919F,
+                "Close this custom interface."));
 
         player.openInventory(inventory);
         player.playSound(player.getLocation(), org.bukkit.Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.55f, 1.25f);
@@ -65,32 +57,40 @@ public final class CustomMenu {
 
     public void openInfo(Player player) {
         GuiHolder holder = new GuiHolder(GuiPage.INFO);
-        Inventory inventory = Bukkit.createInventory(holder, MENU_SIZE, infoTitle());
+        Inventory inventory = Bukkit.createInventory(holder, MENU_SIZE, Component.empty());
         holder.bind(inventory);
 
-        fillBackground(inventory);
-        inventory.setItem(4, item(Material.NETHER_STAR, "✧  DESIGN LAB  ✧", 0xE5D9FF,
-                "A closer look at the interface.",
-                "This page uses its own custom inventory title."));
-        inventory.setItem(13, item(Material.PURPLE_DYE, "BUILT FOR THE SERVER", 0xC5A5FF,
-                "The layout is generated by a Paper plugin.",
-                "The positions, names, lore and colors are fully controlled here."));
-        inventory.setItem(20, item(Material.CHEST, "CUSTOM LAYOUT", 0x76DFFF,
-                "54 inventory slots arranged into a menu.",
-                "Decorative glass, clear spacing and dedicated buttons."));
-        inventory.setItem(22, item(Material.NAME_TAG, "CUSTOM TITLE", 0xC5A5FF,
-                "An Adventure Component title.",
-                "Separate text segments can have different colors and formatting."));
-        inventory.setItem(24, item(Material.PAINTING, "CLIENT-SIDE LIMIT", 0xFFC978,
-                "The chest frame itself remains vanilla.",
-                "Changing the actual inventory texture still requires a resource pack."));
-        inventory.setItem(40, item(Material.SHIELD, "CLICK PROTECTION", 0x83F0C8,
-                "Players cannot take menu icons.",
-                "Click and drag events are cancelled while the custom GUI is open."));
-        inventory.setItem(49, item(Material.ARROW, "BACK TO NOVA", 0x76DFFF,
+        fillCanvas(inventory);
+        addLabTitle(inventory);
+
+        inventory.setItem(13, plugin.artwork().item(MapArtwork.INFO, "THE DESIGN LAB", 0xCFB4FF,
+                "NOVA / VISUAL SYSTEM",
+                "The screen title is a custom image, not typed text.",
+                "Each map tile is drawn by the server."));
+        inventory.setItem(20, plugin.artwork().item(MapArtwork.DESIGN, "PIXEL ART BUTTONS", 0x82E2FF,
+                "128 x 128 PIXEL CANVAS",
+                "Each Filled Map contains original pixel artwork.",
+                "The map images are reused after server restarts."));
+        inventory.setItem(22, plugin.artwork().item(MapArtwork.THEME, "COLOR PALETTES", 0xE3A7FF,
+                "AURORA CYAN / VIOLET",
+                "A different background and border map is used",
+                "when the theme is switched."));
+        inventory.setItem(24, plugin.artwork().item(MapArtwork.PROFILE, "CUSTOM ICONS", 0x81DEFF,
+                "ORIGINAL PIXEL SYMBOLS",
+                "Profile, design, theme, interaction, info,",
+                "status, back and close icons are all custom."));
+        inventory.setItem(31, plugin.artwork().item(MapArtwork.INFO, "CLIENT LIMIT", 0xFFD28C,
+                "THE CHEST FRAME IS VANILLA",
+                "Minecraft does not let a server replace the",
+                "native window font or container texture without a pack."));
+        inventory.setItem(40, plugin.artwork().item(MapArtwork.STATUS, "SERVER-RENDERED", 0x8CF0C9,
+                "NO RESOURCE PACK",
+                "The image data is sent using vanilla maps.",
+                "Every player sees the same custom art."));
+        inventory.setItem(49, plugin.artwork().item(MapArtwork.BACK, "BACK TO NOVA", 0x81DEFF,
                 "Return to the main interface."));
-        inventory.setItem(53, item(Material.BARRIER, "CLOSE INTERFACE", 0xFF8585,
-                "Leave the Nova interface."));
+        inventory.setItem(53, plugin.artwork().item(MapArtwork.CLOSE, "CLOSE INTERFACE", 0xFF919F,
+                "Close this custom interface."));
 
         player.openInventory(inventory);
         player.playSound(player.getLocation(), org.bukkit.Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.55f, 1.05f);
@@ -100,92 +100,38 @@ public final class CustomMenu {
         openMain(player);
     }
 
-    private void fillBackground(Inventory inventory) {
-        Material[] cyanToViolet = {
-                Material.CYAN_STAINED_GLASS_PANE,
-                Material.LIGHT_BLUE_STAINED_GLASS_PANE,
-                Material.BLUE_STAINED_GLASS_PANE,
-                Material.PURPLE_STAINED_GLASS_PANE,
-                Material.MAGENTA_STAINED_GLASS_PANE,
-                Material.PURPLE_STAINED_GLASS_PANE,
-                Material.BLUE_STAINED_GLASS_PANE,
-                Material.LIGHT_BLUE_STAINED_GLASS_PANE,
-                Material.CYAN_STAINED_GLASS_PANE
-        };
-        Material[] violetToCyan = {
-                Material.PURPLE_STAINED_GLASS_PANE,
-                Material.MAGENTA_STAINED_GLASS_PANE,
-                Material.PINK_STAINED_GLASS_PANE,
-                Material.PURPLE_STAINED_GLASS_PANE,
-                Material.BLUE_STAINED_GLASS_PANE,
-                Material.PURPLE_STAINED_GLASS_PANE,
-                Material.PINK_STAINED_GLASS_PANE,
-                Material.MAGENTA_STAINED_GLASS_PANE,
-                Material.PURPLE_STAINED_GLASS_PANE
-        };
-        Material[] palette = plugin.isAlternateTheme() ? violetToCyan : cyanToViolet;
-
+    private void fillCanvas(Inventory inventory) {
+        MapArtwork panel = plugin.isAlternateTheme() ? MapArtwork.PANEL_VIOLET : MapArtwork.PANEL;
+        MapArtwork edge = plugin.isAlternateTheme() ? MapArtwork.EDGE_VIOLET : MapArtwork.EDGE;
+        MapArtwork corner = plugin.isAlternateTheme() ? MapArtwork.ORNAMENT_VIOLET : MapArtwork.ORNAMENT;
         for (int slot = 0; slot < MENU_SIZE; slot++) {
             int row = slot / 9;
             int column = slot % 9;
             boolean horizontalEdge = row == 0 || row == 5;
             boolean verticalEdge = column == 0 || column == 8;
-
-            if (horizontalEdge) {
-                inventory.setItem(slot, pane(palette[column]));
-            } else if (verticalEdge) {
-                inventory.setItem(slot, pane(palette[row == 1 || row == 4 ? 0 : 8]));
-            } else {
-                inventory.setItem(slot, pane(Material.BLACK_STAINED_GLASS_PANE));
-            }
+            MapArtwork texture = horizontalEdge || verticalEdge ? edge : panel;
+            if ((row == 0 || row == 5) && (column == 0 || column == 8)) texture = corner;
+            inventory.setItem(slot, plugin.artwork().tile(texture));
         }
     }
 
-    private Component mainTitle() {
-        return Component.text("✦  ", color(0x63E7FF))
-                .append(Component.text("NOVA", color(0xA8DFFF)).decorate(TextDecoration.BOLD))
-                .append(Component.text("  /  ", color(0x8A9AB9)))
-                .append(Component.text("INTERFACE", color(0xD2B5FF)).decorate(TextDecoration.BOLD))
-                .append(Component.text("  ✦", color(0xC28DFF)))
-                .decoration(TextDecoration.ITALIC, false);
+    private void addNovaTitle(Inventory inventory) {
+        inventory.setItem(1, plugin.artwork().tile(MapArtwork.ORNAMENT));
+        inventory.setItem(2, plugin.artwork().tile(MapArtwork.TITLE_N));
+        inventory.setItem(3, plugin.artwork().tile(MapArtwork.TITLE_O));
+        inventory.setItem(4, plugin.artwork().tile(MapArtwork.TITLE_V));
+        inventory.setItem(5, plugin.artwork().tile(MapArtwork.TITLE_A));
+        inventory.setItem(6, plugin.artwork().tile(MapArtwork.ORNAMENT));
+        inventory.setItem(7, plugin.artwork().tile(MapArtwork.ORNAMENT));
     }
 
-    private Component infoTitle() {
-        return Component.text("✧  ", color(0xC28DFF))
-                .append(Component.text("NOVA", color(0xD4B7FF)).decorate(TextDecoration.BOLD))
-                .append(Component.text("  /  ", color(0x8A9AB9)))
-                .append(Component.text("DESIGN LAB", color(0x8ADFFF)).decorate(TextDecoration.BOLD))
-                .append(Component.text("  ✧", color(0x72E7FF)))
-                .decoration(TextDecoration.ITALIC, false);
-    }
-
-    private ItemStack pane(Material material) {
-        ItemStack stack = new ItemStack(material);
-        ItemMeta meta = stack.getItemMeta();
-        meta.displayName(Component.text(" ").decoration(TextDecoration.ITALIC, false));
-        meta.addItemFlags(ItemFlag.values());
-        stack.setItemMeta(meta);
-        return stack;
-    }
-
-    private ItemStack item(Material material, String name, int hex, String... loreLines) {
-        ItemStack stack = new ItemStack(material);
-        ItemMeta meta = stack.getItemMeta();
-        meta.displayName(Component.text(name, color(hex))
-                .decorate(TextDecoration.BOLD)
-                .decoration(TextDecoration.ITALIC, false));
-
-        List<Component> lore = Arrays.stream(loreLines)
-                .map(line -> (Component) Component.text(line, color(0xB8C7DD))
-                        .decoration(TextDecoration.ITALIC, false))
-                .toList();
-        meta.lore(lore);
-        meta.addItemFlags(ItemFlag.HIDE_ATTRIBUTES, ItemFlag.HIDE_ENCHANTS, ItemFlag.HIDE_ADDITIONAL_TOOLTIP);
-        stack.setItemMeta(meta);
-        return stack;
-    }
-
-    private TextColor color(int hex) {
-        return TextColor.color(hex);
+    private void addLabTitle(Inventory inventory) {
+        inventory.setItem(1, plugin.artwork().tile(MapArtwork.ORNAMENT_VIOLET));
+        inventory.setItem(2, plugin.artwork().tile(MapArtwork.TITLE_L));
+        inventory.setItem(3, plugin.artwork().tile(MapArtwork.TITLE_A));
+        inventory.setItem(4, plugin.artwork().tile(MapArtwork.TITLE_B));
+        inventory.setItem(5, plugin.artwork().tile(MapArtwork.ORNAMENT_VIOLET));
+        inventory.setItem(6, plugin.artwork().tile(MapArtwork.ORNAMENT_VIOLET));
+        inventory.setItem(7, plugin.artwork().tile(MapArtwork.ORNAMENT_VIOLET));
     }
 }
