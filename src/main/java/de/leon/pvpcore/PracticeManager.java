@@ -40,10 +40,9 @@ public final class PracticeManager implements Listener {
 
     private static final int ROOM_SPACING = 1024;
     private static final int DUEL_ARENA_RADIUS = 48;
-    private static final int PRACTICE_ARENA_RADIUS = 24;
+    private static final int PRACTICE_ARENA_RADIUS = 48;
     private static final int ARENA_WALL_HEIGHT = 12;
-    private static final List<String> ARENA_MAPS = List.of(
-            "ANUBIS_RISE", "TINY_END_COLISEUM");
+    private static final List<String> ARENA_MAPS = List.of("ARENA_1", "ARENA_3");
     private static final String PRACTICE_WORLD = "prac_void";
 
     private final PvPCore plugin;
@@ -117,7 +116,7 @@ public final class PracticeManager implements Listener {
                     plugin.getConfig().getInt("practice.players." + player.getUniqueId() + ".room", -1)));
             if (index < 0) continue;
             int cx = roomCenterX(index), cz = 128;
-            boolean nearby = player.getLocation().distanceSquared(new Location(world == null ? player.getWorld() : world, cx + 0.5, player.getLocation().getY(), cz + 0.5)) <= 60.0 * 60.0;
+            boolean nearby = player.getLocation().distanceSquared(new Location(world == null ? player.getWorld() : world, cx + 0.5, player.getLocation().getY(), cz + 0.5)) <= 90.0 * 90.0;
             if (!nearby) {
                 plugin.bots().removeOwned(player);
                 continue;
@@ -185,11 +184,7 @@ public final class PracticeManager implements Listener {
             plugin.message(admin, "&cThat player has not created a practice box yet.");
             return;
         }
-        if (!plugin.getConfig().getBoolean(base + ".built", false)) {
-            buildRoom(roomCenterX(index), 128);
-            plugin.getConfig().set(base + ".built", true);
-            plugin.saveConfig();
-        }
+        ensureRoomBuilt(base, index, arenaMap(owner));
         adminBoxVisits.put(admin.getUniqueId(), index);
         int height = ARENA_WALL_HEIGHT;
         if (!activeForceFields.contains(index)) {
@@ -231,11 +226,7 @@ public final class PracticeManager implements Listener {
             plugin.saveConfig();
         }
         int cx = roomCenterX(index), cz = 128;
-        if (!plugin.getConfig().getBoolean(base + ".built", false)) {
-            buildRoom(cx, cz);
-            plugin.getConfig().set(base + ".built", true);
-            plugin.saveConfig();
-        }
+        ensureRoomBuilt(base, index, arenaMap(challenger));
         clearPlatform(cx, cz, DUEL_ARENA_RADIUS);
         buildDuelObstacles(cx, cz, index);
         buildDuelFoundation(cx, cz, index);
@@ -499,11 +490,7 @@ public final class PracticeManager implements Listener {
         }
 
         int cx = roomCenterX(index), cz = 128;
-        if (!plugin.getConfig().getBoolean(base + ".built", false)) {
-            buildRoom(cx, cz);
-            plugin.getConfig().set(base + ".built", true);
-            plugin.saveConfig();
-        }
+        ensureRoomBuilt(base, index, arenaMap(p));
         clearPlatform(cx, cz, PRACTICE_ARENA_RADIUS);
         plugin.bots().removeOwned(p);
         p.setGameMode(GameMode.SURVIVAL);
@@ -551,8 +538,29 @@ public final class PracticeManager implements Listener {
         return new Location(world, cx + 0.5, 81, cz + 0.5);
     }
 
-    private void buildRoom(int cx, int cz) {
-        buildArenaPlatform(cx, cz, PRACTICE_ARENA_RADIUS);
+    private void ensureRoomBuilt(String base, int roomIndex, String selectedMap) {
+        String builtMap = plugin.getConfig().getString(base + ".built-map", "");
+        boolean built = plugin.getConfig().getBoolean(base + ".built", false);
+        if (built && selectedMap.equals(builtMap)) return;
+
+        String previousMap = built ? builtMap : "";
+        buildRoom(roomCenterX(roomIndex), 128, selectedMap, previousMap);
+        plugin.getConfig().set(base + ".built", true);
+        plugin.getConfig().set(base + ".built-map", selectedMap);
+        plugin.saveConfig();
+    }
+
+    private void buildRoom(int cx, int cz, String map, String previousMap) {
+        try {
+            SchematicLoader.paste(plugin, world, map, previousMap, cx, 80, cz);
+            plugin.getLogger().info("Loaded " + map + " schematic at " + cx + ", 80, " + cz + ".");
+        } catch (Exception exception) {
+            plugin.getLogger().log(java.util.logging.Level.SEVERE,
+                    "Could not load arena schematic " + map + ". Using the built-in fallback arena.", exception);
+            int roomIndex = Math.floorDiv(cx - 128, ROOM_SPACING);
+            buildArenaPlatform(cx, cz, PRACTICE_ARENA_RADIUS);
+            buildArenaLandmarks(cx, cz, PRACTICE_ARENA_RADIUS, roomIndex);
+        }
     }
 
     private void clearPlatform(int cx, int cz, int radius) {
@@ -570,7 +578,6 @@ public final class PracticeManager implements Listener {
         // This also prevents old wall geometry from surviving when switching between practice and duel sizes.
         removeForceField(cx, cz, world.getMaxHeight() - 81, PRACTICE_ARENA_RADIUS);
         removeForceField(cx, cz, world.getMaxHeight() - 81, DUEL_ARENA_RADIUS);
-        buildArenaPlatform(cx, cz, radius);
         int roomIndex = Math.floorDiv(cx - 128, ROOM_SPACING);
         activeForceFields.remove(roomIndex);
         forceFieldHeights.remove(roomIndex);
@@ -608,7 +615,8 @@ public final class PracticeManager implements Listener {
     }
 
     private void buildDuelFoundation(int cx, int cz, int roomIndex) {
-        if (world == null || !plugin.getConfig().getBoolean("duels.foundation.enabled", true)) return;
+        if (world == null || ARENA_MAPS.contains(arenaMap(roomIndex))
+                || !plugin.getConfig().getBoolean("duels.foundation.enabled", true)) return;
         String path = "duels.rooms." + roomIndex + ".foundation-built";
         if (plugin.getConfig().getBoolean(path, false) || !foundationBuildingRooms.add(roomIndex)) return;
         int stoneDepth = Math.max(1, Math.min(64, plugin.getConfig().getInt("duels.foundation.stone-depth", 64)));
@@ -632,10 +640,11 @@ public final class PracticeManager implements Listener {
     }
 
     private void buildBackgroundLandscape(int cx, int cz, int roomIndex) {
-        if (world == null || !plugin.getConfig().getBoolean("duels.landscape.enabled", true)) return;
+        if (world == null || ARENA_MAPS.contains(arenaMap(roomIndex))
+                || !plugin.getConfig().getBoolean("duels.landscape.enabled", true)) return;
         String path = "duels.rooms." + roomIndex + ".landscape-built-v2";
         if (plugin.getConfig().getBoolean(path, false)) return;
-        boolean endTheme = arenaMap(roomIndex).equals("TINY_END_COLISEUM");
+        boolean endTheme = arenaMap(roomIndex).equals("ARENA_3");
         Material deep = endTheme ? Material.END_STONE_BRICKS : Material.SANDSTONE;
         Material middle = endTheme ? Material.END_STONE : Material.RED_SANDSTONE;
         Material surface = endTheme ? Material.END_STONE : Material.SAND;
@@ -669,7 +678,7 @@ public final class PracticeManager implements Listener {
 
     public String arenaMap(Player player) {
         return normalizeArenaMap(plugin.getConfig().getString(
-                "practice.players." + player.getUniqueId() + ".arena-map", "ANUBIS_RISE"));
+                "practice.players." + player.getUniqueId() + ".arena-map", "ARENA_1"));
     }
 
     private String arenaMap(int roomIndex) {
@@ -678,20 +687,19 @@ public final class PracticeManager implements Listener {
             for (String uuid : players.getKeys(false)) {
                 if (plugin.getConfig().getInt("practice.players." + uuid + ".room", -1) == roomIndex) {
                     return normalizeArenaMap(plugin.getConfig().getString(
-                            "practice.players." + uuid + ".arena-map", "ANUBIS_RISE"));
+                            "practice.players." + uuid + ".arena-map", "ARENA_1"));
                 }
             }
         }
-        return "ANUBIS_RISE";
+        return "ARENA_1";
     }
 
     private String normalizeArenaMap(String value) {
-        String normalized = value == null ? "ANUBIS_RISE" : value.toUpperCase(Locale.ROOT);
-        // Preserve saved selections from the previous test build when upgrading.
+        String normalized = value == null ? "ARENA_1" : value.toUpperCase(Locale.ROOT);
         return switch (normalized) {
-            case "END_CITADEL", "TINY_END", "TINY_END_COLISEUM" -> "TINY_END_COLISEUM";
-            case "ANUBIS_RISE" -> "ANUBIS_RISE";
-            default -> "ANUBIS_RISE";
+            case "ARENA_3", "END_CITADEL", "TINY_END", "TINY_END_COLISEUM" -> "ARENA_3";
+            case "ARENA_1", "ANUBIS_RISE", "COLOSSEUM" -> "ARENA_1";
+            default -> "ARENA_1";
         };
     }
 
@@ -705,16 +713,16 @@ public final class PracticeManager implements Listener {
 
     private Material arenaWallMaterial(int roomIndex) {
         return switch (arenaMap(roomIndex)) {
-            case "ANUBIS_RISE" -> Material.SMOOTH_SANDSTONE;
-            case "TINY_END_COLISEUM" -> Material.END_STONE_BRICKS;
+            case "ARENA_1" -> Material.SMOOTH_SANDSTONE;
+            case "ARENA_3" -> Material.END_STONE_BRICKS;
             default -> Material.SMOOTH_SANDSTONE;
         };
     }
 
     private Material arenaAccentMaterial(int roomIndex) {
         return switch (arenaMap(roomIndex)) {
-            case "ANUBIS_RISE" -> Material.CHISELED_SANDSTONE;
-            case "TINY_END_COLISEUM" -> Material.PURPUR_PILLAR;
+            case "ARENA_1" -> Material.CHISELED_SANDSTONE;
+            case "ARENA_3" -> Material.PURPUR_PILLAR;
             default -> Material.CHISELED_SANDSTONE;
         };
     }
@@ -910,7 +918,7 @@ public final class PracticeManager implements Listener {
     private void buildArenaLandmarks(int cx, int cz, int arenaRadius, int roomIndex) {
         if (world == null) return;
         switch (arenaMap(roomIndex)) {
-            case "TINY_END_COLISEUM" -> buildTinyEndColiseum(cx, cz, arenaRadius);
+            case "ARENA_3" -> buildTinyEndColiseum(cx, cz, arenaRadius);
             default -> buildAnubisRise(cx, cz, arenaRadius);
         }
     }
@@ -918,7 +926,7 @@ public final class PracticeManager implements Listener {
     private Material[] arenaPalette(int roomIndex) {
         // Full test presets: each map supplies its own top floor, foundation layers and trim.
         return switch (arenaMap(roomIndex)) {
-            case "TINY_END_COLISEUM" -> new Material[]{
+            case "ARENA_3" -> new Material[]{
                     Material.END_STONE_BRICKS, Material.END_STONE,
                     Material.PURPUR_BLOCK, Material.PURPUR_PILLAR};
             default -> new Material[]{
@@ -1020,12 +1028,12 @@ public final class PracticeManager implements Listener {
                     int plantRoll = decorationRandom.nextInt(17);
                     Material groundDetail = null;
                     switch (theme) {
-                        case "ANUBIS_RISE" -> {
+                        case "ARENA_1" -> {
                             if (plantRoll <= 2) groundDetail = Material.CUT_SANDSTONE;
                             else if (plantRoll == 3) groundDetail = Material.RED_SANDSTONE;
                             else if (plantRoll == 4) groundDetail = Material.CHISELED_SANDSTONE;
                         }
-                        case "TINY_END_COLISEUM" -> {
+                        case "ARENA_3" -> {
                             if (plantRoll <= 2) groundDetail = Material.PURPUR_SLAB;
                             else if (plantRoll == 3) groundDetail = Material.END_STONE_BRICKS;
                             else if (plantRoll == 4) groundDetail = Material.CHORUS_FLOWER;
@@ -1153,7 +1161,7 @@ public final class PracticeManager implements Listener {
             if (Math.floorMod(offset + arenaRadius, 12) == 0) {
                 Material light = switch (arenaMap(roomIndex)) {
                     case "NETHER_FORTRESS" -> Material.SHROOMLIGHT;
-                    case "END_CITADEL", "TINY_END_COLISEUM" -> Material.SEA_LANTERN;
+                    case "ARENA_3" -> Material.SEA_LANTERN;
                     default -> Material.GLOWSTONE;
                 };
                 world.getBlockAt(cx - arenaRadius + 1, 88, cz + offset).setType(light, false);

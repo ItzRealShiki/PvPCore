@@ -107,14 +107,14 @@ public final class Menus implements Listener {
 
     public void openBoxThemes(Player p) {
         Inventory inv = create("arena-maps", "&8ᴛᴇꜱᴛ ᴀʀᴇɴᴀꜱ", 27);
-        String[] maps = {"ANUBIS_RISE", "TINY_END_COLISEUM"};
+        String[] maps = {"ARENA_1", "ARENA_3"};
+        String[] names = {"Arena 1", "Arena 3"};
         Material[] icons = {Material.CHISELED_SANDSTONE, Material.PURPUR_PILLAR};
         int[] slots = {11, 15};
         String selected = plugin.practice().arenaMap(p);
         for (int i = 0; i < maps.length; i++) {
-            String name = maps[i].replace('_', ' ');
-            inv.setItem(slots[i], item(icons[i], (maps[i].equals(selected) ? "&a✓ " : "&e") + name,
-                    "&7Complete test build: floor, walls and structures.",
+            inv.setItem(slots[i], item(icons[i], (maps[i].equals(selected) ? "&a✓ " : "&e") + names[i],
+                    "&7Imported schematic arena.",
                     "&eClick to select"));
         }
         inv.setItem(26, item(Material.ARROW, "&cBack", "&7Return to practice menu."));
@@ -267,8 +267,8 @@ public final class Menus implements Listener {
                     return;
                 }
                 String map = switch (slot) {
-                    case 11 -> "ANUBIS_RISE";
-                    case 15 -> "TINY_END_COLISEUM";
+                    case 11 -> "ARENA_1";
+                    case 15 -> "ARENA_3";
                     default -> null;
                 };
                 if (map != null) {
