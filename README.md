@@ -4,14 +4,14 @@ Standalone Paper plugin for PvP training, separate flat practice worlds, and GUI
 
 ## Requirements
 - Java 25
-- Maven 3.9+
+- Gradle 9.8.1
 - Paper 26.2
 
 ## Build
 ```bash
 gradle clean build
 ```
-Output: `build/libs/PvPCore-1.0.4.jar`
+Output: `build/libs/PvPCore-1.0.5.jar`
 
 ## Commands
 - `/bot` — Opens the training NPC menu.
@@ -34,7 +34,15 @@ Use `/prac` to open the practice menu and choose one of five arena layouts:
 - **Nether Fortress** — basalt towers and polished blackstone details.
 - **End Citadel** — purpur towers and End-rod accents.
 
-Each player receives a separate practice instance, so multiple arenas can run at the same time. A 1v1 uses the challenger's selected arena. Arenas have an open sky and 12-block-high solid perimeter walls with battlements and reinforced corner towers. The old glass roof and cage are removed. A cyan particle forcefield appears only for players within the configured `practice.forcefield.activation-distance` (default 6 blocks) of the inner boundary; movement is stopped at that boundary. The glass color option changes the decorative wall accent band.
+Each player receives a separate practice instance, so multiple arenas can run at the same time. A 1v1 uses the challenger's selected arena. Every selection is a complete build preset: it determines the floor layers, wall palette, trim, corner structures, lighting and arena decorations. There is no separate ground-theme selector and no glass enclosure.
+
+- **Colosseum** — smooth sandstone floor, cut/chiseled sandstone trim, sandstone stadium walls and spectator tiers.
+- **Ancient Ruins** — stone-brick floor layers, cracked and mossy detailing, broken pillars and ruined walls.
+- **Overgrown** — grass, dirt, rooted-dirt and moss floor layers, mossy walls, trees and natural cover.
+- **Nether Fortress** — polished-blackstone floor, basalt/nether-brick layers, blackstone walls and Nether details.
+- **End Citadel** — end-stone-brick floor, purpur layers and walls, End-themed towers and lighting.
+
+A cyan particle forcefield appears only for players within the configured `practice.forcefield.activation-distance` (default 6 blocks) of the invisible inner boundary. Movement is stopped at the boundary without teleporting players back to the center.
 
 ## Training NPC
 The `/bot` menu lets you configure and spawn a stationary training NPC. Left-click the Shield Reaction or Totem Refill setting to lower its difficulty; right-click to raise it. The selected level is shown in the item's lore:
