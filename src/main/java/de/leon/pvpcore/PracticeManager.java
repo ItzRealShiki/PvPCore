@@ -39,8 +39,9 @@ public final class PracticeManager implements Listener {
     private static final int ROOM_SPACING = 1024;
     private static final int ARENA_1_FORCE_FIELD_RADIUS = 74;
     private static final int ARENA_3_FORCE_FIELD_RADIUS = 34;
-    private static final int ARENA_FORCE_FIELD_HEIGHT = 12;
-    private static final Material FORCE_FIELD_GLASS = Material.LIGHT_BLUE_STAINED_GLASS;
+    private static final int ARENA_FORCE_FIELD_HEIGHT = 200;
+    private static final Material FORCE_FIELD_BLOCK = Material.BARRIER;
+    private static final int LEGACY_GLASS_HEIGHT = 12;
     private static final List<String> ARENA_MAPS = List.of("ARENA_1", "ARENA_3");
     private static final String PRACTICE_WORLD = "prac_void";
     private static final int SCHEMATIC_BUILD_VERSION = 3;
@@ -686,18 +687,21 @@ public final class PracticeManager implements Listener {
                 index -> arenaSpawnLocation(index, 0, 0).getBlockY() - 1);
     }
 
-    private void buildForceField(int cx, int cz, int glassHeight, int arenaRadius) {
+    private void buildForceField(int cx, int cz, int ignoredHeight, int arenaRadius) {
         if (world == null) return;
         int roomIndex = Math.floorDiv(cx - 128, ROOM_SPACING);
         int floorY = arenaFloorY(roomIndex);
-        int steps = Math.max(180, arenaRadius * 8);
+        int topY = Math.min(world.getMaxHeight() - 1, floorY + ARENA_FORCE_FIELD_HEIGHT);
+        int steps = Math.max(240, arenaRadius * 12);
         for (int i = 0; i < steps; i++) {
             double angle = (Math.PI * 2.0 * i) / steps;
             int x = cx + (int) Math.round(Math.cos(angle) * arenaRadius);
             int z = cz + (int) Math.round(Math.sin(angle) * arenaRadius);
-            for (int y = floorY + 1; y <= floorY + glassHeight; y++) {
-                world.getBlockAt(x, y, z).setType(FORCE_FIELD_GLASS, false);
-            }
+            for (int y = floorY + 1; y <= topY; y++) world.getBlockAt(x, y, z).setType(FORCE_FIELD_BLOCK, false);
+        }
+        int radiusSquared = arenaRadius * arenaRadius;
+        for (int dx = -arenaRadius; dx <= arenaRadius; dx++) for (int dz = -arenaRadius; dz <= arenaRadius; dz++) {
+            if (dx * dx + dz * dz <= radiusSquared) world.getBlockAt(cx + dx, topY, cz + dz).setType(FORCE_FIELD_BLOCK, false);
         }
     }
 
@@ -735,15 +739,32 @@ public final class PracticeManager implements Listener {
 
     private void removeForceField(int cx, int cz, int arenaRadius) {
         if (world == null) return;
-        int steps = Math.max(180, arenaRadius * 8);
+        int roomIndex = Math.floorDiv(cx - 128, ROOM_SPACING);
+        int floorY = arenaFloorCache.getOrDefault(roomIndex, Math.max(world.getMinHeight(), world.getHighestBlockYAt(cx, cz) - 1));
+        int topY = Math.min(world.getMaxHeight() - 1, floorY + ARENA_FORCE_FIELD_HEIGHT);
+        int steps = Math.max(240, arenaRadius * 12);
         for (int i = 0; i < steps; i++) {
             double angle = (Math.PI * 2.0 * i) / steps;
             int x = cx + (int) Math.round(Math.cos(angle) * arenaRadius);
             int z = cz + (int) Math.round(Math.sin(angle) * arenaRadius);
-            for (int y = world.getMinHeight(); y < world.getMaxHeight(); y++) {
+            for (int y = floorY + 1; y <= topY; y++) {
                 Block block = world.getBlockAt(x, y, z);
-                if (block.getType() == FORCE_FIELD_GLASS) block.setType(Material.AIR, false);
+                if (block.getType() == Material.BARRIER || block.getType() == Material.LIGHT_BLUE_STAINED_GLASS) block.setType(Material.AIR, false);
             }
+        }
+        int legacyTop = Math.min(world.getMaxHeight() - 1, floorY + LEGACY_GLASS_HEIGHT);
+        for (int y = floorY + 1; y <= legacyTop; y++) for (int i = 0; i < steps; i++) {
+            double angle = (Math.PI * 2.0 * i) / steps;
+            int x = cx + (int) Math.round(Math.cos(angle) * arenaRadius);
+            int z = cz + (int) Math.round(Math.sin(angle) * arenaRadius);
+            Block block = world.getBlockAt(x, y, z);
+            if (block.getType() == Material.LIGHT_BLUE_STAINED_GLASS) block.setType(Material.AIR, false);
+        }
+        int radiusSquared = arenaRadius * arenaRadius;
+        for (int dx = -arenaRadius; dx <= arenaRadius; dx++) for (int dz = -arenaRadius; dz <= arenaRadius; dz++) {
+            if (dx * dx + dz * dz > radiusSquared) continue;
+            Block block = world.getBlockAt(cx + dx, topY, cz + dz);
+            if (block.getType() == Material.BARRIER) block.setType(Material.AIR, false);
         }
     }
 
@@ -819,8 +840,18 @@ public final class PracticeManager implements Listener {
 
         // A totem can resurrect the bot even when the damage event reports zero final damage.
         // Keep the attempted weapon/tick above so the resurrection event can safely award it once.
-        if (event.isCancelled() || event.getFinalDamage() <= 0.0) return;
-
+        if (event.isCancelled() || event.getFinalDamage() <= 0.0) {
+            long attemptedTick = world.getGameTime();
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                if (Objects.equals(pendingBotHitTicks.get(id), attemptedTick)) {
+                    pendingBotHitTicks.remove(id);
+                    pendingBotHitModes.remove(id);
+                }
+            }, 3L);
+            return;
+        }
+        pendingBotHitTicks.remove(id);
+        pendingBotHitModes.remove(id);
         if (hitMode == Mode.SWORD) {
             if (!weapon.name().endsWith("_SWORD")) return;
             swordHits.merge(id, 1, Integer::sum);
@@ -857,12 +888,14 @@ public final class PracticeManager implements Listener {
         if (hitTick == null || hitMode == null) return;
 
         long now = world.getGameTime();
-        if (now < hitTick || now - hitTick > 1L) return;
-        if (Objects.equals(lastBotComboScoreTicks.get(id), hitTick)) return;
-
+        if (now < hitTick || now - hitTick > 2L) {
+            pendingBotHitTicks.remove(id);
+            pendingBotHitModes.remove(id);
+            return;
+        }
         pendingBotHitTicks.remove(id);
         pendingBotHitModes.remove(id);
-        lastBotComboScoreTicks.put(id, hitTick);
+        lastBotComboScoreTicks.put(id, now);
 
         if (hitMode == Mode.STUN_SLAM && mode(owner) == Mode.STUN_SLAM
                 && activeAttempts.contains(id)) {
@@ -922,12 +955,7 @@ public final class PracticeManager implements Listener {
 
             renderNearbyForceField(p, cx, cz, arenaRadius);
 
-            // Keep the player inside the playable bowl; the glass ring marks the tribune edge.
-            if (Math.hypot(relativeX, relativeZ) > arenaRadius - 1.5) {
-                event.setTo(event.getFrom());
-                p.setVelocity(new org.bukkit.util.Vector(0, 0, 0));
-                return;
-            }
+            // Physical barrier blocks the outer edge; movement inside the arena stays unrestricted.
         }
 
         if (!activeAttempts.contains(p.getUniqueId())) return;
