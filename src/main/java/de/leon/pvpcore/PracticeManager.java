@@ -1182,7 +1182,9 @@ public final class PracticeManager implements Listener {
                 Location point = fixedX
                         ? new Location(world, fixedCoordinate, y, cz + 0.5 + along)
                         : new Location(world, cx + 0.5 + along, y, fixedCoordinate);
-                world.spawnParticle(Particle.DUST, point, 1, 0, 0, 0, 0, energy, player);
+                world.spawnParticle(Particle.DUST, List.of(player), player,
+                        point.getX(), point.getY(), point.getZ(), 1,
+                        0, 0, 0, 0, energy);
             }
         }
     }
