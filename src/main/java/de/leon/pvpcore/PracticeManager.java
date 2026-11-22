@@ -783,7 +783,9 @@ public final class PracticeManager implements Listener {
             case "FOREST" -> {
                 for (int[] point : corners) {
                     buildArenaTree(cx + point[0], cz + point[1]);
-                    placeArenaTower(cx + point[0] + 4, cz + point[1], 2,
+                    int inwardX = cx + point[0] - Integer.signum(point[0]) * 4;
+                    int inwardZ = cz + point[1] - Integer.signum(point[1]) * 4;
+                    placeArenaTower(inwardX, inwardZ, 2,
                             Material.MOSSY_COBBLESTONE, Material.MOSSY_COBBLESTONE);
                 }
             }
@@ -792,16 +794,16 @@ public final class PracticeManager implements Listener {
                     int[] point = corners[i];
                     placeArenaTower(cx + point[0], cz + point[1], 5 + (i % 2),
                             Material.BASALT, Material.POLISHED_BLACKSTONE_BRICKS);
-                    int baseY = world.getHighestBlockYAt(cx + point[0], cz + point[1]) + 1;
-                    world.getBlockAt(cx + point[0], baseY, cz + point[1]).setType(Material.MAGMA_BLOCK, false);
+                    int topY = world.getHighestBlockYAt(cx + point[0], cz + point[1]) + 1;
+                    world.getBlockAt(cx + point[0], topY, cz + point[1]).setType(Material.GLOWSTONE, false);
                 }
             }
             case "END_CITADEL" -> {
                 for (int[] point : corners) {
+                    int baseY = world.getHighestBlockYAt(cx + point[0], cz + point[1]) + 1;
                     placeArenaTower(cx + point[0], cz + point[1], 6,
                             Material.PURPUR_PILLAR, Material.PURPUR_BLOCK);
-                    int baseY = world.getHighestBlockYAt(cx + point[0], cz + point[1]) + 7;
-                    world.getBlockAt(cx + point[0], baseY, cz + point[1]).setType(Material.END_ROD, false);
+                    world.getBlockAt(cx + point[0], baseY + 6, cz + point[1]).setType(Material.END_ROD, false);
                 }
                 for (int side : new int[]{-1, 1}) {
                     for (int offset = -5; offset <= 5; offset++) {
@@ -1045,7 +1047,7 @@ public final class PracticeManager implements Listener {
             clearEndDecorativeShulkers(roomIndex);
         }
 
-        // Decorative frame inside the glass enclosure, using the selected theme's accent block.
+        // Decorative frame inside the arena, using the selected theme's accent block.
         Material trim = palette[3];
         for (int offset = -arenaRadius + 1; offset <= arenaRadius - 1; offset++) {
             world.getBlockAt(cx - arenaRadius + 1, 80, cz + offset).setType(trim, false);
@@ -1089,6 +1091,13 @@ public final class PracticeManager implements Listener {
         // still prevents players from leaving the assigned private arena.
         for (int offset = -arenaRadius; offset <= arenaRadius; offset++) {
             boolean gate = Math.abs(offset) <= 1;
+
+            // A solid foundation ring anchors the low stadium wall.
+            world.getBlockAt(cx - arenaRadius, 80, cz + offset).setType(wall, false);
+            world.getBlockAt(cx + arenaRadius, 80, cz + offset).setType(wall, false);
+            world.getBlockAt(cx + offset, 80, cz - arenaRadius).setType(wall, false);
+            world.getBlockAt(cx + offset, 80, cz + arenaRadius).setType(wall, false);
+
             for (int y = 81; y <= topY; y++) {
                 if (gate && y < topY) continue;
                 Material block = y == 83 ? accent : wall;
