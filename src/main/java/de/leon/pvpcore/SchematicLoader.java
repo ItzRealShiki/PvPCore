@@ -27,7 +27,7 @@ final class SchematicLoader {
     private static final Map<String, Schematic> CACHE = new ConcurrentHashMap<>();
     private static final int LEGACY_ARENA_RADIUS = 48;
     private static final int MAX_DIMENSION = 512;
-    private static final int MAX_BLOCKS = 8_000_000;
+    private static final int MAX_BLOCKS = 30_000_000;
 
     private SchematicLoader() {
     }
@@ -43,15 +43,17 @@ final class SchematicLoader {
             try {
                 previous = load(plugin, previousArena);
             } catch (IOException ignored) {
-                // Old generated arenas (for example ANUBIS_RISE) have no schematic resource.
+                // Older generated rooms have no bundled schematic resource.
                 clearLegacyGeneratedArena = true;
             }
         }
 
         int schematicX = centerX - schematic.width / 2;
         int schematicZ = centerZ - schematic.length / 2;
+        boolean clearExistingRoom = previousArena != null && !previousArena.isBlank();
 
-        // Clear the new footprint and, when known, the old footprint before the new paste.
+        // A legacy generated floor is small; do not scan Arena 1's 22-million-block bounds
+        // just to remove the former 97x97 generated room.
         int clearMinX = schematicX;
         int clearMinZ = schematicZ;
         int clearMaxX = schematicX + schematic.width;
@@ -67,19 +69,20 @@ final class SchematicLoader {
             clearHeight = Math.max(clearHeight, previous.height + 32);
         }
         if (clearLegacyGeneratedArena) {
-            // Legacy generated arenas occupied the full 97x97 room, not just the new schematic footprint.
-            clearMinX = Math.min(clearMinX, centerX - LEGACY_ARENA_RADIUS);
-            clearMinZ = Math.min(clearMinZ, centerZ - LEGACY_ARENA_RADIUS);
-            clearMaxX = Math.max(clearMaxX, centerX + LEGACY_ARENA_RADIUS + 1);
-            clearMaxZ = Math.max(clearMaxZ, centerZ + LEGACY_ARENA_RADIUS + 1);
-            clearHeight = Math.max(clearHeight, 128);
+            clearMinX = centerX - LEGACY_ARENA_RADIUS;
+            clearMinZ = centerZ - LEGACY_ARENA_RADIUS;
+            clearMaxX = centerX + LEGACY_ARENA_RADIUS + 1;
+            clearMaxZ = centerZ + LEGACY_ARENA_RADIUS + 1;
+            clearHeight = 128;
         }
-        int maxY = Math.min(world.getMaxHeight(), baseY + clearHeight);
-        for (int y = Math.max(world.getMinHeight(), baseY); y < maxY; y++) {
-            for (int z = clearMinZ; z < clearMaxZ; z++) {
-                for (int x = clearMinX; x < clearMaxX; x++) {
-                    var block = world.getBlockAt(x, y, z);
-                    if (!block.getType().isAir()) block.setType(Material.AIR, false);
+        if (clearExistingRoom) {
+            int maxY = Math.min(world.getMaxHeight(), baseY + clearHeight);
+            for (int y = Math.max(world.getMinHeight(), baseY); y < maxY; y++) {
+                for (int z = clearMinZ; z < clearMaxZ; z++) {
+                    for (int x = clearMinX; x < clearMaxX; x++) {
+                        var block = world.getBlockAt(x, y, z);
+                        if (!block.getType().isAir()) block.setType(Material.AIR, false);
+                    }
                 }
             }
         }
@@ -93,8 +96,9 @@ final class SchematicLoader {
             }
             for (int z = 0; z < schematic.length; z++) {
                 for (int x = 0; x < schematic.width; x++) {
-                    BlockData state = schematic.palette[schematic.blockIndices[index++]];
-                    if (state == null || state.getMaterial().isAir()) continue;
+                    BlockData state = schematic.palette[schematic.blockIndices[index++] & 0xFFFF];
+                    if (state == null || state.getMaterial().isAir()
+                            || state.getMaterial() == Material.BARRIER) continue;
                     world.getBlockAt(schematicX + x, worldY, schematicZ + z).setBlockData(state, false);
                 }
             }
@@ -182,7 +186,7 @@ final class SchematicLoader {
                 if (!(rawData instanceof byte[] encodedData)) {
                     throw new IOException("Unsupported schematic block-data format.");
                 }
-                int[] blockIndices = decodeVarInts(encodedData, total, palette.length);
+                short[] blockIndices = decodeVarInts(encodedData, total, palette.length);
 
                 int blockEntities = 0;
                 Object rawBlockEntities = schematic.get("BlockEntities");
@@ -205,8 +209,8 @@ final class SchematicLoader {
         }
     }
 
-    private static int[] decodeVarInts(byte[] data, int expectedCount, int paletteSize) throws IOException {
-        int[] result = new int[expectedCount];
+    private static short[] decodeVarInts(byte[] data, int expectedCount, int paletteSize) throws IOException {
+        short[] result = new short[expectedCount];
         int offset = 0;
         for (int i = 0; i < expectedCount; i++) {
             int value = 0;
@@ -223,7 +227,7 @@ final class SchematicLoader {
             if (value < 0 || value >= paletteSize) {
                 throw new IOException("Schematic contains an invalid palette index: " + value);
             }
-            result[i] = value;
+            result[i] = (short) value;
         }
         return result;
     }
@@ -238,7 +242,7 @@ final class SchematicLoader {
     }
 
     private record Schematic(int width, int height, int length, BlockData[] palette,
-                             int[] blockIndices, int blockEntityCount) {
+                             short[] blockIndices, int blockEntityCount) {
     }
 
     private static final class SchematicLoadFailure extends RuntimeException {
@@ -251,7 +255,7 @@ final class SchematicLoader {
     }
 
     private static final class NbtReader {
-        private static final int MAX_ARRAY_SIZE = 16_000_000;
+        private static final int MAX_ARRAY_SIZE = 32_000_000;
         private final DataInputStream input;
 
         private NbtReader(DataInputStream input) {
