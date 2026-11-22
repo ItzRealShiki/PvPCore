@@ -25,6 +25,7 @@ import java.util.zip.GZIPInputStream;
  */
 final class SchematicLoader {
     private static final Map<String, Schematic> CACHE = new ConcurrentHashMap<>();
+    private static final int LEGACY_ARENA_RADIUS = 48;
     private static final int MAX_DIMENSION = 512;
     private static final int MAX_BLOCKS = 8_000_000;
 
@@ -37,11 +38,13 @@ final class SchematicLoader {
 
         Schematic schematic = load(plugin, arena);
         Schematic previous = null;
+        boolean clearLegacyGeneratedArena = false;
         if (previousArena != null && !previousArena.isBlank() && !previousArena.equals(arena)) {
             try {
                 previous = load(plugin, previousArena);
             } catch (IOException ignored) {
-                // Older plugin versions used generated themes rather than bundled schematics.
+                // Old generated arenas (for example ANUBIS_RISE) have no schematic resource.
+                clearLegacyGeneratedArena = true;
             }
         }
 
@@ -62,6 +65,14 @@ final class SchematicLoader {
             clearMaxX = Math.max(clearMaxX, previousX + previous.width);
             clearMaxZ = Math.max(clearMaxZ, previousZ + previous.length);
             clearHeight = Math.max(clearHeight, previous.height + 32);
+        }
+        if (clearLegacyGeneratedArena) {
+            // Legacy generated arenas occupied the full 97x97 room, not just the new schematic footprint.
+            clearMinX = Math.min(clearMinX, centerX - LEGACY_ARENA_RADIUS);
+            clearMinZ = Math.min(clearMinZ, centerZ - LEGACY_ARENA_RADIUS);
+            clearMaxX = Math.max(clearMaxX, centerX + LEGACY_ARENA_RADIUS + 1);
+            clearMaxZ = Math.max(clearMaxZ, centerZ + LEGACY_ARENA_RADIUS + 1);
+            clearHeight = Math.max(clearHeight, 128);
         }
         int maxY = Math.min(world.getMaxHeight(), baseY + clearHeight);
         for (int y = Math.max(world.getMinHeight(), baseY); y < maxY; y++) {
@@ -96,13 +107,17 @@ final class SchematicLoader {
     }
 
     private static Schematic load(JavaPlugin plugin, String arena) throws IOException {
-        return CACHE.computeIfAbsent(arena, key -> {
-            try {
-                return read(plugin, key);
-            } catch (IOException exception) {
-                throw new SchematicLoadFailure(exception);
-            }
-        });
+        try {
+            return CACHE.computeIfAbsent(arena, key -> {
+                try {
+                    return read(plugin, key);
+                } catch (IOException exception) {
+                    throw new SchematicLoadFailure(exception);
+                }
+            });
+        } catch (SchematicLoadFailure failure) {
+            throw failure.ioException;
+        }
     }
 
     private static Schematic read(JavaPlugin plugin, String arena) throws IOException {

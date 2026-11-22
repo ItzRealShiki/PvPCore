@@ -44,6 +44,7 @@ public final class PracticeManager implements Listener {
     private static final int ARENA_WALL_HEIGHT = 12;
     private static final List<String> ARENA_MAPS = List.of("ARENA_1", "ARENA_3");
     private static final String PRACTICE_WORLD = "prac_void";
+    private static final int SCHEMATIC_BUILD_VERSION = 1;
 
     private final PvPCore plugin;
     private World world;
@@ -239,8 +240,8 @@ public final class PracticeManager implements Listener {
             plugin.saveConfig();
         }
         int cx = roomCenterX(index), cz = 128;
-        ensureRoomBuilt(base, index, arenaMap(challenger));
         clearPlatform(cx, cz, DUEL_ARENA_RADIUS);
+        ensureRoomBuilt(base, index, arenaMap(challenger));
         buildDuelObstacles(cx, cz, index);
         buildDuelFoundation(cx, cz, index);
         buildBackgroundLandscape(cx, cz, index);
@@ -503,8 +504,8 @@ public final class PracticeManager implements Listener {
         }
 
         int cx = roomCenterX(index), cz = 128;
-        ensureRoomBuilt(base, index, arenaMap(p));
         clearPlatform(cx, cz, PRACTICE_ARENA_RADIUS);
+        ensureRoomBuilt(base, index, arenaMap(p));
         plugin.bots().removeOwned(p);
         p.setGameMode(GameMode.SURVIVAL);
         p.setFallDistance(0);
@@ -554,25 +555,37 @@ public final class PracticeManager implements Listener {
     private void ensureRoomBuilt(String base, int roomIndex, String selectedMap) {
         String builtMap = plugin.getConfig().getString(base + ".built-map", "");
         boolean built = plugin.getConfig().getBoolean(base + ".built", false);
-        if (built && selectedMap.equals(builtMap)) return;
+        int builtVersion = plugin.getConfig().getInt(base + ".built-schematic-version", 0);
+        if (built && builtVersion == SCHEMATIC_BUILD_VERSION && selectedMap.equals(builtMap)) return;
 
-        String previousMap = built ? builtMap : "";
-        buildRoom(roomCenterX(roomIndex), 128, selectedMap, previousMap);
-        plugin.getConfig().set(base + ".built", true);
-        plugin.getConfig().set(base + ".built-map", selectedMap);
+        // Rooms created by older PvPCore versions used generated Anubis/End layouts.
+        // Force one clean migration instead of treating those old names as schematic IDs.
+        boolean legacyGeneratedRoom = builtVersion < SCHEMATIC_BUILD_VERSION
+                && (built || !builtMap.isBlank());
+        String previousMap = legacyGeneratedRoom ? "LEGACY_GENERATED"
+                : (built ? builtMap : "");
+
+        if (buildRoom(roomCenterX(roomIndex), 128, selectedMap, previousMap)) {
+            plugin.getConfig().set(base + ".built", true);
+            plugin.getConfig().set(base + ".built-map", selectedMap);
+            plugin.getConfig().set(base + ".built-schematic-version", SCHEMATIC_BUILD_VERSION);
+        } else {
+            // Keep the old version marker so a later entry retries loading the imported schematic.
+            plugin.getConfig().set(base + ".built-schematic-version", 0);
+        }
         plugin.saveConfig();
     }
 
-    private void buildRoom(int cx, int cz, String map, String previousMap) {
+    private boolean buildRoom(int cx, int cz, String map, String previousMap) {
         try {
             SchematicLoader.paste(plugin, world, map, previousMap, cx, 80, cz);
             plugin.getLogger().info("Loaded " + map + " schematic at " + cx + ", 80, " + cz + ".");
+            return true;
         } catch (Exception exception) {
             plugin.getLogger().log(java.util.logging.Level.SEVERE,
-                    "Could not load arena schematic " + map + ". Using the built-in fallback arena.", exception);
-            int roomIndex = Math.floorDiv(cx - 128, ROOM_SPACING);
+                    "Could not load arena schematic " + map + ". A neutral fallback floor was generated; the schematic will be retried on next entry.", exception);
             buildArenaPlatform(cx, cz, PRACTICE_ARENA_RADIUS);
-            buildArenaLandmarks(cx, cz, PRACTICE_ARENA_RADIUS, roomIndex);
+            return false;
         }
     }
 
