@@ -106,20 +106,19 @@ public final class Menus implements Listener {
     }
 
     public void openBoxThemes(Player p) {
-        Inventory inv = create("box-themes", "&8ᴘʀɪᴠᴀᴛᴇ ʙᴏx ᴅᴇꜱɪɢɴ", 54);
-        String[] themes = {"PLAINS", "FLOWER_PLAINS", "CHERRY_BLOSSOM", "DESERT", "BADLANDS",
-                "PALE_GARDEN", "END", "NETHER", "WARPED", "CRIMSON"};
-        Material[] icons = {Material.GRASS_BLOCK, Material.POPPY, Material.CHERRY_SAPLING, Material.SAND,
-                Material.RED_SAND, Material.PALE_MOSS_BLOCK, Material.END_STONE, Material.NETHERRACK,
-                Material.WARPED_NYLIUM, Material.CRIMSON_NYLIUM};
-        int[] slots = {10, 12, 14, 16, 19, 21, 23, 25, 30, 32};
-        String selected = plugin.practice().arenaTheme(p);
-        for (int i = 0; i < themes.length; i++) {
-            String name = themes[i].replace('_', ' ');
-            inv.setItem(slots[i], item(icons[i], (themes[i].equals(selected) ? "&a✓ " : "&e") + name,
-                    "&7Personal box theme.", "&eClick to select"));
+        Inventory inv = create("arena-maps", "&8ᴘᴠᴘ ᴀʀᴇɴᴀ ꜱᴇʟᴇᴄᴛᴏʀ", 27);
+        String[] maps = {"COLOSSEUM", "RUINS", "FOREST", "NETHER_FORTRESS", "END_CITADEL"};
+        Material[] icons = {Material.SMOOTH_SANDSTONE, Material.MOSSY_STONE_BRICKS,
+                Material.OAK_LEAVES, Material.POLISHED_BLACKSTONE_BRICKS, Material.PURPUR_BLOCK};
+        int[] slots = {10, 12, 14, 16, 22};
+        String selected = plugin.practice().arenaMap(p);
+        for (int i = 0; i < maps.length; i++) {
+            String name = maps[i].replace('_', ' ');
+            inv.setItem(slots[i], item(icons[i], (maps[i].equals(selected) ? "&a✓ " : "&e") + name,
+                    "&7Complete arena preset: floor, walls and details.",
+                    "&eClick to select"));
         }
-        inv.setItem(49, item(Material.ARROW, "&cBack", "&7Return to practice menu."));
+        inv.setItem(26, item(Material.ARROW, "&cBack", "&7Return to practice menu."));
         p.openInventory(inv);
     }
 
@@ -263,18 +262,25 @@ public final class Menus implements Listener {
                     default -> { }
                 }
             }
-            case "box-themes" -> {
-                String[] themes = {"PLAINS", "FLOWER_PLAINS", "CHERRY_BLOSSOM", "DESERT", "BADLANDS",
-                        "PALE_GARDEN", "END", "NETHER", "WARPED", "CRIMSON"};
-                int[] slots = {10, 12, 14, 16, 19, 21, 23, 25, 30, 32};
-                for (int i = 0; i < slots.length; i++) {
-                    if (slot == slots[i]) {
-                        plugin.practice().setArenaTheme(p, themes[i]);
-                        openBoxThemes(p);
-                        return;
-                    }
+            case "arena-maps" -> {
+                if (slot == 26) {
+                    p.closeInventory();
+                    return;
                 }
-                if (slot == 49) p.closeInventory();
+                String map = switch (slot) {
+                    case 10 -> "COLOSSEUM";
+                    case 12 -> "RUINS";
+                    case 14 -> "FOREST";
+                    case 16 -> "NETHER_FORTRESS";
+                    case 22 -> "END_CITADEL";
+                    default -> null;
+                };
+                if (map != null) {
+                    boolean alreadyInPractice = p.getWorld().getName().equalsIgnoreCase("prac_void");
+                    p.closeInventory();
+                    plugin.practice().setArenaMap(p, map);
+                    if (alreadyInPractice) plugin.practice().enter(p);
+                }
             }
             case "admin-boxes" -> {
                 if (!plugin.hasCore(p, "Admin.Core")) return;
