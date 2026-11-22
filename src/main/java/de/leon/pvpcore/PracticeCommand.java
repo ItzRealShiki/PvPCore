@@ -58,7 +58,7 @@ public final class PracticeCommand implements CommandExecutor, Listener {
     private void main(Player p) {
         Inventory i = create("&8✦ ᴘʀᴀᴄᴛɪᴄᴇ", "main", 27);
         i.setItem(11, item(Material.MACE, "&6Stun Slam", "&7Choose a difficulty before entering."));
-        i.setItem(13, item(Material.BEACON, "&bArena Selector", "&7Choose one of the two test arenas.", "&7Anubis Rise or Tiny End Coliseum."));
+        i.setItem(13, item(Material.BEACON, "&bArena Selector", "&7Choose between Arena 1 and Arena 3.", "&eClick to open selector."));
         i.setItem(15, item(Material.DIAMOND_SWORD, "&bSword", "&7Diamond sword vs diamond sword.", "&eClick to enter"));
         i.setItem(17, item(Material.RESPAWN_ANCHOR, "&6Crystal Anchor", "&7Time from placement until explosion.", "&7Your fastest time is saved.", "&eClick to enter"));
         i.setItem(22, item(Material.ANVIL, "&aKit Editor", "&7Edit your Practice and Duel kits."));
@@ -69,13 +69,13 @@ public final class PracticeCommand implements CommandExecutor, Listener {
         Inventory i = create("&8✦ ᴛᴇꜱᴛ ᴀʀᴇɴᴀꜱ", "arenas", 27);
         String selected = plugin.practice().arenaMap(p);
         i.setItem(11, item(Material.CHISELED_SANDSTONE,
-                (selected.equals("ANUBIS_RISE") ? "&a✓ " : "&6") + "Anubis Rise",
-                "&7Egyptian desert temple and sandstone coliseum.",
-                "&7Obelisks, guardian statues and a sun-disc floor."));
+                (selected.equals("ARENA_1") ? "&a✓ " : "&6") + "Arena 1",
+                "&7Imported PvP arena schematic 1.",
+                "&7Click to select this arena."));
         i.setItem(15, item(Material.PURPUR_PILLAR,
-                (selected.equals("TINY_END_COLISEUM") ? "&a✓ " : "&6") + "Tiny End Coliseum",
-                "&7Compact End-themed coliseum with four entrances.",
-                "&7Purpur towers, End-stone floor and spectator tiers."));
+                (selected.equals("ARENA_3") ? "&a✓ " : "&6") + "Arena 3",
+                "&7Imported PvP arena schematic 3.",
+                "&7Click to select this arena."));
         i.setItem(26, item(Material.ARROW, "&cBack", "&7Return to practice modes."));
         p.openInventory(i);
     }
@@ -146,8 +146,8 @@ public final class PracticeCommand implements CommandExecutor, Listener {
                 return;
             }
             String map = switch (s) {
-                case 11 -> "ANUBIS_RISE";
-                case 15 -> "TINY_END_COLISEUM";
+                case 11 -> "ARENA_1";
+                case 15 -> "ARENA_3";
                 default -> null;
             };
             if (map != null) {

@@ -78,6 +78,7 @@ public final class PracticeManager implements Listener {
         this.plugin = plugin;
         this.world = Bukkit.getWorld(PRACTICE_WORLD);
         Bukkit.getScheduler().runTaskTimer(plugin, this::updateNearbyArenas, 1L, 10L);
+        Bukkit.getScheduler().runTaskTimer(plugin, this::updateCrystalAnchorTimers, 1L, 5L);
     }
 
     private int roomCenterX(int index) { return 128 + index * ROOM_SPACING; }
@@ -157,6 +158,18 @@ public final class PracticeManager implements Listener {
             activeForceFields.remove(index);
             forceFieldHeights.remove(index);
             forceFieldRadii.remove(index);
+        }
+    }
+
+    private void updateCrystalAnchorTimers() {
+        if (world == null) return;
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            if (!player.getWorld().equals(world) || mode(player) != Mode.CRYSTAL_ANCHOR) continue;
+            Long started = crystalAnchorStartTicks.get(player.getUniqueId());
+            if (started == null) continue;
+            long elapsed = Math.max(0L, world.getGameTime() - started);
+            player.sendActionBar(ChatColor.GOLD + "Crystal Anchor: "
+                    + String.format(Locale.US, "%.2fs", elapsed / 20.0));
         }
     }
 
@@ -1488,39 +1501,41 @@ public final class PracticeManager implements Listener {
     @EventHandler public void onPlace(BlockPlaceEvent event) {
         if (!event.getBlock().getWorld().equals(world)) return;
         Player player = event.getPlayer();
-        if (!isFighting(player) && mode(player) == Mode.CRYSTAL_ANCHOR
-                && event.getBlockPlaced().getType() == Material.RESPAWN_ANCHOR) {
-            UUID id = player.getUniqueId();
-            crystalAnchorStartTicks.put(id, world.getGameTime());
-            crystalAnchorLocations.put(id, event.getBlockPlaced().getLocation());
-            // Refill the placing hand after Bukkit applies the normal item decrement.
-            // This keeps the practice anchor available indefinitely.
+        if (!isFighting(player) && mode(player) == Mode.CRYSTAL_ANCHOR) {
+            Material placed = event.getBlockPlaced().getType();
             org.bukkit.inventory.EquipmentSlot hand = event.getHand();
-            Bukkit.getScheduler().runTask(plugin, () -> {
-                if (!player.isOnline() || mode(player) != Mode.CRYSTAL_ANCHOR) return;
-                ItemStack held = hand == org.bukkit.inventory.EquipmentSlot.OFF_HAND
-                        ? player.getInventory().getItemInOffHand()
-                        : player.getInventory().getItemInMainHand();
-                if (held == null || held.getType() != Material.RESPAWN_ANCHOR) {
-                    held = gear(Material.RESPAWN_ANCHOR);
-                    if (hand == org.bukkit.inventory.EquipmentSlot.OFF_HAND)
-                        player.getInventory().setItemInOffHand(held);
-                    else player.getInventory().setItemInMainHand(held);
-                } else if (held.getAmount() < 64) {
-                    held.setAmount(64);
-                }
-            });
-            player.sendActionBar(ChatColor.GOLD + "Anchor placed! " + ChatColor.GRAY + "Timer started.");
-            updatePracticeBoard(player);
-            return;
+            if (placed == Material.RESPAWN_ANCHOR) {
+                UUID id = player.getUniqueId();
+                crystalAnchorStartTicks.put(id, world.getGameTime());
+                crystalAnchorLocations.put(id, event.getBlockPlaced().getLocation());
+                refillCrystalPracticeItem(player, hand, Material.RESPAWN_ANCHOR);
+                player.sendActionBar(ChatColor.GOLD + "Anchor placed! " + ChatColor.GRAY + "Timer started.");
+                updatePracticeBoard(player);
+                return;
+            }
+            if (placed == Material.GLOWSTONE) {
+                refillCrystalPracticeItem(player, hand, Material.GLOWSTONE);
+                return;
+            }
         }
         event.setCancelled(true);
     }
 
+    private void refillCrystalPracticeItem(Player player, org.bukkit.inventory.EquipmentSlot hand, Material type) {
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (!player.isOnline() || mode(player) != Mode.CRYSTAL_ANCHOR || isFighting(player)) return;
+            ItemStack held = hand == org.bukkit.inventory.EquipmentSlot.OFF_HAND
+                    ? player.getInventory().getItemInOffHand()
+                    : player.getInventory().getItemInMainHand();
+            // Each training stack starts at 64, so the placed block leaves a matching stack to refill.
+            if (held == null || held.getType() != type) return;
+            if (held.getAmount() < 64) held.setAmount(64);
+        });
+    }
+
     @EventHandler
     public void onAnchorExplode(BlockExplodeEvent event) {
-        if (world == null || !event.getBlock().getWorld().equals(world)
-                || event.getBlock().getType() != Material.RESPAWN_ANCHOR) return;
+        if (world == null || !event.getBlock().getWorld().equals(world)) return;
         // Respawn anchors are practice equipment, never loot.
         event.setYield(0.0f);
         Location exploded = event.getBlock().getLocation();
@@ -1528,7 +1543,11 @@ public final class PracticeManager implements Listener {
             UUID id = player.getUniqueId();
             Location tracked = crystalAnchorLocations.get(id);
             Long started = crystalAnchorStartTicks.get(id);
-            if (tracked == null || started == null || !tracked.equals(exploded)
+            if (tracked == null || started == null
+                    || !tracked.getWorld().equals(exploded.getWorld())
+                    || tracked.getBlockX() != exploded.getBlockX()
+                    || tracked.getBlockY() != exploded.getBlockY()
+                    || tracked.getBlockZ() != exploded.getBlockZ()
                     || !player.getWorld().equals(world) || mode(player) != Mode.CRYSTAL_ANCHOR) continue;
             long elapsed = Math.max(1L, world.getGameTime() - started);
             String path = "practice.highscores." + id + ".crystal-anchor-best-ticks";
@@ -1581,21 +1600,21 @@ public final class PracticeManager implements Listener {
 
     public void applyKit(Player p) {
         p.getInventory().clear();
-        p.getInventory().setArmorContents(new ItemStack[]{gear(Material.DIAMOND_BOOTS),gear(Material.DIAMOND_LEGGINGS),gear(Material.DIAMOND_CHESTPLATE),gear(Material.DIAMOND_HELMET)});
         if (mode(p) == Mode.CRYSTAL_ANCHOR) {
-            p.getInventory().setItem(0, gear(Material.RESPAWN_ANCHOR));
+            p.getInventory().setArmorContents(crystalAnchorArmor());
+            p.getInventory().setItem(0, new ItemStack(Material.RESPAWN_ANCHOR, 64));
             p.getInventory().setItem(1, new ItemStack(Material.GLOWSTONE, 64));
-        } else if (mode(p) == Mode.SWORD) p.getInventory().setItem(0, gear(Material.DIAMOND_SWORD));
-        else {
+        } else {
+            p.getInventory().setArmorContents(new ItemStack[]{gear(Material.DIAMOND_BOOTS),gear(Material.DIAMOND_LEGGINGS),gear(Material.DIAMOND_CHESTPLATE),gear(Material.DIAMOND_HELMET)});
+        }
+        if (mode(p) == Mode.SWORD) p.getInventory().setItem(0, gear(Material.DIAMOND_SWORD));
+        else if (mode(p) != Mode.CRYSTAL_ANCHOR) {
             p.getInventory().setItem(0, enchanted(Material.NETHERITE_AXE, "sharpness", 5));
             ItemStack mace = enchanted(Material.MACE, "density", 5); enchant(mace, "wind_burst", 3);
             p.getInventory().setItem(1, mace);
             p.getInventory().setItem(2, enchanted(spearMaterial(), "lunge", 3));
         }
         loadSavedKit(p, p.getInventory());
-        if (mode(p) == Mode.CRYSTAL_ANCHOR) {
-            p.getInventory().setItemInOffHand(new ItemStack(Material.TOTEM_OF_UNDYING));
-        }
         p.getInventory().setHeldItemSlot(0);
         p.setHealth(20); p.setFoodLevel(20); p.setSaturation(20); p.setFireTicks(0);
     }
@@ -1628,7 +1647,7 @@ public final class PracticeManager implements Listener {
     public void applyKitToInventory(Player player, Inventory editor) {
         editor.clear();
         if (mode(player) == Mode.CRYSTAL_ANCHOR) {
-            editor.setItem(0, gear(Material.RESPAWN_ANCHOR));
+            editor.setItem(0, new ItemStack(Material.RESPAWN_ANCHOR, 64));
             editor.setItem(1, new ItemStack(Material.GLOWSTONE, 64));
         } else if (mode(player) == Mode.SWORD) editor.setItem(0, gear(Material.DIAMOND_SWORD));
         else {
@@ -1637,10 +1656,18 @@ public final class PracticeManager implements Listener {
             editor.setItem(1, mace);
             editor.setItem(2, enchanted(spearMaterial(), "lunge", 3));
         }
-        editor.setItem(45, gear(Material.DIAMOND_HELMET));
-        editor.setItem(46, gear(Material.DIAMOND_CHESTPLATE));
-        editor.setItem(47, gear(Material.DIAMOND_LEGGINGS));
-        editor.setItem(48, gear(Material.DIAMOND_BOOTS));
+        if (mode(player) == Mode.CRYSTAL_ANCHOR) {
+            ItemStack[] armor = crystalAnchorArmor();
+            editor.setItem(45, armor[3]);
+            editor.setItem(46, armor[2]);
+            editor.setItem(47, armor[1]);
+            editor.setItem(48, armor[0]);
+        } else {
+            editor.setItem(45, gear(Material.DIAMOND_HELMET));
+            editor.setItem(46, gear(Material.DIAMOND_CHESTPLATE));
+            editor.setItem(47, gear(Material.DIAMOND_LEGGINGS));
+            editor.setItem(48, gear(Material.DIAMOND_BOOTS));
+        }
         String path = "practice.players." + player.getUniqueId() + ".kits." + mode(player).name();
         if (!plugin.getConfig().contains(path + ".contents")) return;
         for (int slot = 0; slot < 36; slot++) {
@@ -1828,6 +1855,24 @@ public final class PracticeManager implements Listener {
             plugin.getLogger().warning("NETHERITE_SPEAR is not available in this Paper API; using TRIDENT as a compatibility fallback.");
         }
         return Material.TRIDENT;
+    }
+
+    private ItemStack[] crystalAnchorArmor() {
+        return new ItemStack[]{
+                anchorArmor(Material.NETHERITE_BOOTS, true),
+                anchorArmor(Material.NETHERITE_LEGGINGS, true),
+                anchorArmor(Material.NETHERITE_CHESTPLATE, false),
+                anchorArmor(Material.NETHERITE_HELMET, false)
+        };
+    }
+
+    private ItemStack anchorArmor(Material material, boolean blastProtection) {
+        ItemStack item = gear(material);
+        ItemMeta meta = item.getItemMeta();
+        meta.addEnchant(Enchantment.PROTECTION, 4, true);
+        if (blastProtection) meta.addEnchant(Enchantment.BLAST_PROTECTION, 4, true);
+        item.setItemMeta(meta);
+        return item;
     }
 
     private ItemStack gear(Material type) {
