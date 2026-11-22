@@ -140,14 +140,15 @@ public final class Menus implements Listener {
     public void openAdminKits(Player p) {
         Inventory inv = create("admin-kits", "&8ᴀᴅᴍɪɴ · ᴋɪᴛꜱ", 27);
         inv.setItem(10, item(Material.DIAMOND_SWORD, "&bSword Kit", "&7Edit the global 1v1 Sword kit."));
-        inv.setItem(16, item(Material.MACE, "&6Spear Mace Kit", "&7Edit the global 1v1 Spear Mace kit."));
+        inv.setItem(16, item(Material.MACE, "&6Spear-Mace Kit", "&7Edit the global 1v1 Spear-Mace kit."));
         inv.setItem(22, item(Material.ARROW, "&cBack"));
         p.openInventory(inv);
     }
 
     private void openAdminKitEditor(Player p, PracticeManager.Mode mode) {
         String key = "admin-kit-editor-" + mode.name();
-        Inventory inv = create(key, "&8ᴀᴅᴍɪɴ · " + mode.name() + " ᴋɪᴛ", 54);
+        String kitName = mode == PracticeManager.Mode.STUN_SLAM ? "SPEAR-MACE" : mode.name();
+        Inventory inv = create(key, "&8ᴀᴅᴍɪɴ · " + kitName + " ᴋɪᴛ", 54);
         plugin.practice().applyAdminKitToInventory(mode, inv);
         for (int slot = 36; slot <= 44; slot++) inv.setItem(slot, item(Material.GRAY_STAINED_GLASS_PANE, "&8 "));
         inv.setItem(49, item(Material.BOOK, "&eKit Editor", "&7Changes apply to future 1v1 fights.", "&7Armor slots: 45–48.", "&7Close to save."));
@@ -160,7 +161,7 @@ public final class Menus implements Listener {
         inv.setItem(10, item(Material.PLAYER_HEAD, "&aPlayer Boxes", "&7Teleport to an online player's box."));
         inv.setItem(12, item(Material.ZOMBIE_HEAD, "&eBot Management", "&7Remove all training NPCs."));
         inv.setItem(14, item(Material.COMMAND_BLOCK, "&6Gamemode Management", "&7Open gamemode selector."));
-        inv.setItem(16, item(Material.ANVIL, "&bKit Management", "&7Edit Sword and Spear Mace 1v1 kits."));
+        inv.setItem(16, item(Material.ANVIL, "&bKit Management", "&7Edit Sword and Spear-Mace 1v1 kits."));
         boolean duelBreaking = plugin.getConfig().getBoolean("duels.block-breaking.enabled", false);
         inv.setItem(18, item(duelBreaking ? Material.IRON_PICKAXE : Material.WOODEN_PICKAXE,
                 (duelBreaking ? "&a" : "&c") + "Duel Block Breaking: " + (duelBreaking ? "ON" : "OFF"),
