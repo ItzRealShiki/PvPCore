@@ -11,6 +11,8 @@ import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -128,10 +130,11 @@ final class SchematicLoader {
         String path = switch (arena) {
             case "ARENA_1" -> "schematics/arena-1.schem";
             case "ARENA_3" -> "schematics/arena-3.schem";
+            case "HIGH_CROWN_SPAWN" -> "schematics/high-crown-medieval-spawn.schem";
             default -> throw new IOException("Unknown arena key: " + arena);
         };
 
-        try (InputStream resource = plugin.getResource(path)) {
+        try (InputStream resource = openResource(plugin, path)) {
             if (resource == null) throw new IOException("Missing plugin resource: " + path);
             BufferedInputStream buffered = new BufferedInputStream(resource);
             buffered.mark(2);
@@ -196,6 +199,21 @@ final class SchematicLoader {
         } catch (SchematicLoadFailure failure) {
             throw failure.ioException;
         }
+    }
+
+    private static InputStream openResource(JavaPlugin plugin, String path) throws IOException {
+        if ("schematics/high-crown-medieval-spawn.schem".equals(path)) {
+            Path external = plugin.getDataFolder().toPath()
+                    .resolve("schematics").resolve("high-crown-medieval-spawn.schem");
+            if (!Files.isRegularFile(external)) {
+                throw new IOException("Missing " + external
+                        + ". Place high-crown-medieval-spawn.schem in plugins/PvPCore/schematics/.");
+            }
+            return Files.newInputStream(external);
+        }
+        InputStream resource = plugin.getResource(path);
+        if (resource == null) throw new IOException("Missing plugin resource: " + path);
+        return resource;
     }
 
     private static BlockData parseBlockData(String state) {

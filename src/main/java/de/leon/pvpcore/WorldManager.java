@@ -402,6 +402,55 @@ public final class WorldManager {
         return world;
     }
 
+    /**
+     * Installs the High Crown hub once in the main overworld, centered at X=0/Z=0.
+     * The schematic's central spawn slab is at local coordinate (95, 101, 131).
+     */
+    public void installHighCrownSpawnOnce() {
+        if (plugin.getConfig().getBoolean("spawn.high-crown-installed", false)) return;
+
+        World mainWorld = Bukkit.getWorld("world");
+        if (mainWorld == null || isManagedWorldName(mainWorld.getName())) {
+            mainWorld = Bukkit.getWorlds().stream()
+                    .filter(candidate -> candidate.getEnvironment() == World.Environment.NORMAL)
+                    .filter(candidate -> !isManagedWorldName(candidate.getName()))
+                    .findFirst().orElse(null);
+        }
+        if (mainWorld == null) {
+            plugin.getLogger().severe("High Crown spawn was not installed: the main overworld is unavailable.");
+            return;
+        }
+
+        try {
+            mainWorld.getChunkAt(0, 0);
+            int terrainY = mainWorld.getHighestBlockYAt(0, 0);
+            int baseY = terrainY - 101;
+            baseY = Math.max(mainWorld.getMinHeight(),
+                    Math.min(baseY, mainWorld.getMaxHeight() - 147));
+
+            // Clear and paste only the schematic footprint, never the entire main world.
+            SchematicLoader.paste(plugin, mainWorld, "HIGH_CROWN_SPAWN",
+                    "HIGH_CROWN_SPAWN", 0, baseY, 0);
+
+            double spawnY = baseY + 101.5D;
+            plugin.getConfig().set("spawn.world", mainWorld.getName());
+            plugin.getConfig().set("spawn.x", 0.5D);
+            plugin.getConfig().set("spawn.y", spawnY);
+            plugin.getConfig().set("spawn.z", 0.5D);
+            plugin.getConfig().set("spawn.yaw", 0.0D);
+            plugin.getConfig().set("spawn.pitch", 0.0D);
+            plugin.getConfig().set("spawn.high-crown-base-y", baseY);
+            plugin.getConfig().set("spawn.high-crown-installed", true);
+            mainWorld.setSpawnLocation(0, baseY + 102, 0);
+            plugin.saveConfig();
+
+            plugin.getLogger().info("Installed High Crown Medieval Spawn in "
+                    + mainWorld.getName() + " centered at X=0, Z=0 (base Y=" + baseY + ").");
+        } catch (IOException exception) {
+            plugin.getLogger().severe("Could not install High Crown spawn: " + exception.getMessage());
+        }
+    }
+
     public void setSpawn(Player player) {
         Location location = player.getLocation();
         plugin.getConfig().set("spawn.world", location.getWorld().getName());

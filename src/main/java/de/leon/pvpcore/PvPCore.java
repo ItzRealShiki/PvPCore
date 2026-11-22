@@ -33,6 +33,8 @@ public final class PvPCore extends JavaPlugin implements Listener {
         // Run the one-time, whitelist-only world reset before PracticeManager caches
         // a reference to prac_void. No normal server world is included in this cleanup.
         worlds.initializeWorldsOnce();
+        // Install the hub after startup, once the main world is available.
+        Bukkit.getScheduler().runTaskLater(this, worlds::installHighCrownSpawnOnce, 1L);
         for (World world : Bukkit.getWorlds()) worlds.applyPermanentDay(world);
         menus = new Menus(this);
         bots = new BotManager(this);
