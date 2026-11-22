@@ -41,6 +41,9 @@ public final class PracticeManager implements Listener {
     private static final int ROOM_SPACING = 1024;
     private static final int DUEL_ARENA_RADIUS = 48;
     private static final int PRACTICE_ARENA_RADIUS = 24;
+    private static final int ARENA_WALL_HEIGHT = 5;
+    private static final List<String> ARENA_MAPS = List.of(
+            "COLOSSEUM", "RUINS", "FOREST", "NETHER_FORTRESS", "END_CITADEL");
     private static final String PRACTICE_WORLD = "prac_void";
 
     private final PvPCore plugin;
@@ -118,7 +121,7 @@ public final class PracticeManager implements Listener {
                 continue;
             }
             nearbyRooms.add(index);
-            int glassHeight = mode(player) == Mode.SWORD ? 30 : selectedHeight(player) + 10;
+            int glassHeight = ARENA_WALL_HEIGHT;
             int arenaRadius = isFighting(player) ? DUEL_ARENA_RADIUS : PRACTICE_ARENA_RADIUS;
             Integer previousGlassHeight = forceFieldHeights.get(index);
             if (!activeForceFields.contains(index)) {
@@ -181,8 +184,7 @@ public final class PracticeManager implements Listener {
             plugin.saveConfig();
         }
         adminBoxVisits.put(admin.getUniqueId(), index);
-        int height = owner.getGameMode() == GameMode.SPECTATOR ? 0
-                : (mode(owner) == Mode.SWORD ? 30 : selectedHeight(owner) + 10);
+        int height = ARENA_WALL_HEIGHT;
         if (!activeForceFields.contains(index)) {
             removeForceField(roomCenterX(index), 128, world.getMaxHeight() - 81, DUEL_ARENA_RADIUS);
             buildForceField(roomCenterX(index), 128, height, PRACTICE_ARENA_RADIUS);
@@ -678,6 +680,154 @@ public final class PracticeManager implements Listener {
         plugin.message(player, "&aYour box design is now &e" + normalized.replace('_', ' ') + "&a.");
     }
 
+    public String arenaMap(Player player) {
+        return normalizeArenaMap(plugin.getConfig().getString(
+                "practice.players." + player.getUniqueId() + ".arena-map", "COLOSSEUM"));
+    }
+
+    private String arenaMap(int roomIndex) {
+        var players = plugin.getConfig().getConfigurationSection("practice.players");
+        if (players != null) {
+            for (String uuid : players.getKeys(false)) {
+                if (plugin.getConfig().getInt("practice.players." + uuid + ".room", -1) == roomIndex) {
+                    return normalizeArenaMap(plugin.getConfig().getString(
+                            "practice.players." + uuid + ".arena-map", "COLOSSEUM"));
+                }
+            }
+        }
+        return "COLOSSEUM";
+    }
+
+    private String normalizeArenaMap(String value) {
+        String normalized = value == null ? "COLOSSEUM" : value.toUpperCase(Locale.ROOT);
+        return ARENA_MAPS.contains(normalized) ? normalized : "COLOSSEUM";
+    }
+
+    public void setArenaMap(Player player, String map) {
+        String normalized = normalizeArenaMap(map);
+        if (!ARENA_MAPS.contains(normalized)) return;
+        plugin.getConfig().set("practice.players." + player.getUniqueId() + ".arena-map", normalized);
+        plugin.saveConfig();
+        plugin.message(player, "&aArena selected: &e" + normalized.replace('_', ' ') + "&a.");
+    }
+
+    private Material arenaWallMaterial(int roomIndex) {
+        return switch (arenaMap(roomIndex)) {
+            case "RUINS" -> Material.MOSSY_STONE_BRICKS;
+            case "FOREST" -> Material.MOSSY_COBBLESTONE;
+            case "NETHER_FORTRESS" -> Material.POLISHED_BLACKSTONE_BRICKS;
+            case "END_CITADEL" -> Material.PURPUR_BLOCK;
+            default -> Material.STONE_BRICKS;
+        };
+    }
+
+    private void placeArenaTower(int x, int z, int height, Material body, Material accent) {
+        if (world == null) return;
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                int baseY = world.getHighestBlockYAt(x + dx, z + dz) + 1;
+                for (int y = 0; y < height; y++) {
+                    Material block = y == height - 1 ? accent : body;
+                    world.getBlockAt(x + dx, baseY + y, z + dz).setType(block, false);
+                }
+            }
+        }
+    }
+
+    private void buildArenaTree(int x, int z) {
+        if (world == null) return;
+        int baseY = world.getHighestBlockYAt(x, z) + 1;
+        int trunkHeight = 4;
+        for (int y = 0; y < trunkHeight; y++)
+            world.getBlockAt(x, baseY + y, z).setType(Material.OAK_LOG, false);
+        for (int layer = 0; layer < 3; layer++) {
+            int spread = layer == 0 ? 2 : 1;
+            for (int dx = -spread; dx <= spread; dx++) {
+                for (int dz = -spread; dz <= spread; dz++) {
+                    if (Math.abs(dx) == spread && Math.abs(dz) == spread && layer == 0) continue;
+                    world.getBlockAt(x + dx, baseY + trunkHeight - 1 + layer, z + dz)
+                            .setType(Material.OAK_LEAVES, false);
+                }
+            }
+        }
+    }
+
+    private void buildArenaLandmarks(int cx, int cz, int arenaRadius, int roomIndex) {
+        if (world == null) return;
+        int reach = Math.max(8, arenaRadius - 8);
+        int[][] corners = {{-reach, -reach}, {-reach, reach}, {reach, -reach}, {reach, reach}};
+        switch (arenaMap(roomIndex)) {
+            case "RUINS" -> {
+                Material[] ruins = {Material.CRACKED_STONE_BRICKS, Material.MOSSY_STONE_BRICKS,
+                        Material.STONE_BRICKS, Material.CHISELED_STONE_BRICKS};
+                for (int i = 0; i < corners.length; i++) {
+                    int[] point = corners[i];
+                    placeArenaTower(cx + point[0], cz + point[1], 3 + (i % 3), ruins[i], Material.MOSSY_STONE_BRICKS);
+                }
+                for (int side : new int[]{-1, 1}) {
+                    for (int offset = -7; offset <= 7; offset++) {
+                        if (Math.abs(offset) < 3) continue;
+                        int x = cx + offset;
+                        int z = cz + side * (arenaRadius - 8);
+                        int y = world.getHighestBlockYAt(x, z) + 1;
+                        world.getBlockAt(x, y, z).setType(Material.MOSSY_STONE_BRICKS, false);
+                        if (Math.floorMod(offset, 3) == 0)
+                            world.getBlockAt(x, y + 1, z).setType(Material.CRACKED_STONE_BRICKS, false);
+                    }
+                }
+            }
+            case "FOREST" -> {
+                for (int[] point : corners) {
+                    buildArenaTree(cx + point[0], cz + point[1]);
+                    placeArenaTower(cx + point[0] + 4, cz + point[1], 2,
+                            Material.MOSSY_COBBLESTONE, Material.MOSSY_COBBLESTONE);
+                }
+            }
+            case "NETHER_FORTRESS" -> {
+                for (int i = 0; i < corners.length; i++) {
+                    int[] point = corners[i];
+                    placeArenaTower(cx + point[0], cz + point[1], 5 + (i % 2),
+                            Material.BASALT, Material.POLISHED_BLACKSTONE_BRICKS);
+                    int baseY = world.getHighestBlockYAt(cx + point[0], cz + point[1]) + 1;
+                    world.getBlockAt(cx + point[0], baseY, cz + point[1]).setType(Material.MAGMA_BLOCK, false);
+                }
+            }
+            case "END_CITADEL" -> {
+                for (int[] point : corners) {
+                    placeArenaTower(cx + point[0], cz + point[1], 6,
+                            Material.PURPUR_PILLAR, Material.PURPUR_BLOCK);
+                    int baseY = world.getHighestBlockYAt(cx + point[0], cz + point[1]) + 7;
+                    world.getBlockAt(cx + point[0], baseY, cz + point[1]).setType(Material.END_ROD, false);
+                }
+                for (int side : new int[]{-1, 1}) {
+                    for (int offset = -5; offset <= 5; offset++) {
+                        int x = cx + offset;
+                        int z = cz + side * (arenaRadius - 8);
+                        int y = world.getHighestBlockYAt(x, z) + 1;
+                        world.getBlockAt(x, y, z).setType(Material.PURPUR_SLAB, false);
+                    }
+                }
+            }
+            default -> {
+                // Colosseum: symmetric sandstone towers and tiered spectator ledges.
+                for (int[] point : corners) {
+                    placeArenaTower(cx + point[0], cz + point[1], 6,
+                            Material.SMOOTH_SANDSTONE, Material.CHISELED_SANDSTONE);
+                }
+                for (int side : new int[]{-1, 1}) {
+                    for (int row = 0; row < 3; row++) {
+                        for (int offset = -8; offset <= 8; offset++) {
+                            int x = cx + offset;
+                            int z = cz + side * (arenaRadius - 13 + row * 2);
+                            int y = world.getHighestBlockYAt(x, z) + 1 + row;
+                            world.getBlockAt(x, y, z).setType(Material.SMOOTH_SANDSTONE_SLAB, false);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private Material[] arenaPalette(int roomIndex) {
         return switch (arenaTheme(roomIndex)) {
             case "DESERT" -> new Material[]{Material.SAND, Material.SANDSTONE, Material.SMOOTH_SANDSTONE, Material.CUT_SANDSTONE, Material.DEAD_BUSH};
@@ -908,6 +1058,10 @@ public final class PracticeManager implements Listener {
                 leafDecayTasks.remove(roomIndex);
             }, 1200L));
         }
+
+        // The arena map adds recognizable structures around the outer ring.
+        // The central combat lane remains open for every kit and training mode.
+        buildArenaLandmarks(cx, cz, arenaRadius, roomIndex);
     }
 
     private void addTimedCherryLeaves(int x, int y, int z, List<Block> timedLeaves) {
@@ -921,20 +1075,34 @@ public final class PracticeManager implements Listener {
 
     private void buildForceField(int cx, int cz, int glassHeight, int arenaRadius) {
         if (world == null) return;
-        int roofY = 80 + glassHeight;
+        int roomIndex = Math.floorDiv(cx - 128, ROOM_SPACING);
+        Material wall = arenaWallMaterial(roomIndex);
+        Material accent = forceFieldMaterial();
+        int topY = 80 + ARENA_WALL_HEIGHT;
+
+        // Open-air stadium walls replace the old full-height glass cage and roof.
+        // Four 3-block-wide gates keep the arena visually open; the movement guard
+        // still prevents players from leaving the assigned private arena.
         for (int offset = -arenaRadius; offset <= arenaRadius; offset++) {
-            for (int y = 81; y <= roofY; y++) {
-                world.getBlockAt(cx - arenaRadius, y, cz + offset).setType(forceFieldMaterial(), false);
-                world.getBlockAt(cx + arenaRadius, y, cz + offset).setType(forceFieldMaterial(), false);
-                world.getBlockAt(cx + offset, y, cz - arenaRadius).setType(forceFieldMaterial(), false);
-                world.getBlockAt(cx + offset, y, cz + arenaRadius).setType(forceFieldMaterial(), false);
+            boolean gate = Math.abs(offset) <= 1;
+            for (int y = 81; y <= topY; y++) {
+                if (gate && y < topY) continue;
+                Material block = y == 83 ? accent : wall;
+                if (Math.floorMod(offset, 8) == 0 && y < topY) block = wall;
+                world.getBlockAt(cx - arenaRadius, y, cz + offset).setType(block, false);
+                world.getBlockAt(cx + arenaRadius, y, cz + offset).setType(block, false);
+                world.getBlockAt(cx + offset, y, cz - arenaRadius).setType(block, false);
+                world.getBlockAt(cx + offset, y, cz + arenaRadius).setType(block, false);
             }
         }
 
-        // Close the arena with a complete glass roof at the calculated mode-specific height.
-        for (int x = -arenaRadius; x <= arenaRadius; x++) {
-            for (int z = -arenaRadius; z <= arenaRadius; z++) {
-                world.getBlockAt(cx + x, roofY, cz + z).setType(forceFieldMaterial(), false);
+        // Solid corner piers and a continuous open sky; there is deliberately no roof.
+        for (int xSign : new int[]{-1, 1}) {
+            for (int zSign : new int[]{-1, 1}) {
+                for (int y = 81; y <= topY + 1; y++) {
+                    world.getBlockAt(cx + xSign * arenaRadius, y, cz + zSign * arenaRadius)
+                            .setType(wall, false);
+                }
             }
         }
     }
@@ -957,20 +1125,28 @@ public final class PracticeManager implements Listener {
 
     private void removeForceField(int cx, int cz, int glassHeight, int arenaRadius) {
         if (world == null) return;
-        int roofY = 80 + glassHeight;
+        // Remove the previous perimeter (including its accent band) before rebuilding it.
         for (int offset = -arenaRadius; offset <= arenaRadius; offset++) {
-            for (int y = 81; y <= roofY; y++) {
+            for (int y = 81; y <= 80 + ARENA_WALL_HEIGHT + 1; y++) {
                 world.getBlockAt(cx - arenaRadius, y, cz + offset).setType(Material.AIR, false);
                 world.getBlockAt(cx + arenaRadius, y, cz + offset).setType(Material.AIR, false);
                 world.getBlockAt(cx + offset, y, cz - arenaRadius).setType(Material.AIR, false);
                 world.getBlockAt(cx + offset, y, cz + arenaRadius).setType(Material.AIR, false);
             }
         }
+
+        // Delete any legacy glass roof left by a previous PvPCore version.
+        int legacyRoofY = 80 + glassHeight;
         for (int x = -arenaRadius; x <= arenaRadius; x++) {
             for (int z = -arenaRadius; z <= arenaRadius; z++) {
-                world.getBlockAt(cx + x, roofY, cz + z).setType(Material.AIR, false);
+                Block roof = world.getBlockAt(cx + x, legacyRoofY, cz + z);
+                if (isArenaGlass(roof.getType())) roof.setType(Material.AIR, false);
             }
         }
+    }
+
+    private boolean isArenaGlass(Material material) {
+        return material == Material.GLASS || material.name().endsWith("_STAINED_GLASS");
     }
 
     private void retry(Player p, boolean success) {
