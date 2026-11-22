@@ -58,10 +58,37 @@ public final class PracticeCommand implements CommandExecutor, Listener {
     private void main(Player p) {
         Inventory i = create("&8✦ ᴘʀᴀᴄᴛɪᴄᴇ", "main", 27);
         i.setItem(11, item(Material.MACE, "&6Stun Slam", "&7Choose a difficulty before entering."));
-        i.setItem(13, item(Material.GRASS_BLOCK, "&aBox Design", "&7Choose your own arena theme."));
+        i.setItem(13, item(Material.BEACON, "&bArena Selector", "&7Choose a complete arena map.", "&7Colosseum, Ruins, Forest and more."));
         i.setItem(15, item(Material.DIAMOND_SWORD, "&bSword", "&7Diamond sword vs diamond sword.", "&eClick to enter"));
         i.setItem(17, item(Material.RESPAWN_ANCHOR, "&6Crystal Anchor", "&7Time from placement until explosion.", "&7Your fastest time is saved.", "&eClick to enter"));
         i.setItem(22, item(Material.ANVIL, "&aKit Editor", "&7Edit your Practice and Duel kits."));
+        p.openInventory(i);
+    }
+
+    private void arenaMaps(Player p) {
+        Inventory i = create("&8✦ ᴀʀᴇɴᴀ ꜱᴇʟᴇᴄᴛᴏʀ", "arenas", 27);
+        String selected = plugin.practice().arenaMap(p);
+        i.setItem(10, item(Material.SMOOTH_SANDSTONE,
+                (selected.equals("COLOSSEUM") ? "&a✓ " : "&6") + "Colosseum",
+                "&7A classic stone stadium with raised spectator ledges.",
+                "&7Open sky and a clear center for PvP."));
+        i.setItem(12, item(Material.MOSSY_STONE_BRICKS,
+                (selected.equals("RUINS") ? "&a✓ " : "&6") + "Ancient Ruins",
+                "&7Broken stone pillars and mossy walls.",
+                "&7A ruined battleground with multiple angles."));
+        i.setItem(14, item(Material.OAK_LEAVES,
+                (selected.equals("FOREST") ? "&a✓ " : "&6") + "Overgrown",
+                "&7Trees, mossy cover and natural corners.",
+                "&7A forest arena with an open combat lane."));
+        i.setItem(16, item(Material.POLISHED_BLACKSTONE_BRICKS,
+                (selected.equals("NETHER_FORTRESS") ? "&a✓ " : "&6") + "Nether Fortress",
+                "&7Basalt towers and blackstone details.",
+                "&7A dark fortress-style battleground."));
+        i.setItem(22, item(Material.PURPUR_BLOCK,
+                (selected.equals("END_CITADEL") ? "&a✓ " : "&6") + "End Citadel",
+                "&7Purpur towers and End-rod accents.",
+                "&7A floating-citadel inspired arena."));
+        i.setItem(26, item(Material.ARROW, "&cBack", "&7Return to practice modes."));
         p.openInventory(i);
     }
 
@@ -121,10 +148,30 @@ public final class PracticeCommand implements CommandExecutor, Listener {
         int s = e.getSlot();
         if (h.kind.equals("main")) {
             if (s == 11) difficulty(p);
-            else if (s == 13) plugin.menus().openBoxThemes(p);
+            else if (s == 13) arenaMaps(p);
             else if (s == 15) { plugin.practice().setMode(p, PracticeManager.Mode.SWORD); p.closeInventory(); plugin.practice().enter(p); }
             else if (s == 17) { plugin.practice().setMode(p, PracticeManager.Mode.CRYSTAL_ANCHOR); p.closeInventory(); plugin.practice().enter(p); }
             else if (s == 22) kit(p);
+        } else if (h.kind.equals("arenas")) {
+            if (s == 26) {
+                main(p);
+                return;
+            }
+            String map = switch (s) {
+                case 10 -> "COLOSSEUM";
+                case 12 -> "RUINS";
+                case 14 -> "FOREST";
+                case 16 -> "NETHER_FORTRESS";
+                case 22 -> "END_CITADEL";
+                default -> null;
+            };
+            if (map != null) {
+                boolean alreadyInPractice = p.getWorld().getName().equalsIgnoreCase("prac_void");
+                p.closeInventory();
+                plugin.practice().setArenaMap(p, map);
+                if (alreadyInPractice) plugin.practice().enter(p);
+                else main(p);
+            }
         } else if (h.kind.equals("difficulty")) {
             if (s == 10 || s == 12 || s == 14 || s == 16) {
                 int height = s == 10 ? 10 : s == 12 ? 20 : s == 14 ? 30 : 100;
