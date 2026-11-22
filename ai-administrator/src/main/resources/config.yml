@@ -1,0 +1,23 @@
+# Add your OpenAI API key here. Never share this file or commit a populated config file.
+# The OPENAI_API_KEY environment variable takes priority when available.
+openai:
+  api-key: ""
+  model: "gpt-6.2-astra"
+  endpoint: "https://api.openai.com/v1/responses"
+  timeout-seconds: 50
+  max-output-tokens: 2600
+
+monitoring:
+  enabled: true
+  interval-seconds: 30
+  cooldown-seconds: 300
+  max-trigger-lines: 35
+
+privacy:
+  include-logs: true
+  max-log-characters: 16000
+  include-crash-report: true
+
+security:
+  allow-approved-config-changes: true
+  allow-approved-safe-commands: true
