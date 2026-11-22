@@ -11,7 +11,7 @@ Standalone Paper plugin for PvP training, separate flat practice worlds, and GUI
 ```bash
 gradle clean build
 ```
-Output: `build/libs/PvPCore-1.0.5.jar`
+Output: `build/libs/PvPCore-1.0.6.jar`
 
 ## Commands
 - `/bot` — Opens the training NPC menu.
@@ -27,22 +27,12 @@ All in-game messages, menu titles, item names, and lore use Unicode small-caps s
 
 ## Practice arenas
 
-Use `/prac` to open the practice menu and choose one of five arena layouts:
-- **Colosseum** — sandstone stadium towers and stepped spectator ledges.
-- **Ancient Ruins** — broken stone pillars and mossy walls.
-- **Overgrown** — trees and mossy cover around an open combat lane.
-- **Nether Fortress** — basalt towers and polished blackstone details.
-- **End Citadel** — purpur towers and End-rod accents.
+Use `/prac` to choose between two original test layouts inspired by the broad visual themes of the linked references. The paid schematic files are not bundled or downloaded.
 
-Each player receives a separate practice instance, so multiple arenas can run at the same time. A 1v1 uses the challenger's selected arena. Every selection is a complete build preset: it determines the floor layers, wall palette, trim, corner structures, lighting and arena decorations. There is no separate ground-theme selector and no glass enclosure.
+- **Anubis Rise** — an Egyptian desert-temple arena with sand and sandstone floor layers, red-sandstone details, gold sun-disc spawn emblem, four monumental gates, obelisks and a stepped temple facade.
+- **Tiny End Coliseum** — a compact End-themed coliseum with end-stone floor layers, purpur rings, four gatehouses, corner towers, End-rod beacons and two spectator tiers.
 
-- **Colosseum** — smooth sandstone floor, cut/chiseled sandstone trim, sandstone stadium walls and spectator tiers.
-- **Ancient Ruins** — stone-brick floor layers, cracked and mossy detailing, broken pillars and ruined walls.
-- **Overgrown** — grass, dirt, rooted-dirt and moss floor layers, mossy walls, trees and natural cover.
-- **Nether Fortress** — polished-blackstone floor, basalt/nether-brick layers, blackstone walls and Nether details.
-- **End Citadel** — end-stone-brick floor, purpur layers and walls, End-themed towers and lighting.
-
-A cyan particle forcefield appears only for players within the configured `practice.forcefield.activation-distance` (default 6 blocks) of the invisible inner boundary. Movement is stopped at the boundary without teleporting players back to the center.
+Each player has a separate practice instance; duels use the challenger's selected test arena. The layout scales to the existing Practice and Duel footprints so it does not create oversized schematic-sized worlds. Both presets control the whole build: floor, wall palette, trim, structures, lighting and decorations. The solid 12-block perimeter walls remain in place, with a cyan proximity forcefield at the inner boundary. Set `practice.forcefield.activation-distance` in `config.yml` to adjust how early it appears.
 
 ## Training NPC
 The `/bot` menu lets you configure and spawn a stationary training NPC. Left-click the Shield Reaction or Totem Refill setting to lower its difficulty; right-click to raise it. The selected level is shown in the item's lore:
