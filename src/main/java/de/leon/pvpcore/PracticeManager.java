@@ -5,7 +5,6 @@ import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.generator.WorldInfo;
 import org.bukkit.generator.ChunkGenerator.ChunkData;
 import org.bukkit.entity.Player;
-import org.bukkit.entity.Shulker;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -24,7 +23,6 @@ import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.*;
 import org.bukkit.block.Block;
-import org.bukkit.block.data.type.Leaves;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.scoreboard.Criteria;
 import org.bukkit.scoreboard.DisplaySlot;
@@ -39,12 +37,13 @@ public final class PracticeManager implements Listener {
     public enum Mode { STUN_SLAM, SWORD, CRYSTAL_ANCHOR }
 
     private static final int ROOM_SPACING = 1024;
-    private static final int DUEL_ARENA_RADIUS = 48;
-    private static final int PRACTICE_ARENA_RADIUS = 48;
-    private static final int ARENA_WALL_HEIGHT = 12;
+    private static final int ARENA_1_FORCE_FIELD_RADIUS = 74;
+    private static final int ARENA_3_FORCE_FIELD_RADIUS = 34;
+    private static final int ARENA_FORCE_FIELD_HEIGHT = 12;
+    private static final Material FORCE_FIELD_GLASS = Material.LIGHT_BLUE_STAINED_GLASS;
     private static final List<String> ARENA_MAPS = List.of("ARENA_1", "ARENA_3");
     private static final String PRACTICE_WORLD = "prac_void";
-    private static final int SCHEMATIC_BUILD_VERSION = 1;
+    private static final int SCHEMATIC_BUILD_VERSION = 3;
 
     private final PvPCore plugin;
     private World world;
@@ -69,8 +68,6 @@ public final class PracticeManager implements Listener {
     private final Map<UUID, Mode> fightModes = new HashMap<>();
     private final Map<UUID, Location> fightReturnLocations = new HashMap<>();
     private final Map<UUID, Integer> adminBoxVisits = new HashMap<>();
-    private final Map<Integer, org.bukkit.scheduler.BukkitTask> leafDecayTasks = new HashMap<>();
-    private final Set<Integer> foundationBuildingRooms = new HashSet<>();
     private final Map<UUID, Scoreboard> practiceBoards = new HashMap<>();
     private final Map<UUID, Scoreboard> previousBoards = new HashMap<>();
     private boolean warnedSpearFallback;
@@ -558,12 +555,11 @@ public final class PracticeManager implements Listener {
         int builtVersion = plugin.getConfig().getInt(base + ".built-schematic-version", 0);
         if (built && builtVersion == SCHEMATIC_BUILD_VERSION && selectedMap.equals(builtMap)) return;
 
-        // Rooms created by older PvPCore versions used generated Anubis/End layouts.
-        // Force one clean migration instead of treating those old names as schematic IDs.
-        boolean legacyGeneratedRoom = builtVersion < SCHEMATIC_BUILD_VERSION
-                && (built || !builtMap.isBlank());
-        String previousMap = legacyGeneratedRoom ? "LEGACY_GENERATED"
-                : (built ? builtMap : "");
+        // Older versions may have generated fallback geometry instead of pasting Arena 1.
+        // Preserve a real previous schematic ID so the loader can clear the complete old footprint.
+        String previousMap = built
+                ? (ARENA_MAPS.contains(builtMap) ? builtMap : "LEGACY_GENERATED")
+                : "";
 
         if (buildRoom(roomCenterX(roomIndex), 128, selectedMap, previousMap)) {
             plugin.getConfig().set(base + ".built", true);
@@ -583,8 +579,7 @@ public final class PracticeManager implements Listener {
             return true;
         } catch (Exception exception) {
             plugin.getLogger().log(java.util.logging.Level.SEVERE,
-                    "Could not load arena schematic " + map + ". A neutral fallback floor was generated; the schematic will be retried on next entry.", exception);
-            buildArenaPlatform(cx, cz, PRACTICE_ARENA_RADIUS);
+                    "Could not load arena schematic " + map + ". Loading will be retried on next entry.", exception);
             return false;
         }
     }
@@ -610,98 +605,6 @@ public final class PracticeManager implements Listener {
         forceFieldRadii.remove(roomIndex);
     }
 
-    private void buildDuelObstacles(int cx, int cz, int roomIndex) {
-        // Each test arena has its own themed pillars, gates and floor emblem.
-        // Do not overlay the former generic stone/copper obstacle set.
-        if (ARENA_MAPS.contains(arenaMap(roomIndex))) return;
-        Material[] pillars = {Material.STONE_BRICKS, Material.MOSSY_STONE_BRICKS, Material.POLISHED_ANDESITE, Material.COBBLED_DEEPSLATE};
-        int[][] positions = {
-                {-14, -12, 3}, {14, -12, 2}, {-14, 12, 2}, {14, 12, 3},
-                {-25, -2, 2}, {25, 2, 2}, {-3, -22, 2}, {3, 22, 2}
-        };
-        for (int i = 0; i < positions.length; i++) {
-            int[] pos = positions[i];
-            Material block = pillars[Math.floorMod(roomIndex + i, pillars.length)];
-            for (int dx = 0; dx < 2; dx++) for (int dz = 0; dz < 2; dz++)
-                for (int y = 1; y <= pos[2]; y++)
-                    world.getBlockAt(cx + pos[0] + dx, 80 + y, cz + pos[1] + dz).setType(block, false);
-        }
-        // Low cover walls on the outer lanes; keep the central spawn-to-spawn lane open.
-        for (int i = -4; i <= 4; i++) {
-            world.getBlockAt(cx - 21 + i, 81, cz - 15).setType(Material.STONE_BRICKS, false);
-            world.getBlockAt(cx - 21 + i, 82, cz - 15).setType(Material.STONE_BRICKS, false);
-            world.getBlockAt(cx + 21 + i, 81, cz + 15).setType(Material.POLISHED_ANDESITE, false);
-            world.getBlockAt(cx + 21 + i, 82, cz + 15).setType(Material.POLISHED_ANDESITE, false);
-        }
-        // Raised two-block stepping platforms add vertical movement without blocking combat.
-        for (int x : new int[]{-8, 8}) for (int z : new int[]{-28, 28}) {
-            for (int dx = -2; dx <= 2; dx++) for (int dz = -2; dz <= 2; dz++)
-                world.getBlockAt(cx + x + dx, 81, cz + z + dz).setType(Material.CUT_COPPER, false);
-        }
-    }
-
-    private void buildDuelFoundation(int cx, int cz, int roomIndex) {
-        if (world == null || ARENA_MAPS.contains(arenaMap(roomIndex))
-                || !plugin.getConfig().getBoolean("duels.foundation.enabled", true)) return;
-        String path = "duels.rooms." + roomIndex + ".foundation-built";
-        if (plugin.getConfig().getBoolean(path, false) || !foundationBuildingRooms.add(roomIndex)) return;
-        int stoneDepth = Math.max(1, Math.min(64, plugin.getConfig().getInt("duels.foundation.stone-depth", 64)));
-        int deepslateDepth = Math.max(1, Math.min(128, plugin.getConfig().getInt("duels.foundation.deepslate-depth", 64)));
-        List<int[]> columns = new ArrayList<>((DUEL_ARENA_RADIUS * 2 + 1) * (DUEL_ARENA_RADIUS * 2 + 1));
-        for (int x = -DUEL_ARENA_RADIUS; x <= DUEL_ARENA_RADIUS; x++) for (int z = -DUEL_ARENA_RADIUS; z <= DUEL_ARENA_RADIUS; z++) columns.add(new int[]{cx + x, cz + z});
-        int[] cursor = {0};
-        Bukkit.getScheduler().runTaskTimer(plugin, task -> {
-            int processed = 0;
-            while (cursor[0] < columns.size() && processed++ < 24) {
-                int[] col = columns.get(cursor[0]++);
-                for (int y = 80 - stoneDepth; y < 80; y++) world.getBlockAt(col[0], y, col[1]).setType(Material.STONE, false);
-                for (int y = 80 - stoneDepth - deepslateDepth; y < 80 - stoneDepth; y++) world.getBlockAt(col[0], y, col[1]).setType(Material.DEEPSLATE, false);
-                world.getBlockAt(col[0], 80 - stoneDepth - deepslateDepth - 1, col[1]).setType(Material.BEDROCK, false);
-            }
-            if (cursor[0] >= columns.size()) {
-                plugin.getConfig().set(path, true); plugin.saveConfig();
-                foundationBuildingRooms.remove(roomIndex); task.cancel();
-            }
-        }, 1L, 1L);
-    }
-
-    private void buildBackgroundLandscape(int cx, int cz, int roomIndex) {
-        if (world == null || ARENA_MAPS.contains(arenaMap(roomIndex))
-                || !plugin.getConfig().getBoolean("duels.landscape.enabled", true)) return;
-        String path = "duels.rooms." + roomIndex + ".landscape-built-v2";
-        if (plugin.getConfig().getBoolean(path, false)) return;
-        boolean endTheme = arenaMap(roomIndex).equals("ARENA_3");
-        Material deep = endTheme ? Material.END_STONE_BRICKS : Material.SANDSTONE;
-        Material middle = endTheme ? Material.END_STONE : Material.RED_SANDSTONE;
-        Material surface = endTheme ? Material.END_STONE : Material.SAND;
-        Random random = new Random(731942L + roomIndex * 7919L);
-        for (int hill = 0; hill < 22; hill++) {
-            double angle = Math.PI * 2.0 * hill / 22.0 + random.nextDouble() * 0.18;
-            int distance = 78 + random.nextInt(52);
-            int hx = cx + (int) Math.round(Math.cos(angle) * distance);
-            int hz = cz + (int) Math.round(Math.sin(angle) * distance);
-            int radius = 8 + random.nextInt(10), peak = 4 + random.nextInt(9);
-            for (int dx = -radius; dx <= radius; dx++) for (int dz = -radius; dz <= radius; dz++) {
-                double norm = Math.sqrt(dx * dx + dz * dz) / radius;
-                if (norm > 1.0) continue;
-                int top = 77 + Math.max(1, (int) Math.round(peak * (1.0 - norm * norm)));
-                for (int y = 76; y < top - 1; y++) world.getBlockAt(hx + dx, y, hz + dz).setType(deep, false);
-                world.getBlockAt(hx + dx, top - 1, hz + dz).setType(middle, false);
-                world.getBlockAt(hx + dx, top, hz + dz).setType(surface, false);
-            }
-            if (hill % 2 == 0) {
-                int tx = hx + random.nextInt(Math.max(1, radius / 2)) - radius / 4;
-                int tz = hz + random.nextInt(Math.max(1, radius / 2)) - radius / 4;
-                placeArenaColumn(tx, tz, 6,
-                        endTheme ? Material.OBSIDIAN : Material.RED_SANDSTONE,
-                        endTheme ? Material.PURPUR_PILLAR : Material.SMOOTH_SANDSTONE,
-                        endTheme ? Material.PURPUR_BLOCK : Material.CHISELED_SANDSTONE);
-            }
-        }
-        plugin.getConfig().set(path, true);
-        plugin.saveConfig();
-    }
-
     public String arenaMap(Player player) {
         return normalizeArenaMap(plugin.getConfig().getString(
                 "practice.players." + player.getUniqueId() + ".arena-map", "ARENA_1"));
@@ -722,426 +625,19 @@ public final class PracticeManager implements Listener {
 
     private String normalizeArenaMap(String value) {
         String normalized = value == null ? "ARENA_1" : value.toUpperCase(Locale.ROOT);
-        return switch (normalized) {
-            case "ARENA_3", "END_CITADEL", "TINY_END", "TINY_END_COLISEUM" -> "ARENA_3";
-            case "ARENA_1", "ANUBIS_RISE", "COLOSSEUM" -> "ARENA_1";
-            default -> "ARENA_1";
-        };
+        return normalized.equals("ARENA_3") ? "ARENA_3" : "ARENA_1";
     }
 
     public void setArenaMap(Player player, String map) {
-        String normalized = normalizeArenaMap(map);
-        if (!ARENA_MAPS.contains(normalized)) return;
-        plugin.getConfig().set("practice.players." + player.getUniqueId() + ".arena-map", normalized);
+        if (!ARENA_MAPS.contains(map)) return;
+        plugin.getConfig().set("practice.players." + player.getUniqueId() + ".arena-map", map);
         plugin.saveConfig();
-        plugin.message(player, "&aArena selected: &e" + normalized.replace('_', ' ') + "&a.");
+        plugin.message(player, "&aArena selected: &e" + map.replace('_', ' ') + "&a.");
     }
 
-    private Material arenaWallMaterial(int roomIndex) {
-        return switch (arenaMap(roomIndex)) {
-            case "ARENA_1" -> Material.SMOOTH_SANDSTONE;
-            case "ARENA_3" -> Material.END_STONE_BRICKS;
-            default -> Material.SMOOTH_SANDSTONE;
-        };
-    }
-
-    private Material arenaAccentMaterial(int roomIndex) {
-        return switch (arenaMap(roomIndex)) {
-            case "ARENA_1" -> Material.CHISELED_SANDSTONE;
-            case "ARENA_3" -> Material.PURPUR_PILLAR;
-            default -> Material.CHISELED_SANDSTONE;
-        };
-    }
-
-    private void placeArenaTower(int x, int z, int height, Material body, Material accent) {
-        if (world == null) return;
-        for (int dx = -1; dx <= 1; dx++) {
-            for (int dz = -1; dz <= 1; dz++) {
-                int baseY = world.getHighestBlockYAt(x + dx, z + dz) + 1;
-                for (int y = 0; y < height; y++) {
-                    Material block = y == height - 1 ? accent : body;
-                    world.getBlockAt(x + dx, baseY + y, z + dz).setType(block, false);
-                }
-            }
-        }
-    }
-
-    private void buildArenaTree(int x, int z) {
-        if (world == null) return;
-        int baseY = world.getHighestBlockYAt(x, z) + 1;
-        int trunkHeight = 4;
-        for (int y = 0; y < trunkHeight; y++)
-            world.getBlockAt(x, baseY + y, z).setType(Material.OAK_LOG, false);
-        for (int layer = 0; layer < 3; layer++) {
-            int spread = layer == 0 ? 2 : 1;
-            for (int dx = -spread; dx <= spread; dx++) {
-                for (int dz = -spread; dz <= spread; dz++) {
-                    if (Math.abs(dx) == spread && Math.abs(dz) == spread && layer == 0) continue;
-                    world.getBlockAt(x + dx, baseY + trunkHeight - 1 + layer, z + dz)
-                            .setType(Material.OAK_LEAVES, false);
-                }
-            }
-        }
-    }
-
-    private void placeArenaColumn(int x, int z, int height, Material base, Material body, Material cap) {
-        if (world == null) return;
-        int baseY = world.getHighestBlockYAt(x, z) + 1;
-        for (int dx = -1; dx <= 1; dx++) {
-            for (int dz = -1; dz <= 1; dz++) {
-                for (int y = 0; y < height; y++) {
-                    Material material = y == 0 ? base : y == height - 1 ? cap : body;
-                    world.getBlockAt(x + dx, baseY + y, z + dz).setType(material, false);
-                }
-            }
-        }
-    }
-
-    private void buildArenaGate(int cx, int cz, int centerX, int centerZ, boolean alongX,
-                                Material base, Material body, Material cap, int height) {
-        int leftX = alongX ? centerX - 4 : centerX;
-        int leftZ = alongX ? centerZ : centerZ - 4;
-        int rightX = alongX ? centerX + 4 : centerX;
-        int rightZ = alongX ? centerZ : centerZ + 4;
-        int leftBaseY = world.getHighestBlockYAt(leftX, leftZ) + 1;
-        int rightBaseY = world.getHighestBlockYAt(rightX, rightZ) + 1;
-        placeArenaColumn(leftX, leftZ, height, base, body, cap);
-        placeArenaColumn(rightX, rightZ, height, base, body, cap);
-        int bridgeY = Math.max(leftBaseY, rightBaseY) + height - 1;
-        for (int offset = -4; offset <= 4; offset++) {
-            int x = alongX ? centerX + offset : centerX;
-            int z = alongX ? centerZ : centerZ + offset;
-            world.getBlockAt(x, bridgeY, z).setType(cap, false);
-            if (Math.abs(offset) == 4) {
-                world.getBlockAt(x, bridgeY + 1, z).setType(base, false);
-            }
-        }
-        // A clear 5-block passage remains between the gate pillars.
-    }
-
-    private void buildAnubisRise(int cx, int cz, int arenaRadius) {
-        Material sandstone = Material.SMOOTH_SANDSTONE;
-        Material cut = Material.CUT_SANDSTONE;
-        Material chiseled = Material.CHISELED_SANDSTONE;
-        Material red = Material.RED_SANDSTONE;
-        Material dark = Material.POLISHED_BLACKSTONE;
-        Material gold = Material.GOLD_BLOCK;
-
-        // Four desert obelisks frame the combat bowl without obstructing the center.
-        int reach = Math.max(9, arenaRadius - 8);
-        for (int sx : new int[]{-1, 1}) {
-            for (int sz : new int[]{-1, 1}) {
-                int x = cx + sx * reach;
-                int z = cz + sz * reach;
-                placeArenaColumn(x, z, 8, red, sandstone, chiseled);
-                int y = world.getHighestBlockYAt(x, z) + 1;
-                world.getBlockAt(x, y, z).setType(gold, false);
-                world.getBlockAt(x + 1, y - 2, z).setType(dark, false);
-                world.getBlockAt(x - 1, y - 2, z).setType(dark, false);
-            }
-        }
-
-        // Four monumental entrances: sandstone pylons, red-sandstone bases and gold caps.
-        int gateReach = Math.max(8, arenaRadius - 6);
-        buildArenaGate(cx, cz, cx, cz - gateReach, true, red, sandstone, gold, 7);
-        buildArenaGate(cx, cz, cx, cz + gateReach, true, red, sandstone, gold, 7);
-        buildArenaGate(cx, cz, cx - gateReach, cz, false, red, sandstone, gold, 7);
-        buildArenaGate(cx, cz, cx + gateReach, cz, false, red, sandstone, gold, 7);
-
-        // A stepped temple facade stands behind the north entrance.
-        // Its broad central doorway stays open so it is a visual landmark, not a choke point.
-        int templeZ = cz - Math.max(10, arenaRadius - 13);
-        int templeBaseY = world.getHighestBlockYAt(cx, templeZ) + 1;
-        for (int layer = 0; layer < 3; layer++) {
-            int halfWidth = 8 - layer * 2;
-            int y = templeBaseY + layer;
-            for (int x = -halfWidth; x <= halfWidth; x++) {
-                if (Math.abs(x) <= 3) continue;
-                world.getBlockAt(cx + x, y, templeZ + layer).setType(layer == 2 ? chiseled : sandstone, false);
-                world.getBlockAt(cx + x, y, templeZ + layer + 2).setType(layer == 2 ? chiseled : cut, false);
-            }
-            for (int x : new int[]{-3, 3}) {
-                world.getBlockAt(cx + x, y, templeZ + layer + 1).setType(layer == 2 ? gold : dark, false);
-            }
-        }
-        for (int x : new int[]{-6, -3, 3, 6}) {
-            placeArenaColumn(cx + x, templeZ + 1, 6, red, dark, gold);
-        }
-
-        // An original sun-disc floor emblem marks the shared spawn point.
-        for (int x = -7; x <= 7; x++) {
-            for (int z = -7; z <= 7; z++) {
-                int diamond = Math.abs(x) + Math.abs(z);
-                if (diamond == 5 || diamond == 6) {
-                    world.getBlockAt(cx + x, 80, cz + z).setType(red, false);
-                } else if (diamond == 3 || diamond == 4) {
-                    world.getBlockAt(cx + x, 80, cz + z).setType(chiseled, false);
-                } else if (diamond == 1 || diamond == 2) {
-                    world.getBlockAt(cx + x, 80, cz + z).setType(cut, false);
-                }
-            }
-        }
-        world.getBlockAt(cx, 80, cz).setType(gold, false);
-    }
-
-    private void buildTinyEndColiseum(int cx, int cz, int arenaRadius) {
-        Material endStone = Material.END_STONE_BRICKS;
-        Material endAccent = Material.PURPUR_PILLAR;
-        Material purpur = Material.PURPUR_BLOCK;
-        Material obsidian = Material.OBSIDIAN;
-        Material light = Material.SEA_LANTERN;
-
-        // Four compact gatehouses give the coliseum its four distinct entrances.
-        int gateReach = Math.max(8, arenaRadius - 6);
-        buildArenaGate(cx, cz, cx, cz - gateReach, true, obsidian, endStone, endAccent, 7);
-        buildArenaGate(cx, cz, cx, cz + gateReach, true, obsidian, endStone, endAccent, 7);
-        buildArenaGate(cx, cz, cx - gateReach, cz, false, obsidian, endStone, endAccent, 7);
-        buildArenaGate(cx, cz, cx + gateReach, cz, false, obsidian, endStone, endAccent, 7);
-
-        // Purpur corner towers and End-rod beacons establish a clear silhouette.
-        int reach = Math.max(9, arenaRadius - 8);
-        for (int sx : new int[]{-1, 1}) {
-            for (int sz : new int[]{-1, 1}) {
-                int x = cx + sx * reach;
-                int z = cz + sz * reach;
-                placeArenaColumn(x, z, 8, obsidian, endAccent, purpur);
-                int top = world.getHighestBlockYAt(x, z) + 1;
-                world.getBlockAt(x, top, z).setType(light, false);
-                world.getBlockAt(x, top + 1, z).setType(Material.END_ROD, false);
-            }
-        }
-
-        // Two compact spectator tiers follow the four outer walls; the middle stays open.
-        int halfSpan = Math.max(5, arenaRadius - 15);
-        for (int side : new int[]{-1, 1}) {
-            for (int row = 0; row < 2; row++) {
-                for (int offset = -halfSpan; offset <= halfSpan; offset++) {
-                    int yNorthSouth = world.getHighestBlockYAt(cx + offset, cz + side * (arenaRadius - 12 + row * 2)) + 1 + row;
-                    world.getBlockAt(cx + offset, yNorthSouth, cz + side * (arenaRadius - 12 + row * 2))
-                            .setType(row == 0 ? purpur : endAccent, false);
-                    int yEastWest = world.getHighestBlockYAt(cx + side * (arenaRadius - 12 + row * 2), cz + offset) + 1 + row;
-                    world.getBlockAt(cx + side * (arenaRadius - 12 + row * 2), yEastWest, cz + offset)
-                            .setType(row == 0 ? purpur : endAccent, false);
-                }
-            }
-        }
-
-        // A concentric End/purpur floor seal sits beneath the shared spawn point.
-        for (int x = -8; x <= 8; x++) {
-            for (int z = -8; z <= 8; z++) {
-                int ring = Math.max(Math.abs(x), Math.abs(z));
-                if (ring == 7) world.getBlockAt(cx + x, 80, cz + z).setType(obsidian, false);
-                else if (ring == 6 || ring == 4) world.getBlockAt(cx + x, 80, cz + z).setType(purpur, false);
-                else if (ring == 5 || ring == 3) world.getBlockAt(cx + x, 80, cz + z).setType(endStone, false);
-                else if (ring == 2) world.getBlockAt(cx + x, 80, cz + z).setType(endAccent, false);
-            }
-        }
-        for (int[] point : new int[][]{{-5, -5}, {-5, 5}, {5, -5}, {5, 5}}) {
-            world.getBlockAt(cx + point[0], 80, cz + point[1]).setType(light, false);
-        }
-    }
-
-    private void buildArenaLandmarks(int cx, int cz, int arenaRadius, int roomIndex) {
-        if (world == null) return;
-        switch (arenaMap(roomIndex)) {
-            case "ARENA_3" -> buildTinyEndColiseum(cx, cz, arenaRadius);
-            default -> buildAnubisRise(cx, cz, arenaRadius);
-        }
-    }
-
-    private Material[] arenaPalette(int roomIndex) {
-        // Full test presets: each map supplies its own top floor, foundation layers and trim.
-        return switch (arenaMap(roomIndex)) {
-            case "ARENA_3" -> new Material[]{
-                    Material.END_STONE_BRICKS, Material.END_STONE,
-                    Material.PURPUR_BLOCK, Material.PURPUR_PILLAR};
-            default -> new Material[]{
-                    Material.SAND, Material.SANDSTONE,
-                    Material.RED_SANDSTONE, Material.CUT_SANDSTONE};
-        };
-    }
-
-    private void clearEndDecorativeShulkers(int roomIndex) {
-        String tag = "pvpcore_end_shulker_" + roomIndex;
-        for (org.bukkit.entity.Entity entity : world.getEntities()) {
-            if (entity.getScoreboardTags().contains(tag)) entity.remove();
-        }
-    }
-
-    private void buildEndRuin(int x, int z, int roomIndex, int variant) {
-        // Small 5x5 End-stone-brick outposts with purpur details.
-        int baseY = 81;
-        Material brick = Material.END_STONE_BRICKS;
-        Material accent = Material.PURPUR_PILLAR;
-        for (int dx = -2; dx <= 2; dx++) {
-            for (int dz = -2; dz <= 2; dz++) {
-                boolean corner = Math.abs(dx) == 2 && Math.abs(dz) == 2;
-                if (!corner) world.getBlockAt(x + dx, baseY, z + dz).setType(brick, false);
-            }
-        }
-        for (int[] corner : new int[][]{{-2,-2},{-2,2},{2,-2},{2,2}}) {
-            int px = x + corner[0], pz = z + corner[1];
-            for (int y = 1; y <= 3; y++)
-                world.getBlockAt(px, baseY + y, pz).setType(accent, false);
-            world.getBlockAt(px, baseY + 4, pz).setType(Material.PURPUR_BLOCK, false);
-        }
-        world.getBlockAt(x, baseY + 1, z).setType(Material.PURPUR_BLOCK, false);
-        world.getBlockAt(x, baseY + 2, z).setType(Material.PURPUR_PILLAR, false);
-        world.getBlockAt(x, baseY + 3, z).setType(Material.PURPUR_BLOCK, false);
-        // Each ruin has one stationary, invulnerable shulker as decoration.
-        Location spawn = new Location(world, x + 0.5, baseY + 1.0, z + 0.5);
-        Shulker shulker = world.spawn(spawn, Shulker.class, entity -> {
-            entity.setAI(false);
-            entity.setInvulnerable(true);
-            entity.setSilent(true);
-            entity.setGravity(false);
-            entity.addScoreboardTag("pvpcore_end_shulker_" + roomIndex);
-            entity.setPeek((byte) 0);
-            entity.setColor(org.bukkit.DyeColor.PURPLE);
-        });
-    }
-
-    private void buildArenaPlatform(int cx, int cz, int arenaRadius) {
-        if (world == null) return;
-        int roomIndex = Math.floorDiv(cx - 128, ROOM_SPACING);
-        String theme = arenaMap(roomIndex);
-        Material[] palette = arenaPalette(roomIndex);
-        Random decorationRandom = new Random();
-        List<Block> timedLeaves = new ArrayList<>();
-
-        // Cancel the previous timer when a room is rebuilt or its theme changes.
-        org.bukkit.scheduler.BukkitTask oldDecay = leafDecayTasks.remove(roomIndex);
-        if (oldDecay != null) oldDecay.cancel();
-
-        for (int x = -DUEL_ARENA_RADIUS; x <= DUEL_ARENA_RADIUS; x++) {
-            for (int z = -DUEL_ARENA_RADIUS; z <= DUEL_ARENA_RADIUS; z++) {
-                int edge = Math.max(Math.abs(x), Math.abs(z));
-                double radius = Math.hypot(x, z);
-
-                // Keep the central PvP zone level. Small, clustered height changes
-                // are restricted to the outer ring so movement and combos stay fair.
-                double terrainNoise = Math.sin(x * 0.37) + Math.cos(z * 0.33)
-                        + Math.sin((x + z) * 0.21) * 0.8;
-                int height = 0;
-                if (radius >= arenaRadius * 0.54 && radius <= arenaRadius * 0.90) {
-                    if (terrainNoise > 2.05) height = 2;
-                    else if (terrainNoise > 1.15) height = 1;
-                }
-
-                // Never touch the outermost ring: it contains the arena wall and buttresses.
-                if (edge > arenaRadius) {
-                    for (int y = 80; y <= 90; y++) world.getBlockAt(cx + x, y, cz + z).setType(Material.AIR, false);
-                    continue;
-                }
-                if (edge == arenaRadius) continue;
-
-                // Clear old decoration and raised terrain before rebuilding the tile.
-                // Clear the full decoration height so changing presets removes old floor features
-                // and the new material palette can rebuild a clean arena floor.
-                for (int y = 81; y <= 90; y++) {
-                    world.getBlockAt(cx + x, y, cz + z).setType(Material.AIR, false);
-                }
-
-                int topY = 80 + height;
-                world.getBlockAt(cx + x, topY, cz + z).setType(palette[0], false);
-                world.getBlockAt(cx + x, topY - 1, cz + z).setType(palette[1], false);
-                world.getBlockAt(cx + x, topY - 2, cz + z).setType(palette[2], false);
-                world.getBlockAt(cx + x, topY - 3, cz + z).setType(palette[3], false);
-
-                // Add varied ground cover from the mid-ring outward. The central
-                // combat zone stays clear, while plants are scattered in small clusters.
-                if (radius >= arenaRadius * 0.33 && radius <= arenaRadius * 0.94) {
-                    int plantRoll = decorationRandom.nextInt(17);
-                    Material groundDetail = null;
-                    switch (theme) {
-                        case "ARENA_1" -> {
-                            if (plantRoll <= 2) groundDetail = Material.CUT_SANDSTONE;
-                            else if (plantRoll == 3) groundDetail = Material.RED_SANDSTONE;
-                            else if (plantRoll == 4) groundDetail = Material.CHISELED_SANDSTONE;
-                        }
-                        case "ARENA_3" -> {
-                            if (plantRoll <= 2) groundDetail = Material.PURPUR_SLAB;
-                            else if (plantRoll == 3) groundDetail = Material.END_STONE_BRICKS;
-                            else if (plantRoll == 4) groundDetail = Material.CHORUS_FLOWER;
-                        }
-                        case "COLOSSEUM" -> {
-                            if (plantRoll <= 2) groundDetail = Material.SANDSTONE_SLAB;
-                            else if (plantRoll == 3) groundDetail = Material.CUT_SANDSTONE;
-                            else if (plantRoll == 4) groundDetail = Material.CHISELED_SANDSTONE;
-                        }
-                        case "RUINS" -> {
-                            if (plantRoll <= 4) groundDetail = Material.MOSS_CARPET;
-                            else if (plantRoll == 5) groundDetail = Material.CRACKED_STONE_BRICKS;
-                            else if (plantRoll == 6) groundDetail = Material.MOSSY_COBBLESTONE;
-                        }
-                        case "FOREST" -> {
-                            if (plantRoll <= 3) groundDetail = Material.SHORT_GRASS;
-                            else if (plantRoll <= 5) groundDetail = Material.FERN;
-                            else if (plantRoll == 6) groundDetail = Material.MOSS_CARPET;
-                            else if (plantRoll == 7) groundDetail = Material.AZURE_BLUET;
-                        }
-                        case "NETHER_FORTRESS" -> {
-                            if (plantRoll <= 2) groundDetail = Material.NETHER_SPROUTS;
-                            else if (plantRoll == 3) groundDetail = Material.CRIMSON_ROOTS;
-                            else if (plantRoll == 4) groundDetail = Material.WARPED_ROOTS;
-                            else if (plantRoll == 5) groundDetail = Material.NETHER_BRICKS;
-                        }
-                        case "END_CITADEL" -> {
-                            if (plantRoll <= 2) groundDetail = Material.CHORUS_FLOWER;
-                            else if (plantRoll == 3) groundDetail = Material.END_ROD;
-                            else if (plantRoll == 4) groundDetail = Material.PURPUR_SLAB;
-                        }
-                    }
-                    if (groundDetail != null) {
-                        world.getBlockAt(cx + x, topY + 1, cz + z).setType(groundDetail, false);
-                    }
-
-                    // A few subtle ground patches add texture between the plants.
-                    if ((theme.equals("FOREST") || theme.equals("RUINS"))
-                            && Math.floorMod(x * 43 + z * 67, 31) == 0) {
-                        world.getBlockAt(cx + x, topY + 1, cz + z).setType(Material.MOSS_CARPET, false);
-                    }
-                }
-
-                // Forest canopy and structural landmarks are generated by the map preset
-                // outside the central combat lane.
-            }
-        }
-
-        // Remove any legacy display shulkers left by the earlier End Citadel test.
-        // The Tiny End Coliseum now uses block-built gatehouses and corner towers.
-        clearEndDecorativeShulkers(roomIndex);
-
-        // Decorative frame uses the selected arena's own floor trim material.
-        Material trim = palette[3];
-        for (int offset = -arenaRadius + 1; offset <= arenaRadius - 1; offset++) {
-            world.getBlockAt(cx - arenaRadius + 1, 80, cz + offset).setType(trim, false);
-            world.getBlockAt(cx + arenaRadius - 1, 80, cz + offset).setType(trim, false);
-            world.getBlockAt(cx + offset, 80, cz - arenaRadius + 1).setType(trim, false);
-            world.getBlockAt(cx + offset, 80, cz + arenaRadius - 1).setType(trim, false);
-        }
-
-        if (!timedLeaves.isEmpty()) {
-            leafDecayTasks.put(roomIndex, Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                for (Block leaf : timedLeaves) {
-                    if (leaf.getType() == Material.CHERRY_LEAVES) leaf.setType(Material.AIR, false);
-                }
-                leafDecayTasks.remove(roomIndex);
-            }, 1200L));
-        }
-
-        // The arena map adds recognizable structures around the outer ring.
-        // The central combat lane remains open for every kit and training mode.
-        buildArenaLandmarks(cx, cz, arenaRadius, roomIndex);
-    }
-
-    private void addTimedCherryLeaves(int x, int y, int z, List<Block> timedLeaves) {
-        Block block = world.getBlockAt(x, y, z);
-        block.setType(Material.CHERRY_LEAVES, false);
-        Leaves leaves = (Leaves) block.getBlockData();
-        leaves.setPersistent(true);
-        block.setBlockData(leaves, false);
-        timedLeaves.add(block);
+    private int arenaForceFieldRadius(int roomIndex) {
+        return arenaMap(roomIndex).equals("ARENA_3")
+                ? ARENA_3_FORCE_FIELD_RADIUS : ARENA_1_FORCE_FIELD_RADIUS;
     }
 
     private void buildForceField(int cx, int cz, int glassHeight, int arenaRadius) {
