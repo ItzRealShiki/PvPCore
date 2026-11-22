@@ -1,3 +1,7 @@
+practice:
+  forcefield:
+    # Distance from the inner arena boundary at which the particle shield appears.
+    activation-distance: 6
 duels:
   foundation:
     enabled: true
