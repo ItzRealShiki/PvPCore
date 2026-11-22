@@ -557,6 +557,10 @@ public final class PracticeManager implements Listener {
                 }
             }
         }
+        // Remove both possible legacy arena perimeters before laying out the selected map.
+        // This also prevents old wall geometry from surviving when switching between practice and duel sizes.
+        removeForceField(cx, cz, world.getMaxHeight() - 81, PRACTICE_ARENA_RADIUS);
+        removeForceField(cx, cz, world.getMaxHeight() - 81, DUEL_ARENA_RADIUS);
         buildArenaPlatform(cx, cz, radius);
         int roomIndex = Math.floorDiv(cx - 128, ROOM_SPACING);
         activeForceFields.remove(roomIndex);
