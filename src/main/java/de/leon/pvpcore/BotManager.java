@@ -64,6 +64,10 @@ public final class BotManager implements Listener {
         removeOwned(owner);
         Location at = owner.getLocation().clone();
         if (owner.getWorld().getName().equals("prac_void")) at = plugin.practice().botSpawnLocation(owner);
+        if (at == null) {
+            plugin.message(owner, "&cNo safe bot spawn position was found in this Practice arena.");
+            return;
+        }
 
         try {
             String botName = "Training Bot";
