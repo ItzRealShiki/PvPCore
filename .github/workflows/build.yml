@@ -2,7 +2,7 @@ name: Build PvPCore
 
 on:
   push:
-    branches: [main, feature/fake-player-bot, feature/multiple-pvp-arenas]
+    branches: [main, feature/fake-player-bot, feature/multiple-pvp-arenas, fix/prac-world-cleanup-lag]
   workflow_dispatch:
 
 permissions:
