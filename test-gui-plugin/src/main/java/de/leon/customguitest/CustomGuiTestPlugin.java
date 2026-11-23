@@ -2,6 +2,9 @@ package de.leon.customguitest;
 
 import de.leon.customguitest.art.MapArtworkRegistry;
 import de.leon.customguitest.command.TestCommand;
+import de.leon.customguitest.css.CssGuiEngine;
+import de.leon.customguitest.css.CssGuiListener;
+import de.leon.customguitest.css.CssUiCommand;
 import de.leon.customguitest.gui.CustomMenu;
 import de.leon.customguitest.listener.GuiListener;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -9,6 +12,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 public final class CustomGuiTestPlugin extends JavaPlugin {
     private CustomMenu menu;
     private MapArtworkRegistry artwork;
+    private CssGuiEngine cssEngine;
     private boolean alternateTheme;
 
     @Override
@@ -24,34 +28,29 @@ public final class CustomGuiTestPlugin extends JavaPlugin {
         }
 
         menu = new CustomMenu(this);
-        TestCommand command = new TestCommand(this);
-
-        if (getCommand("test") == null) {
-            getLogger().severe("Command 'test' is missing from plugin.yml. Disabling plugin.");
+        TestCommand testCommand = new TestCommand(this);
+        if (getCommand("test") == null || getCommand("cssui") == null) {
+            getLogger().severe("Required command is missing from plugin.yml. Disabling plugin.");
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
 
-        getCommand("test").setExecutor(command);
-        getCommand("test").setTabCompleter(command);
+        getCommand("test").setExecutor(testCommand);
+        getCommand("test").setTabCompleter(testCommand);
         getServer().getPluginManager().registerEvents(new GuiListener(this), this);
 
-        getLogger().info("CustomGuiTest enabled. Use /test to open the fully textured map-art GUI.");
+        cssEngine = new CssGuiEngine(this);
+        cssEngine.initialize();
+        CssUiCommand cssCommand = new CssUiCommand(this, cssEngine);
+        getCommand("cssui").setExecutor(cssCommand);
+        getCommand("cssui").setTabCompleter(cssCommand);
+        getServer().getPluginManager().registerEvents(new CssGuiListener(), this);
+
+        getLogger().info("CustomGuiTest enabled. Use /test or /cssui to open a menu.");
     }
 
-    public CustomMenu menu() {
-        return menu;
-    }
-
-    public MapArtworkRegistry artwork() {
-        return artwork;
-    }
-
-    public boolean isAlternateTheme() {
-        return alternateTheme;
-    }
-
-    public void toggleTheme() {
-        alternateTheme = !alternateTheme;
-    }
+    public CustomMenu menu() { return menu; }
+    public MapArtworkRegistry artwork() { return artwork; }
+    public boolean isAlternateTheme() { return alternateTheme; }
+    public void toggleTheme() { alternateTheme = !alternateTheme; }
 }
