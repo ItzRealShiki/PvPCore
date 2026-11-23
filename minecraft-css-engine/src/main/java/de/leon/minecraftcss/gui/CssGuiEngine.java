@@ -8,17 +8,22 @@ import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.IOException;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -26,6 +31,9 @@ import java.util.TreeSet;
 
 public final class CssGuiEngine {
     private static final NamespacedKey INVISIBLE_MODEL = new NamespacedKey("mcss", "gui_hidden");
+    private static final String ITEMSADDER_FONT_IMAGE = "dev.lone.itemsadder.api.FontImages.FontImageWrapper";
+    private static final String ITEMSADDER_TEXTURED_INVENTORY =
+            "dev.lone.itemsadder.api.FontImages.TexturedInventoryWrapper";
 
     private final JavaPlugin plugin;
     private final Path menusDirectory;
@@ -75,19 +83,40 @@ public final class CssGuiEngine {
 
         CssStyleSheet sheet = CssStyleSheet.parse(Files.readString(file, StandardCharsets.UTF_8));
         Map<String, String> screen = sheet.stylesFor("screen");
-
-        int rows = parseInt(screen.getOrDefault("rows", "3"), 3);
+        int rows = parseInt(screen.getOrDefault("rows", "6"), 6);
         if (rows < 1 || rows > 6) {
             throw new IllegalArgumentException("The 'rows' property must be between 1 and 6.");
         }
 
-        TitleSelection titleSelection = selectTitle(screen, name);
-        String title = applyPlaceholders(unquote(titleSelection.title()), player);
+        TitleSelection selection = selectTitle(screen, name);
+        String title = applyPlaceholders(selection.title(), player);
         CssGuiHolder holder = new CssGuiHolder();
-        Inventory inventory = Bukkit.createInventory(holder, rows * 9, Component.text(title));
+        Object texturedWrapper = null;
+        Class<?> texturedWrapperClass = null;
+        Inventory inventory;
+
+        if (selection.provider().equals("ItemsAdder")) {
+            try {
+                texturedWrapper = createItemsAdderWrapper(holder, rows * 9, title,
+                        unquote(screen.getOrDefault("texture-image", "mcss:mcss_dashboard")));
+                texturedWrapperClass = texturedWrapper.getClass();
+                Method getInternal = texturedWrapperClass.getMethod("getInternal");
+                inventory = (Inventory) getInternal.invoke(texturedWrapper);
+                if (inventory == null) throw new IllegalStateException("ItemsAdder returned no inventory.");
+            } catch (ReflectiveOperationException | LinkageError | RuntimeException exception) {
+                plugin.getLogger().warning("ItemsAdder GUI texture could not be initialized: " + rootMessage(exception));
+                player.sendMessage(Component.text("CSS Engine: ItemsAdder texture setup is incomplete. Showing the fallback GUI."));
+                selection = new TitleSelection(unquote(screen.getOrDefault("title", name)), false, "none");
+                inventory = Bukkit.createInventory(holder, rows * 9, Component.text(applyPlaceholders(selection.title(), player)));
+                texturedWrapper = null;
+                texturedWrapperClass = null;
+            }
+        } else {
+            inventory = Bukkit.createInventory(holder, rows * 9, Component.text(title));
+        }
         holder.setInventory(inventory);
 
-        String defaultBackground = titleSelection.textured() ? "AIR" : "BLACK_STAINED_GLASS_PANE";
+        String defaultBackground = selection.textured() ? "AIR" : "BLACK_STAINED_GLASS_PANE";
         Material background = parseMaterial(screen.getOrDefault("background", defaultBackground), Material.AIR);
         if (background != Material.AIR) {
             ItemStack filler = new ItemStack(background);
@@ -99,8 +128,9 @@ public final class CssGuiEngine {
             }
         }
 
-        boolean hideButtonsByDefault = titleSelection.textured()
+        boolean hideButtonsByDefault = selection.textured()
                 && Boolean.parseBoolean(unquote(screen.getOrDefault("hide-buttons", "true")));
+        Set<Integer> occupied = new HashSet<>();
 
         for (CssStyleSheet.Rule rule : sheet.rules()) {
             String selector = rule.selector().trim();
@@ -117,25 +147,79 @@ public final class CssGuiEngine {
                 continue;
             }
 
+            String defaultName = selector.substring(1);
             Material material = parseMaterial(style.getOrDefault("item",
                     style.getOrDefault("material", "PAPER")), Material.PAPER);
-            String defaultName = selector.substring(1);
             String displayName = applyPlaceholders(unquote(style.getOrDefault("text", defaultName)), player);
             String colorValue = style.get("color");
             String loreValue = style.get("lore");
             String action = applyPlaceholders(unquote(style.getOrDefault("action", "")), player);
-            int amount = Math.max(1, Math.min(64, parseInt(style.getOrDefault("amount", "1"), 1)));
             boolean glow = Boolean.parseBoolean(unquote(style.getOrDefault("glow", "false")));
             String renderMode = unquote(style.getOrDefault("render", hideButtonsByDefault ? "hidden" : "normal"));
-            boolean hidden = renderMode.equalsIgnoreCase("hidden") || renderMode.equalsIgnoreCase("invisible");
+            boolean hidden = selection.textured()
+                    && (renderMode.equalsIgnoreCase("hidden") || renderMode.equalsIgnoreCase("invisible"));
+
+            Hitbox hitbox = parseHitbox(style.getOrDefault("hitbox", "1x1"));
+            int startRow = slot / 9;
+            int startColumn = slot % 9;
+            if (startColumn + hitbox.width() > 9 || startRow + hitbox.height() > rows) {
+                plugin.getLogger().warning("Ignored hitbox outside menu bounds for selector " + selector + " in " + name + ".mcss");
+                continue;
+            }
 
             ItemStack item = createItem(material, displayName, colorValue, loreValue,
-                    hidden ? 1 : amount, glow, player, hidden);
-            inventory.setItem(slot, item);
-            holder.setAction(slot, action);
+                    hidden ? 1 : Math.max(1, Math.min(64, parseInt(style.getOrDefault("amount", "1"), 1))),
+                    glow, player, hidden);
+
+            for (int dy = 0; dy < hitbox.height(); dy++) {
+                for (int dx = 0; dx < hitbox.width(); dx++) {
+                    int targetSlot = (startRow + dy) * 9 + startColumn + dx;
+                    if (!occupied.add(targetSlot)) {
+                        throw new IllegalArgumentException("Click hitboxes overlap at slot " + targetSlot + " in " + name + ".mcss");
+                    }
+                    if (hidden) {
+                        inventory.setItem(targetSlot, item);
+                    } else if (dx == 0 && dy == 0) {
+                        inventory.setItem(targetSlot, item);
+                    }
+                    holder.setAction(targetSlot, action);
+                }
+            }
         }
 
-        player.openInventory(inventory);
+        if (texturedWrapper != null) {
+            try {
+                texturedWrapperClass.getMethod("showInventory", Player.class).invoke(texturedWrapper, player);
+            } catch (ReflectiveOperationException exception) {
+                plugin.getLogger().warning("Could not open ItemsAdder textured inventory: " + rootMessage(exception));
+                player.openInventory(inventory);
+            }
+        } else {
+            player.openInventory(inventory);
+        }
+
+        if (!selection.textured()) {
+            player.sendMessage(Component.text("CSS Engine: No custom GUI pack provider detected. Install ItemsAdder or Oraxen and apply the setup files in plugins/MinecraftCSSEngine/setup/."));
+        }
+    }
+
+    private Object createItemsAdderWrapper(CssGuiHolder holder, int size, String title, String textureId)
+            throws ReflectiveOperationException {
+        Plugin itemsAdder = Bukkit.getPluginManager().getPlugin("ItemsAdder");
+        if (itemsAdder == null || !itemsAdder.isEnabled()) {
+            throw new IllegalStateException("ItemsAdder is not enabled.");
+        }
+
+        ClassLoader loader = itemsAdder.getClass().getClassLoader();
+        Class<?> fontImageClass = Class.forName(ITEMSADDER_FONT_IMAGE, true, loader);
+        Object fontImage = fontImageClass.getConstructor(String.class).newInstance(textureId);
+
+        Class<?> wrapperClass = Class.forName(ITEMSADDER_TEXTURED_INVENTORY, true, loader);
+        // This constructor supplies ItemsAdder's standard title and GUI texture offsets.
+        Constructor<?> constructor = wrapperClass.getConstructor(
+                InventoryHolder.class, int.class, String.class, fontImageClass
+        );
+        return constructor.newInstance(holder, size, title, fontImage);
     }
 
     private TitleSelection selectTitle(Map<String, String> screen, String menuName) {
@@ -143,23 +227,23 @@ public final class CssGuiEngine {
         String requestedProvider = unquote(screen.getOrDefault("texture-provider", "auto"))
                 .toLowerCase(Locale.ROOT);
 
-        if (requestedProvider.equals("auto") || requestedProvider.equals("oraxen")) {
-            String oraxenTitle = screen.get("title-oraxen");
-            if (oraxenTitle != null && isEnabled("Oraxen")) {
-                return new TitleSelection(oraxenTitle, true, "Oraxen");
+        if (requestedProvider.equals("auto") || requestedProvider.equals("itemsadder")) {
+            if (isEnabled("ItemsAdder")) {
+                return new TitleSelection(normalTitle, true, "ItemsAdder");
             }
-            if (requestedProvider.equals("oraxen")) {
-                plugin.getLogger().warning("Menu asks for Oraxen textures, but Oraxen is not enabled. Using normal title.");
+            if (requestedProvider.equals("itemsadder")) {
+                plugin.getLogger().warning("Menu asks for ItemsAdder, but ItemsAdder is not enabled. Using vanilla fallback.");
             }
         }
 
-        if (requestedProvider.equals("auto") || requestedProvider.equals("itemsadder")) {
-            String itemsAdderTitle = screen.get("title-itemsadder");
-            if (itemsAdderTitle != null && isEnabled("ItemsAdder")) {
-                return new TitleSelection(itemsAdderTitle, true, "ItemsAdder");
+        if (requestedProvider.equals("auto") || requestedProvider.equals("oraxen")) {
+            String oraxenTitle = unquote(screen.getOrDefault("title-oraxen",
+                    "<shift:-16><glyph:mcss_dashboard>"));
+            if (isEnabled("Oraxen")) {
+                return new TitleSelection(oraxenTitle, true, "Oraxen");
             }
-            if (requestedProvider.equals("itemsadder")) {
-                plugin.getLogger().warning("Menu asks for ItemsAdder textures, but ItemsAdder is not enabled. Using normal title.");
+            if (requestedProvider.equals("oraxen")) {
+                plugin.getLogger().warning("Menu asks for Oraxen, but Oraxen is not enabled. Using vanilla fallback.");
             }
         }
 
@@ -169,6 +253,18 @@ public final class CssGuiEngine {
     private boolean isEnabled(String pluginName) {
         Plugin dependency = Bukkit.getPluginManager().getPlugin(pluginName);
         return dependency != null && dependency.isEnabled();
+    }
+
+    private Hitbox parseHitbox(String raw) {
+        String value = unquote(raw).toLowerCase(Locale.ROOT).replace(" ", "");
+        String[] parts = value.split("x", -1);
+        if (parts.length != 2) throw new IllegalArgumentException("Invalid hitbox '" + raw + "'. Use WIDTHxHEIGHT, for example 2x2.");
+        int width = parseInt(parts[0], -1);
+        int height = parseInt(parts[1], -1);
+        if (width < 1 || width > 9 || height < 1 || height > 6) {
+            throw new IllegalArgumentException("Hitbox size must be between 1x1 and 9x6.");
+        }
+        return new Hitbox(width, height);
     }
 
     public void performAction(Player player, String action) {
@@ -207,8 +303,7 @@ public final class CssGuiEngine {
         ItemMeta meta = item.getItemMeta();
 
         if (hidden) {
-            // The item remains its real Bukkit material and continues to occupy/capture the slot.
-            // A client resource pack maps this item_model to minecraft:empty.
+            // The real Bukkit item stays in the slot; the client resource pack renders this model as empty.
             meta.setItemModel(INVISIBLE_MODEL);
             meta.setHideTooltip(true);
             meta.displayName(Component.empty());
@@ -277,5 +372,12 @@ public final class CssGuiEngine {
         return value.regionMatches(true, 0, prefix, 0, prefix.length());
     }
 
+    private String rootMessage(Exception exception) {
+        Throwable cause = exception instanceof InvocationTargetException invocation && invocation.getCause() != null
+                ? invocation.getCause() : exception;
+        return cause.getMessage() == null ? cause.getClass().getSimpleName() : cause.getMessage();
+    }
+
     private record TitleSelection(String title, boolean textured, String provider) {}
+    private record Hitbox(int width, int height) {}
 }
