@@ -1,28 +1,31 @@
 # CustomGuiTest
 
-A standalone Paper 26.2 / Java 25 plugin that demonstrates a heavily customized inventory GUI without asking players to install a resource pack.
+Standalone Paper 26.2 / Java 25 multi-screen GUI test plugin.
+
+## Seven screens
+
+- `/test nova` — Main hub with navigation cards.
+- `/test dashboard` — Status cards and quick actions.
+- `/test profile` — Player identity, world, ping, level and food.
+- `/test settings` — Aurora/Violet theme switch and sound preview.
+- `/test showcase` — Gallery of all custom buttons, borders and panels.
+- `/test stats` — Live health, food, level, ping, world and coordinates.
+- `/test lab` — Design/technical information and limitations.
+
+Aliases and navigation:
+- `/test` or `/test open` opens the NOVA hub.
+- `/test gui <name>` and `/test ui <name>` open a selected screen.
+- Direct forms such as `/test profile` are supported.
+- `/test theme`, `/test close`, and `/test help` are available.
+- Tab completion suggests all screen names, including after `gui` or `ui`.
 
 ## Visual implementation
 
-- The native inventory title is intentionally blank.
-- The first row forms a custom graphical NOVA title from four individually drawn bitmap glyph tiles.
-- Every background, border and button is a Filled Map item whose 128x128 image is drawn by a server-side MapRenderer.
-- Buttons use original pixel artwork: profile, design lab, color theme, interaction, status, back and close.
-- The map IDs are persisted in config.yml and reused on later restarts.
-- The GUI has a matching second page with a graphical LAB heading.
-- All clicks and drags in the top inventory are protected.
+The plugin draws custom pixel art to individual 128x128 Filled Map textures using Bukkit/Paper MapRenderer. Every screen has a bitmap title made from custom letter tiles. The Aurora and Violet palettes update the screen frame and panel artwork. All top-inventory clicks and drags are cancelled so GUI items cannot be removed.
 
-The maps use the normal vanilla Filled Map item as a carrier. The art is delivered as map pixels by the server, not as a resource pack. The actual chest window frame and inventory panel remain vanilla; the custom graphic is drawn inside the inventory slots. This is the strongest fully server-side visual approach without changing the client's font or item textures.
+No resource pack is required for this build. The Minecraft inventory frame and native client UI remain vanilla; a later resource-pack-based iteration can replace those client-side elements.
 
-## Commands
-
-- `/test` or `/test open` — Open the main custom GUI.
-- `/test info` — Open the design-lab page.
-- `/test close` — Close the current inventory.
-- `/test theme` — Switch between the cyan and violet visual themes.
-- `/test help` — Show command help.
-
-The first argument has tab autocomplete. Alias: `/testgui`.
+Map IDs are persisted in config.yml and reused across restarts.
 
 ## Build
 

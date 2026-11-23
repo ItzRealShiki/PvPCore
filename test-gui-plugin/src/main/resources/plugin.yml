@@ -3,11 +3,11 @@ version: '${project.version}'
 main: de.leon.customguitest.CustomGuiTestPlugin
 api-version: '26.2'
 author: ItzRealShiki
-description: Standalone custom inventory GUI and title test plugin.
+description: Standalone multi-screen custom GUI and UI test framework.
 commands:
   test:
-    description: Opens the custom GUI test menu.
-    usage: /test [open|info|close|theme|help]
+    description: Opens one of seven custom GUI test screens.
+    usage: /test [nova|dashboard|profile|settings|showcase|stats|lab]
     aliases: [testgui]
 permissions:
   customguitest.use:

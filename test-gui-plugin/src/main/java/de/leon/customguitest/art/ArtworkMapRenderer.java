@@ -38,6 +38,17 @@ public final class ArtworkMapRenderer extends MapRenderer {
             case TITLE_A -> drawTitle(c, "A");
             case TITLE_L -> drawTitle(c, "L");
             case TITLE_B -> drawTitle(c, "B");
+            case TITLE_D -> drawTitle(c, "D");
+            case TITLE_S -> drawTitle(c, "S");
+            case TITLE_H -> drawTitle(c, "H");
+            case TITLE_P -> drawTitle(c, "P");
+            case TITLE_R -> drawTitle(c, "R");
+            case TITLE_F -> drawTitle(c, "F");
+            case TITLE_I -> drawTitle(c, "I");
+            case TITLE_T -> drawTitle(c, "T");
+            case TITLE_Y -> drawTitle(c, "Y");
+            case TITLE_E -> drawTitle(c, "E");
+            case TITLE_M -> drawTitle(c, "M");
             case PROFILE -> drawProfile(c);
             case DESIGN -> drawDesign(c);
             case THEME -> drawTheme(c);
@@ -131,6 +142,17 @@ public final class ArtworkMapRenderer extends MapRenderer {
             case "A" -> new String[]{"01110","10001","10001","11111","10001","10001","10001"};
             case "L" -> new String[]{"10000","10000","10000","10000","10000","10000","11111"};
             case "B" -> new String[]{"11110","10001","10001","11110","10001","10001","11110"};
+            case "D" -> new String[]{"11110","10001","10001","10001","10001","10001","11110"};
+            case "S" -> new String[]{"01111","10000","10000","01110","00001","00001","11110"};
+            case "H" -> new String[]{"10001","10001","10001","11111","10001","10001","10001"};
+            case "P" -> new String[]{"11110","10001","10001","11110","10000","10000","10000"};
+            case "R" -> new String[]{"11110","10001","10001","11110","10100","10010","10001"};
+            case "F" -> new String[]{"11111","10000","10000","11110","10000","10000","10000"};
+            case "I" -> new String[]{"11111","00100","00100","00100","00100","00100","11111"};
+            case "T" -> new String[]{"11111","00100","00100","00100","00100","00100","00100"};
+            case "Y" -> new String[]{"10001","10001","01010","00100","00100","00100","00100"};
+            case "E" -> new String[]{"11111","10000","10000","11110","10000","10000","11111"};
+            case "M" -> new String[]{"10001","11011","10101","10101","10001","10001","10001"};
             default -> new String[]{"00000","00000","00000","00000","00000","00000","00000"};
         };
     }
