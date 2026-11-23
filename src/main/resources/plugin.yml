@@ -32,7 +32,6 @@ commands:
   lag:
     description: Opens Prac server diagnostics and lag analysis.
     usage: /lag [report|profile]
-    permission: Admin.Core
 permissions:
   Member.Core:
     description: Access to PvPCore training and RTP features.
