@@ -1,0 +1,40 @@
+name: Build Minecraft CSS Engine
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'minecraft-css-engine/**'
+      - '.github/workflows/build-minecraft-css-engine.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'minecraft-css-engine/**'
+      - '.github/workflows/build-minecraft-css-engine.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Build standalone plugin
+        working-directory: minecraft-css-engine
+        run: mvn --batch-mode --no-transfer-progress clean package
+      - name: Upload plugin JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: MinecraftCSSEngine
+          path: minecraft-css-engine/target/MinecraftCSSEngine-*.jar
+          if-no-files-found: error
+          retention-days: 14
