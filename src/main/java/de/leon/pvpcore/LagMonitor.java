@@ -9,12 +9,19 @@ import org.bukkit.event.Listener;
 
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
+import java.lang.management.ThreadInfo;
 import java.lang.management.ThreadMXBean;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.List;
+import java.util.EnumMap;
+import java.util.Locale;
+import java.util.Map;
 
 public final class LagMonitor implements Listener {
     private static final int MAX_TICK_SAMPLES = 1_200;
@@ -185,6 +192,166 @@ public final class LagMonitor implements Listener {
                 Bukkit.getPluginManager().getPlugins().length,
                 Bukkit.getScheduler().getPendingTasks().size()
         );
+    }
+
+
+    /**
+     * Creates a compact, shareable report from the last 60 seconds of captured
+     * telemetry plus a point-in-time snapshot of JVM, server, worlds and plugins.
+     * It intentionally excludes player names, UUIDs, IP addresses and file paths.
+     */
+    public String diagnosticsReport() {
+        Snapshot data = snapshot();
+        StringBuilder out = new StringBuilder(8_000);
+        DateTimeFormatter clock = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss z")
+                .withZone(ZoneId.systemDefault());
+        Runtime runtime = Runtime.getRuntime();
+        java.lang.management.OperatingSystemMXBean os = ManagementFactory.getOperatingSystemMXBean();
+        ThreadMXBean threads = ManagementFactory.getThreadMXBean();
+
+        out.append("=== PRAC LAG DIAGNOSTICS ===\n");
+        out.append("Captured: ").append(clock.format(Instant.ofEpochMilli(data.capturedAtMillis()))).append("\n");
+        out.append("Report window: last 60 seconds; world counts are sampled every 10 seconds.\n\n");
+
+        out.append("[SERVER]\n");
+        out.append("Platform: ").append(Bukkit.getName()).append("\n");
+        out.append("Bukkit/Paper version: ").append(Bukkit.getBukkitVersion()).append("\n");
+        out.append("Server implementation version: ").append(Bukkit.getVersion()).append("\n");
+        out.append("Minecraft version: ").append(Bukkit.getMinecraftVersion()).append("\n");
+        out.append("Online players: ").append(data.onlinePlayers()).append("\n");
+        out.append("Loaded plugins: ").append(data.pluginCount()).append("\n");
+        out.append("Uptime: ").append(formatDuration(ManagementFactory.getRuntimeMXBean().getUptime())).append("\n");
+        out.append("Java: ").append(System.getProperty("java.version", "unknown"))
+                .append(" (").append(System.getProperty("java.vendor", "unknown")).append(")\n");
+        out.append("OS: ").append(os.getName()).append(" ").append(os.getVersion())
+                .append(" / ").append(os.getArch()).append("\n");
+        out.append("Available processors: ").append(runtime.availableProcessors()).append("\n");
+        out.append("System load average: ").append(number(os.getSystemLoadAverage())).append("\n");
+        if (os instanceof com.sun.management.OperatingSystemMXBean extended) {
+            out.append("Process CPU load: ").append(percent(extended.getProcessCpuLoad())).append("\n");
+            out.append("System CPU load: ").append(percent(extended.getCpuLoad())).append("\n");
+        } else {
+            out.append("Process/System CPU load: unavailable from this JVM.\n");
+        }
+        out.append("\n");
+
+        out.append("[TICK PERFORMANCE]\n");
+        out.append("TPS 1m/5m/15m: ").append(number(data.tps1m())).append(" / ")
+                .append(number(data.tps5m())).append(" / ").append(number(data.tps15m())).append("\n");
+        out.append("Paper average tick time: ").append(number(data.paperAverageMspt())).append(" ms\n");
+        out.append("Sampled average MSPT (60s): ").append(number(data.windowAverageMspt())).append(" ms\n");
+        out.append("P95 MSPT (60s): ").append(number(data.p95Mspt())).append(" ms\n");
+        out.append("Peak MSPT (60s): ").append(number(data.peakMspt())).append(" ms\n");
+        out.append("Ticks sampled (60s): ").append(data.sampledTicks()).append("\n");
+        out.append("Ticks >=50/100/250 ms: ").append(data.spikesOver50()).append(" / ")
+                .append(data.spikesOver100()).append(" / ").append(data.spikesOver250()).append("\n");
+        out.append("\n");
+
+        out.append("[JVM MEMORY]\n");
+        out.append("Heap used: ").append(megabytes(data.usedMemoryBytes())).append(" MB (")
+                .append(number(data.heapPercent())).append("% of max)\n");
+        out.append("Heap committed: ").append(megabytes(data.committedMemoryBytes())).append(" MB\n");
+        out.append("Heap max: ").append(megabytes(data.maxMemoryBytes())).append(" MB\n");
+        java.lang.management.MemoryUsage nonHeap = ManagementFactory.getMemoryMXBean().getNonHeapMemoryUsage();
+        out.append("Non-heap used: ").append(megabytes(nonHeap.getUsed())).append(" MB\n");
+        out.append("GC total collections/time: ").append(data.gcCollections()).append(" / ")
+                .append(data.gcTimeMillis()).append(" ms\n");
+        for (GarbageCollectorMXBean bean : ManagementFactory.getGarbageCollectorMXBeans()) {
+            out.append("GC ").append(bean.getName()).append(": count=")
+                    .append(bean.getCollectionCount()).append(", time=")
+                    .append(bean.getCollectionTime()).append(" ms\n");
+        }
+        out.append("JVM threads: ").append(data.threadCount())
+                .append(" (peak ").append(threads.getPeakThreadCount()).append(")\n");
+        Map<Thread.State, Integer> threadStates = new EnumMap<>(Thread.State.class);
+        for (long id : threads.getAllThreadIds()) {
+            ThreadInfo info = threads.getThreadInfo(id);
+            if (info != null) threadStates.merge(info.getThreadState(), 1, Integer::sum);
+        }
+        out.append("Thread states: ").append(threadStates).append("\n");
+        out.append("Pending scheduler tasks: ").append(data.pendingTasks()).append("\n");
+        out.append("\n");
+
+        out.append("[LOADED WORLDS] (sampled ").append(clock.format(Instant.ofEpochMilli(data.worldSnapshotAt()))).append(")\n");
+        out.append("World count: ").append(data.worlds().size()).append("\n");
+        for (WorldSnapshot world : data.worlds()) {
+            out.append("- ").append(world.name())
+                    .append(": players=").append(world.players())
+                    .append(", chunks=").append(world.chunks())
+                    .append(", entities=").append(world.entities())
+                    .append(", blockEntities=").append(world.tileEntities())
+                    .append(", tickableBlockEntities=").append(world.tickableTileEntities())
+                    .append("\n");
+        }
+        out.append("Totals: chunks=").append(data.totalChunks())
+                .append(", entities=").append(data.totalEntities())
+                .append(", blockEntities=").append(data.totalTileEntities())
+                .append(", tickableBlockEntities=").append(data.totalTickableTileEntities())
+                .append("\n\n");
+
+        out.append("[RECENT TICK SPIKES] (up to ").append(data.spikes().size()).append(" captured)\n");
+        if (data.spikes().isEmpty()) {
+            out.append("No tick >=50 ms captured in the current 60-second window.\n");
+        } else {
+            for (SpikeSample spike : data.spikes()) {
+                out.append("- ").append(number(spike.durationMillis())).append(" ms")
+                        .append(" | tick=").append(spike.tickNumber())
+                        .append(" | time=").append(clock.format(Instant.ofEpochMilli(spike.timestampMillis())))
+                        .append(" | timeRemaining=")
+                        .append(number(spike.timeRemainingNanos() / 1_000_000.0)).append(" ms\n");
+            }
+        }
+        out.append("\n");
+
+        out.append("[SLOW PRAC OPERATIONS] (slowest recorded in current 60-second window)\n");
+        if (data.topOperations().isEmpty()) {
+            out.append("No instrumented Prac operation >=2 ms was recorded. This does not rule out uninstrumented code.\n");
+        } else {
+            for (OperationSample operation : data.topOperations()) {
+                out.append("- ").append(operation.name())
+                        .append(": ").append(number(operation.durationMillis())).append(" ms")
+                        .append(" | ended=").append(clock.format(Instant.ofEpochMilli(operation.endMillis())))
+                        .append("\n");
+            }
+        }
+        out.append("\n");
+
+        out.append("[PLUGINS]\n");
+        for (org.bukkit.plugin.Plugin loadedPlugin : Bukkit.getPluginManager().getPlugins()) {
+            out.append("- ").append(loadedPlugin.getName())
+                    .append(" ").append(loadedPlugin.getPluginMeta().getVersion())
+                    .append(" | enabled=").append(loadedPlugin.isEnabled())
+                    .append("\n");
+        }
+        out.append("\n");
+        out.append("[NOTES]\n");
+        out.append("- A tick over 50 ms misses the 20 TPS target.\n");
+        out.append("- A time-correlated Prac operation is a clue, not proof of root cause.\n");
+        out.append("- For a deeper profile during a spike, run /lag profile and include the Spark URL.\n");
+        out.append("- This report contains no player names, UUIDs, IP addresses or server file paths.\n");
+
+        return out.toString();
+    }
+
+    private static String number(double value) {
+        return Double.isFinite(value) ? String.format(Locale.ROOT, "%.2f", value) : "unavailable";
+    }
+
+    private static String percent(double value) {
+        return value < 0.0 ? "unavailable" : number(value * 100.0) + "%";
+    }
+
+    private static String megabytes(double bytes) {
+        return bytes < 0.0 ? "unavailable" : number(bytes / 1_048_576.0);
+    }
+
+    private static String formatDuration(long millis) {
+        long seconds = Math.max(0L, millis / 1000L);
+        long days = seconds / 86_400L;
+        long hours = (seconds % 86_400L) / 3_600L;
+        long minutes = (seconds % 3_600L) / 60L;
+        long remainder = seconds % 60L;
+        return days + "d " + hours + "h " + minutes + "m " + remainder + "s";
     }
 
     private static double valueAt(double[] values, int index) {
