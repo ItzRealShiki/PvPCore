@@ -27,17 +27,32 @@ public final class PvPCore extends JavaPlugin implements Listener {
     private PracticeManager practice;
     private FightCommand fights;
     private ParkourManager parkour;
+    private LagMonitor lagMonitor;
+    private LagMenu lagMenu;
     private final Set<UUID> rtpLoading = ConcurrentHashMap.newKeySet();
 
     @Override public void onEnable() {
         saveDefaultConfig();
+        lagMonitor = new LagMonitor(this);
+        lagMenu = new LagMenu(this);
+        Bukkit.getPluginManager().registerEvents(lagMonitor, this);
+        Bukkit.getPluginManager().registerEvents(lagMenu, this);
+        lagMonitor.start();
+
         worlds = new WorldManager(this);
         // Run the one-time, whitelist-only world reset before PracticeManager caches
         // a reference to prac_void. No normal server world is included in this cleanup.
         worlds.initializeWorldsOnce();
         worlds.configureDefaultWorldProperty();
         // Install the hub after startup, once the main world is available.
-        Bukkit.getScheduler().runTaskLater(this, worlds::installHighCrownSpawnOnce, 1L);
+        Bukkit.getScheduler().runTaskLater(this, () -> {
+            long started = System.nanoTime();
+            try {
+                worlds.installHighCrownSpawnOnce();
+            } finally {
+                lagMonitor.recordOperation("Spawn initialization and schematic", System.nanoTime() - started);
+            }
+        }, 1L);
         for (World world : Bukkit.getWorlds()) worlds.applyPermanentDay(world);
         menus = new Menus(this);
         bots = new BotManager(this);
@@ -45,7 +60,16 @@ public final class PvPCore extends JavaPlugin implements Listener {
         parkour = new ParkourManager(this);
         // Create the private Practice world at startup as a second managed world.
         // It uses a void generator and does not depend on the Spawn default world.
-        Bukkit.getScheduler().runTaskLater(this, practice::initializePracticeWorld, 6L);
+        Bukkit.getScheduler().runTaskLater(this, () -> {
+            long started = System.nanoTime();
+            try {
+                practice.initializePracticeWorld();
+            } finally {
+                lagMonitor.recordOperation("Practice world initialization", System.nanoTime() - started);
+            }
+        }, 6L);
+        // Wait until both required worlds are ready before cleaning any other world.
+        Bukkit.getScheduler().runTaskLater(this, () -> worlds.cleanupUnusedWorldsWhenReady(0), 40L);
         Bukkit.getPluginManager().registerEvents(practice, this);
         Bukkit.getPluginManager().registerEvents(parkour, this);
         Bukkit.getScheduler().runTaskTimer(this, practice::enforcePracticeFood, 1L, 1L);
@@ -63,6 +87,7 @@ public final class PvPCore extends JavaPlugin implements Listener {
         register("leave", new LeaveCommand(this));
         register("setspawn", new SetSpawnCommand(this));
         register("admin", new AdminCommand(this));
+        register("lag", new LagCommand(this));
         fights = new FightCommand(this);
         register("duel", fights);
         register("duels", new DuelsCommand(this));
@@ -138,6 +163,8 @@ public final class PvPCore extends JavaPlugin implements Listener {
     public PracticeManager practice() { return practice; }
     public FightCommand fights() { return fights; }
     public ParkourManager parkour() { return parkour; }
+    public LagMonitor lag() { return lagMonitor; }
+    public LagMenu lagMenu() { return lagMenu; }
     public String color(String text) {
         return ChatColor.translateAlternateColorCodes('&', SmallCaps.of(text));
     }
@@ -152,5 +179,8 @@ public final class PvPCore extends JavaPlugin implements Listener {
         message(sender, "&cThis command can only be used in-game.");
         return false;
     }
-    @Override public void onDisable() { if (bots != null) bots.removeAll(); }
+    @Override public void onDisable() {
+        if (bots != null) bots.removeAll();
+        if (lagMonitor != null) lagMonitor.stop();
+    }
 }
