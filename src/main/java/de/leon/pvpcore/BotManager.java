@@ -63,13 +63,24 @@ public final class BotManager implements Listener {
 
         removeOwned(owner);
         Location at = owner.getLocation().clone();
-        if (owner.getWorld().getName().equals("prac_void")) at = plugin.practice().botSpawnLocation(owner);
+        boolean practiceSpawn = owner.getWorld().getName().equals("prac_void");
+        if (practiceSpawn) at = plugin.practice().botSpawnLocation(owner);
         if (at == null) {
             plugin.message(owner, "&cNo safe bot spawn position was found in this Practice arena.");
             return;
         }
 
         try {
+            if (practiceSpawn) {
+                // Put the owner on the exact same arena-floor coordinates as the bot.
+                owner.setFallDistance(0.0f);
+                owner.setVelocity(new Vector(0.0, 0.0, 0.0));
+                if (!owner.teleport(at)) {
+                    plugin.message(owner, "&cCould not teleport you to the Practice arena spawn.");
+                    return;
+                }
+            }
+
             String botName = "Training Bot";
             FakePlayer fake = FakePlayer.spawn(at, botName, owner);
             fake.clearSpawnInvulnerability();
@@ -78,6 +89,7 @@ public final class BotManager implements Listener {
             bot.setCustomNameVisible(true);
             bot.setInvulnerable(false);
             bot.setGravity(true);
+            bot.setCollidable(false);
             bot.setFallDistance(0.0f);
             bot.setVelocity(new org.bukkit.util.Vector(0.0, 0.0, 0.0));
             owned.put(owner.getUniqueId(), fake);
