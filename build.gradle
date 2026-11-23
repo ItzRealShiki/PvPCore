@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'de.leon'
-version = '1.0.15' // Add shareable /lag copy report and tab completion
+version = '1.0.16' // Reuse saved Practice arenas by persisted prac_void world identity
 
 repositories {
     mavenCentral()
