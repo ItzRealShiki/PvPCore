@@ -97,8 +97,10 @@ public final class CssGuiEngine {
 
         if (selection.provider().equals("ItemsAdder")) {
             try {
-                texturedWrapper = createItemsAdderWrapper(holder, rows * 9, title,
-                        unquote(screen.getOrDefault("texture-image", "mcss:mcss_dashboard")));
+                texturedWrapper = createItemsAdderWrapper(holder, rows * 9,
+                        unquote(screen.getOrDefault("texture-image", "mcss:mcss_dashboard")),
+                        parseInt(screen.getOrDefault("title-offset", "0"), 0),
+                        parseInt(screen.getOrDefault("texture-offset", "0"), 0));
                 texturedWrapperClass = texturedWrapper.getClass();
                 Method getInternal = texturedWrapperClass.getMethod("getInternal");
                 inventory = (Inventory) getInternal.invoke(texturedWrapper);
@@ -203,7 +205,8 @@ public final class CssGuiEngine {
         }
     }
 
-    private Object createItemsAdderWrapper(CssGuiHolder holder, int size, String title, String textureId)
+    private Object createItemsAdderWrapper(CssGuiHolder holder, int size, String textureId,
+                                            int titleOffset, int textureOffset)
             throws ReflectiveOperationException {
         Plugin itemsAdder = Bukkit.getPluginManager().getPlugin("ItemsAdder");
         if (itemsAdder == null || !itemsAdder.isEnabled()) {
@@ -213,13 +216,22 @@ public final class CssGuiEngine {
         ClassLoader loader = itemsAdder.getClass().getClassLoader();
         Class<?> fontImageClass = Class.forName(ITEMSADDER_FONT_IMAGE, true, loader);
         Object fontImage = fontImageClass.getConstructor(String.class).newInstance(textureId);
+        boolean exists = (boolean) fontImageClass.getMethod("exists").invoke(fontImage);
+        if (!exists) {
+            throw new IllegalStateException("ItemsAdder font image '" + textureId
+                    + "' is not registered. Check the mcss.yml config and rebuild the pack.");
+        }
 
         Class<?> wrapperClass = Class.forName(ITEMSADDER_TEXTURED_INVENTORY, true, loader);
-        // This constructor supplies ItemsAdder's standard title and GUI texture offsets.
+        Class<?> textureArrayClass = java.lang.reflect.Array.newInstance(fontImageClass, 0).getClass();
         Constructor<?> constructor = wrapperClass.getConstructor(
-                InventoryHolder.class, int.class, String.class, fontImageClass
+                InventoryHolder.class, int.class, String.class, int.class, int.class, textureArrayClass
         );
-        return constructor.newInstance(holder, size, title, fontImage);
+        Object textures = java.lang.reflect.Array.newInstance(fontImageClass, 1);
+        java.lang.reflect.Array.set(textures, 0, fontImage);
+
+        // The custom font image is centered in the inventory title area; offsets are CSS-configurable.
+        return constructor.newInstance(holder, size, null, titleOffset, textureOffset, textures);
     }
 
     private TitleSelection selectTitle(Map<String, String> screen, String menuName) {
@@ -238,7 +250,7 @@ public final class CssGuiEngine {
 
         if (requestedProvider.equals("auto") || requestedProvider.equals("oraxen")) {
             String oraxenTitle = unquote(screen.getOrDefault("title-oraxen",
-                    "<shift:-16><glyph:mcss_dashboard>"));
+                    "<glyph:mcss_dashboard>"));
             if (isEnabled("Oraxen")) {
                 return new TitleSelection(oraxenTitle, true, "Oraxen");
             }
