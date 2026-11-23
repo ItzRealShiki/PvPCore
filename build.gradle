@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'de.leon'
-version = '1.0.13' // High Crown spawn schematic and raised parkour leaderboard
+version = '1.0.14' // Integrated Prac diagnostics and two-world cleanup
 
 repositories {
     mavenCentral()
