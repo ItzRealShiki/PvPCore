@@ -30,19 +30,24 @@ public final class MinecraftCSSEnginePlugin extends JavaPlugin {
         command.setTabCompleter(executor);
         getServer().getPluginManager().registerEvents(new CssGuiListener(guiEngine), this);
 
-        getLogger().info("Minecraft CSS Engine enabled. Use /mcss to open the example GUI.");
-        getLogger().info("ItemsAdder/Oraxen integration setup files are available in plugins/MinecraftCSSEngine/setup/");
+        if (getServer().getPluginManager().isPluginEnabled("ItemsAdder")
+                || getServer().getPluginManager().isPluginEnabled("Oraxen")) {
+            getLogger().info("Custom GUI texture provider detected.");
+        } else {
+            getLogger().warning("No texture provider found. Install ItemsAdder or Oraxen and apply plugins/MinecraftCSSEngine/setup/ to enable the custom GUI artwork.");
+        }
+        getLogger().info("Minecraft CSS Engine enabled. Use /mcss to open the sample dashboard.");
     }
 
     private void exportIntegrationSetup() {
         List<String> resources = List.of(
                 "setup/README.txt",
-                "setup/itemsadder/contents/mcss/configs/gui.yml",
+                "setup/itemsadder/contents/mcss/mcss.yml",
+                "setup/itemsadder/contents/mcss/textures/gui/dashboard.png",
                 "setup/itemsadder/contents/mcss/resourcepack/assets/mcss/items/gui_hidden.json",
-                "setup/itemsadder/contents/mcss/resourcepack/assets/mcss/textures/gui/README.txt",
                 "setup/oraxen/glyphs/mcss.yml",
                 "setup/oraxen/pack/assets/mcss/items/gui_hidden.json",
-                "setup/oraxen/pack/textures/gui/README.txt"
+                "setup/oraxen/pack/textures/gui/dashboard.png"
         );
 
         for (String resource : resources) {
