@@ -573,6 +573,7 @@ public final class WorldManager {
         plugin.getConfig().set("spawn.yaw", -178.9D);
         plugin.getConfig().set("spawn.pitch", 3.6D);
         spawnWorld.setSpawnLocation(-3, 142, 48);
+        Bukkit.getServer().setRespawnWorld(spawnWorld);
         plugin.saveConfig();
 
         for (UUID id : new ArrayList<>(spawnMigrationPlayers)) {
@@ -997,6 +998,170 @@ public final class WorldManager {
         return null;
     }
 
+
+
+    /**
+     * One-time full world-folder cleanup. Prac deliberately retains exactly two
+     * loaded worlds: the public Spawn hub and the private Practice world.
+     *
+     * World unloading and player transfers happen on the server thread. File
+     * deletion happens asynchronously, only after every non-retained world has
+     * been successfully unloaded.
+     */
+    public void cleanupUnusedWorldsWhenReady(int attempt) {
+        final String marker = "worlds.only-spawn-and-prac-cleaned-v1";
+        if (plugin.getConfig().getBoolean(marker, false)) return;
+
+        World spawnWorld = Bukkit.getWorld(SPAWN_WORLD_NAME);
+        World practiceWorld = Bukkit.getWorld("prac_void");
+        if (spawnWorld == null || practiceWorld == null) {
+            retryUnusedWorldCleanup(attempt, "Spawn or prac_void is not loaded yet");
+            return;
+        }
+        if (Bukkit.isTickingWorlds()) {
+            retryUnusedWorldCleanup(attempt, "Worlds are currently ticking");
+            return;
+        }
+
+        Path worldContainer = Bukkit.getWorldContainer().toPath().toAbsolutePath().normalize();
+        Path spawnFolder = spawnWorld.getWorldFolder().toPath().toAbsolutePath().normalize();
+        Path practiceFolder = practiceWorld.getWorldFolder().toPath().toAbsolutePath().normalize();
+        Set<Path> foldersToDelete = new LinkedHashSet<>();
+        boolean unloadComplete = true;
+
+        // Evacuate players first, then unload every other loaded world.
+        for (World loadedWorld : new ArrayList<>(Bukkit.getWorlds())) {
+            if (isRetainedWorld(loadedWorld)) continue;
+
+            Path folder = loadedWorld.getWorldFolder().toPath().toAbsolutePath().normalize();
+            if (isInsideWorldContainer(folder, worldContainer)
+                    && !isRetainedFolder(folder, spawnFolder, practiceFolder)) {
+                foldersToDelete.add(folder);
+            }
+
+            for (Player player : new ArrayList<>(loadedWorld.getPlayers())) {
+                if (!player.teleport(spawnWorld.getSpawnLocation())) {
+                    unloadComplete = false;
+                    plugin.getLogger().warning("Could not move " + player.getName()
+                            + " out of world " + loadedWorld.getName() + "; keeping that world for now.");
+                }
+            }
+            if (!loadedWorld.getPlayers().isEmpty()) {
+                unloadComplete = false;
+                continue;
+            }
+
+            try {
+                if (!Bukkit.unloadWorld(loadedWorld, false)) {
+                    unloadComplete = false;
+                    plugin.getLogger().warning("Could not unload world " + loadedWorld.getName()
+                            + "; its files will not be deleted.");
+                } else {
+                    plugin.getLogger().info("Unloaded unused world: " + loadedWorld.getName());
+                }
+            } catch (IllegalStateException exception) {
+                unloadComplete = false;
+                plugin.getLogger().warning("Deferred unloading world " + loadedWorld.getName()
+                        + " because Paper is currently ticking worlds.");
+            }
+        }
+
+        if (Bukkit.getWorlds().stream().anyMatch(world -> !isRetainedWorld(world))) {
+            unloadComplete = false;
+        }
+        if (!unloadComplete) {
+            retryUnusedWorldCleanup(attempt, "At least one non-Prac world could not be unloaded safely");
+            return;
+        }
+
+        // Also discover worlds that are already unloaded, including old backups,
+        // legacy arena folders and the temporary Spawn-migration holding world.
+        try (Stream<Path> entries = Files.list(worldContainer)) {
+            for (Path entry : entries.toList()) {
+                if (!Files.isDirectory(entry, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(entry)) continue;
+                String name = entry.getFileName().toString();
+                if (name.equalsIgnoreCase(SPAWN_WORLD_NAME) || name.equalsIgnoreCase("prac_void")) continue;
+
+                boolean worldFolder = Files.isRegularFile(entry.resolve("level.dat"))
+                        || Files.isRegularFile(entry.resolve("level.dat_old"))
+                        || name.startsWith("Spawn_legacy_backup")
+                        || name.equalsIgnoreCase("pvpcore_void_migration_hold")
+                        || name.equalsIgnoreCase("pvpcore_regeneration_holding");
+                if (worldFolder) foldersToDelete.add(entry.toAbsolutePath().normalize());
+            }
+        } catch (IOException exception) {
+            plugin.getLogger().log(java.util.logging.Level.WARNING,
+                    "Could not enumerate old world folders; cleanup will retry.", exception);
+            retryUnusedWorldCleanup(attempt, "Could not enumerate old world folders");
+            return;
+        }
+
+        List<Path> deleteTargets = foldersToDelete.stream()
+                .filter(path -> isInsideWorldContainer(path, worldContainer))
+                .filter(path -> !isRetainedFolder(path, spawnFolder, practiceFolder))
+                .sorted(Comparator.comparingInt(Path::getNameCount).reversed())
+                .toList();
+
+        // Disk I/O can be expensive for large old worlds, so do not delete them
+        // on the main server thread and create a new lag spike while fixing lag.
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            List<String> failures = new ArrayList<>();
+            for (Path folder : deleteTargets) {
+                if (Files.isSymbolicLink(folder)) continue;
+                try {
+                    if (Files.exists(folder)) {
+                        deleteWorldFolder(folder);
+                        plugin.getLogger().info("Deleted unused world folder: " + folder.getFileName());
+                    }
+                } catch (IOException exception) {
+                    failures.add(folder.getFileName() + " (" + exception.getMessage() + ")");
+                }
+            }
+
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                boolean extraWorldLoaded = Bukkit.getWorlds().stream()
+                        .anyMatch(world -> !isRetainedWorld(world));
+                if (failures.isEmpty() && !extraWorldLoaded) {
+                    plugin.getConfig().set("spawn.world", SPAWN_WORLD_NAME);
+                    plugin.getConfig().set(marker, true);
+                    plugin.saveConfig();
+                    plugin.getLogger().info("World cleanup complete. Only Spawn and prac_void are retained by Prac.");
+                } else {
+                    if (!failures.isEmpty()) {
+                        plugin.getLogger().warning("Some old world folders could not be deleted: "
+                                + String.join(", ", failures));
+                    }
+                    retryUnusedWorldCleanup(attempt, extraWorldLoaded
+                            ? "Another plugin loaded an extra world during cleanup"
+                            : "Some old world folders could not be deleted");
+                }
+            });
+        });
+    }
+
+    private boolean isRetainedWorld(World world) {
+        return world.getName().equalsIgnoreCase(SPAWN_WORLD_NAME)
+                || world.getName().equalsIgnoreCase("prac_void");
+    }
+
+    private boolean isRetainedFolder(Path folder, Path spawnFolder, Path practiceFolder) {
+        return folder.equals(spawnFolder) || folder.equals(practiceFolder)
+                || folder.startsWith(spawnFolder) || folder.startsWith(practiceFolder);
+    }
+
+    private boolean isInsideWorldContainer(Path folder, Path worldContainer) {
+        return !folder.equals(worldContainer) && folder.startsWith(worldContainer);
+    }
+
+    private void retryUnusedWorldCleanup(int attempt, String reason) {
+        if (attempt >= 24) {
+            plugin.getLogger().severe("World cleanup is still incomplete: " + reason
+                    + ". The cleanup will be retried after the next server restart.");
+            return;
+        }
+        Bukkit.getScheduler().runTaskLater(plugin,
+                () -> cleanupUnusedWorldsWhenReady(attempt + 1), 100L);
+    }
 
     private void deleteWorldFolder(Path folder) throws IOException {
         if (!Files.exists(folder)) return;
