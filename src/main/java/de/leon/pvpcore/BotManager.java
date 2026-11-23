@@ -45,7 +45,14 @@ public final class BotManager implements Listener {
         if (!available) {
             plugin.getLogger().warning("Training bots are disabled: this NMS implementation currently supports Minecraft 26.2 on Paper servers.");
         }
-        Bukkit.getScheduler().runTaskTimer(plugin, this::tickBots, 1L, 1L);
+        Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            long started = System.nanoTime();
+            try {
+                tickBots();
+            } finally {
+                plugin.lag().recordOperation("Training bot tick (" + owned.size() + " bots)", System.nanoTime() - started);
+            }
+        }, 1L, 1L);
     }
 
     public void spawn(Player owner) {
