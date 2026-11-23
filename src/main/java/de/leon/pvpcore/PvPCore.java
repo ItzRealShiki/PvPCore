@@ -17,10 +17,18 @@ public final class PvPCore extends JavaPlugin implements Listener {
     private BotManager bots;
     private WorldManager worlds;
     private ItemEditCommand itemEdit;
+    private LagMonitor lagMonitor;
+    private LagMenu lagMenu;
     private final Set<UUID> rtpLoading = ConcurrentHashMap.newKeySet();
 
     @Override public void onEnable() {
         saveDefaultConfig();
+        lagMonitor = new LagMonitor(this);
+        lagMenu = new LagMenu(this);
+        Bukkit.getPluginManager().registerEvents(lagMonitor, this);
+        Bukkit.getPluginManager().registerEvents(lagMenu, this);
+        lagMonitor.start();
+
         worlds = new WorldManager(this);
         worlds.initializeWorldsOnce();
         worlds.startRegenerationCycle();
@@ -31,6 +39,7 @@ public final class PvPCore extends JavaPlugin implements Listener {
         register("spawn", new SpawnCommand(this));
         register("setspawn", new SetSpawnCommand(this));
         register("admin", new AdminCommand(this));
+        register("lag", new LagCommand(this));
         register("gm", new GamemodeCommand(this));
         itemEdit = new ItemEditCommand(this);
         register("it", itemEdit);
@@ -63,6 +72,8 @@ public final class PvPCore extends JavaPlugin implements Listener {
     public Menus menus() { return menus; }
     public BotManager bots() { return bots; }
     public WorldManager worlds() { return worlds; }
+    public LagMonitor lag() { return lagMonitor; }
+    public LagMenu lagMenu() { return lagMenu; }
     public String color(String text) {
         return ChatColor.translateAlternateColorCodes('&', SmallCaps.of(text));
     }
@@ -77,5 +88,8 @@ public final class PvPCore extends JavaPlugin implements Listener {
         message(sender, "&cThis command can only be used in-game.");
         return false;
     }
-    @Override public void onDisable() { if (bots != null) bots.removeAll(); }
+    @Override public void onDisable() {
+        if (bots != null) bots.removeAll();
+        if (lagMonitor != null) lagMonitor.stop();
+    }
 }
