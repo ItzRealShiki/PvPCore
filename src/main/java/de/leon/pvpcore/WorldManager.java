@@ -20,8 +20,10 @@ public final class WorldManager {
     private static final class PvPGenerator extends ChunkGenerator {
         private final Biome biome;
         private final String terrainKey;
-        private PvPGenerator(String key) {
+        private final LagMonitor monitor;
+        private PvPGenerator(String key, LagMonitor monitor) {
             terrainKey = key.toLowerCase();
+            this.monitor = monitor;
             String biomeKey = switch (terrainKey) {
                 case "desert" -> "desert";
                 case "snow" -> "snowy_plains";
@@ -55,6 +57,8 @@ public final class WorldManager {
 
         @Override
         public ChunkData generateChunkData(World world, Random random, int chunkX, int chunkZ, BiomeGrid biomeGrid) {
+            long generationStarted = System.nanoTime();
+            try {
             ChunkData data = createChunkData(world);
             int minY = world.getMinHeight();
             long seed = world.getSeed();
@@ -141,6 +145,9 @@ public final class WorldManager {
                 }
             }
             return data;
+            } finally {
+                monitor.recordOperation("Chunk generation [" + terrainKey + "]", System.nanoTime() - generationStarted);
+            }
         }
         @Override public boolean shouldGenerateNoise(){return false;}
         @Override public boolean shouldGenerateSurface(){return false;}
@@ -165,14 +172,19 @@ public final class WorldManager {
     }
 
     private World loadOrCreateWorld(String key) {
-        String name = plugin.getConfig().getString("worlds." + key + ".name", "pvp_" + key + "_arena");
-        World world = Bukkit.getWorld(name);
-        if (world == null) {
-            world = new WorldCreator(name).environment(World.Environment.NORMAL)
-                    .type(WorldType.NORMAL).generator(new PvPGenerator(key)).generateStructures(false).createWorld();
+        long started = System.nanoTime();
+        try {
+            String name = plugin.getConfig().getString("worlds." + key + ".name", "pvp_" + key + "_arena");
+            World world = Bukkit.getWorld(name);
+            if (world == null) {
+                world = new WorldCreator(name).environment(World.Environment.NORMAL)
+                        .type(WorldType.NORMAL).generator(new PvPGenerator(key, plugin.lag())).generateStructures(false).createWorld();
+            }
+            if (world != null) world.setGameRule(GameRule.DO_MOB_SPAWNING, false);
+            return world;
+        } finally {
+            plugin.lag().recordOperation("World load/create [" + key + "]", System.nanoTime() - started);
         }
-        if (world != null) world.setGameRule(GameRule.DO_MOB_SPAWNING, false);
-        return world;
     }
 
     public void setSpawn(Player player) {
@@ -331,6 +343,8 @@ public final class WorldManager {
     }
 
     private void regenerateSharedWorlds() {
+        long regenerationStarted = System.nanoTime();
+        try {
         World holding = Bukkit.getWorlds().stream()
                 .filter(world -> !isManagedWorldName(world.getName()))
                 .findFirst().orElse(null);
@@ -371,7 +385,7 @@ public final class WorldManager {
             }
 
             World fresh = new WorldCreator(name).environment(World.Environment.NORMAL)
-                    .type(WorldType.NORMAL).generator(new PvPGenerator(key)).generateStructures(false).createWorld();
+                    .type(WorldType.NORMAL).generator(new PvPGenerator(key, plugin.lag())).generateStructures(false).createWorld();
             if (fresh == null) {
                 plugin.getLogger().severe("Could not create regenerated arena " + name);
             } else {
@@ -380,6 +394,9 @@ public final class WorldManager {
         }
 
         Bukkit.broadcastMessage(plugin.color("&8[&aPvPCore&8] &aAll shared arena worlds have been regenerated!"));
+        } finally {
+            plugin.lag().recordOperation("Scheduled arena regeneration (all worlds)", System.nanoTime() - regenerationStarted);
+        }
     }
 
     private boolean isManagedWorldName(String name) {
