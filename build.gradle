@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'de.leon'
-version = '1.0.19' // Search the full playable arena for verified player spawn positions
+version = '1.0.20' // Spawn player and Practice bot together on the resolved arena floor
 
 repositories {
     mavenCentral()
