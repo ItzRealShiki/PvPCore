@@ -3,7 +3,10 @@ version: '${project.version}'
 main: de.leon.minecraftcss.MinecraftCSSEnginePlugin
 api-version: '26.2'
 author: ItzRealShiki
-description: Standalone CSS-inspired engine for creating Paper inventory GUIs.
+description: Standalone CSS-inspired engine for textured Paper inventory GUIs.
+softdepend:
+  - ItemsAdder
+  - Oraxen
 commands:
   mcss:
     description: Opens and manages CSS-styled Minecraft GUI menus.
