@@ -28,6 +28,9 @@ commands:
   setspawn:
     description: Sets the server spawn location.
     usage: /setspawn
+  lag:
+    description: Opens Prac performance diagnostics and lag analysis.
+    usage: /lag [report|profile]
   admin:
     description: Opens the administration dashboard.
     usage: /admin
