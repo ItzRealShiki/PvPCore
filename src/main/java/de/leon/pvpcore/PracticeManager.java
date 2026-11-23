@@ -720,7 +720,31 @@ public final class PracticeManager implements Listener {
 
     public Location botSpawnLocation(Player owner) {
         int index = plugin.getConfig().getInt("practice.players." + owner.getUniqueId() + ".room", 0);
-        return arenaSpawnLocation(index, 0, 0);
+        Location playerSpawn = arenaSpawnLocation(index, 0, 0);
+        int playerFloorY = playerSpawn.getBlockY() - 1;
+
+        // The bot must not spawn inside the player. Overlapping player hitboxes can
+        // push the fake player upwards on its first physics ticks, making it appear
+        // as though the bot was teleported into the air.
+        int[][] offsets = {
+                {2, 0}, {-2, 0}, {0, 2}, {0, -2},
+                {3, 0}, {-3, 0}, {0, 3}, {0, -3},
+                {2, 2}, {-2, 2}, {2, -2}, {-2, -2}
+        };
+        for (int[] offset : offsets) {
+            Location candidate = arenaSpawnLocation(index, offset[0], offset[1]);
+            if (candidate.distanceSquared(playerSpawn) < 4.0) continue;
+            if (Math.abs((candidate.getBlockY() - 1) - playerFloorY) > 2) continue;
+
+            int floorY = candidate.getBlockY() - 1;
+            if (isSafeArenaSpawnSurface(candidate.getBlockX(), floorY, candidate.getBlockZ())) {
+                return candidate;
+            }
+        }
+
+        // The center spawn is still guaranteed to be the arena's resolved ground
+        // location if no separate nearby position can be found.
+        return playerSpawn;
     }
 
     private int highestArenaSurfaceY(int x, int z) {
