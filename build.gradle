@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'de.leon'
-version = '1.0.14' // Integrated Prac diagnostics and two-world cleanup
+version = '1.0.15' // Add shareable /lag copy report and tab completion
 
 repositories {
     mavenCentral()
