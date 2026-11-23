@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'de.leon'
-version = '1.0.17' // Retry exact-two-world cleanup on next startup
+version = '1.0.18' // Keep Practice bots on nearby safe ground instead of overlapping the player
 
 repositories {
     mavenCentral()
