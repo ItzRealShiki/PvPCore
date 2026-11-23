@@ -11,7 +11,7 @@ Standalone Paper plugin for PvP training, private practice rooms, and GUI admini
 ```bash
 gradle clean build
 ```
-Output: `build/libs/PvPCore-1.0.14.jar`
+Output: `build/libs/PvPCore-1.0.15.jar`
 
 ## Commands
 - `/prac` — Opens the private PvP practice hub and training modes.
@@ -21,6 +21,7 @@ Output: `build/libs/PvPCore-1.0.14.jar`
 - `/duel` and `/duels` — Challenges and manages private 1v1 duels.
 - `/lag` — Opens the integrated Prac performance dashboard.
 - `/lag report` — Prints a diagnostics snapshot.
+- `/lag copy` — Sends a clickable chat message that copies the complete diagnostics report to the player's clipboard. Console/RCON senders receive the report as plain text.
 - `/lag profile` — Starts a 10-minute Spark profile; check the server console for its report URL.
 - `/admin` — Opens the administration GUI.
 - `/bot` — Opens the training NPC menu.
@@ -28,6 +29,8 @@ Output: `build/libs/PvPCore-1.0.14.jar`
 - `/scoreboard` — Configures the practice scoreboard.
 - `/gm` or `/gamemode` — Opens the game-mode selector.
 - `/setspawn` — Sets the configured spawn position.
+
+The `/lag` command autocompletes `copy`, `report`, and `profile` for users with diagnostic permissions.
 
 ## Practice arenas
 
@@ -46,7 +49,9 @@ If a world cannot be unloaded safely, Prac does not delete its files. It retries
 
 ## Performance diagnostics
 
-The integrated `/lag` dashboard shows TPS/MSPT, recent tick spikes, JVM memory and garbage collection, loaded worlds/chunks/entities, and measured Prac operation times. Use `/lag profile` while the lag spike is happening to start Spark's deeper profiler. The Spark report URL is printed in the server console.
+The integrated `/lag` dashboard shows TPS/MSPT, recent tick spikes, JVM memory and garbage collection, loaded worlds/chunks/entities, and measured Prac operation times. Use `/lag copy` to copy a complete, shareable text report including server/JVM information, thread and GC stats, world counts, recent tick spikes, slow recorded Prac operations, and enabled plugins. The report excludes player names, UUIDs, IP addresses and server file paths.
+
+Use `/lag profile` while the lag spike is happening to start Spark's deeper profiler. The Spark report URL is printed in the server console.
 
 ## Training NPC
 
