@@ -5,12 +5,12 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
-import org.bukkit.enchantments.Enchantment;
+import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
-import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.IOException;
@@ -25,6 +25,8 @@ import java.util.Set;
 import java.util.TreeSet;
 
 public final class CssGuiEngine {
+    private static final NamespacedKey INVISIBLE_MODEL = new NamespacedKey("mcss", "gui_hidden");
+
     private final JavaPlugin plugin;
     private final Path menusDirectory;
 
@@ -79,19 +81,26 @@ public final class CssGuiEngine {
             throw new IllegalArgumentException("The 'rows' property must be between 1 and 6.");
         }
 
-        String title = applyPlaceholders(unquote(screen.getOrDefault("title", name)), player);
+        TitleSelection titleSelection = selectTitle(screen, name);
+        String title = applyPlaceholders(unquote(titleSelection.title()), player);
         CssGuiHolder holder = new CssGuiHolder();
         Inventory inventory = Bukkit.createInventory(holder, rows * 9, Component.text(title));
         holder.setInventory(inventory);
 
-        Material background = parseMaterial(screen.getOrDefault("background", "BLACK_STAINED_GLASS_PANE"),
-                Material.BLACK_STAINED_GLASS_PANE);
+        String defaultBackground = titleSelection.textured() ? "AIR" : "BLACK_STAINED_GLASS_PANE";
+        Material background = parseMaterial(screen.getOrDefault("background", defaultBackground), Material.AIR);
         if (background != Material.AIR) {
-            ItemStack filler = createItem(background, " ", null, null, 1, false, player);
+            ItemStack filler = new ItemStack(background);
+            ItemMeta fillerMeta = filler.getItemMeta();
+            fillerMeta.setHideTooltip(true);
+            filler.setItemMeta(fillerMeta);
             for (int slot = 0; slot < inventory.getSize(); slot++) {
                 inventory.setItem(slot, filler);
             }
         }
+
+        boolean hideButtonsByDefault = titleSelection.textured()
+                && Boolean.parseBoolean(unquote(screen.getOrDefault("hide-buttons", "true")));
 
         for (CssStyleSheet.Rule rule : sheet.rules()) {
             String selector = rule.selector().trim();
@@ -108,7 +117,8 @@ public final class CssGuiEngine {
                 continue;
             }
 
-            Material material = parseMaterial(style.getOrDefault("material", "PAPER"), Material.PAPER);
+            Material material = parseMaterial(style.getOrDefault("item",
+                    style.getOrDefault("material", "PAPER")), Material.PAPER);
             String defaultName = selector.substring(1);
             String displayName = applyPlaceholders(unquote(style.getOrDefault("text", defaultName)), player);
             String colorValue = style.get("color");
@@ -116,13 +126,49 @@ public final class CssGuiEngine {
             String action = applyPlaceholders(unquote(style.getOrDefault("action", "")), player);
             int amount = Math.max(1, Math.min(64, parseInt(style.getOrDefault("amount", "1"), 1)));
             boolean glow = Boolean.parseBoolean(unquote(style.getOrDefault("glow", "false")));
+            String renderMode = unquote(style.getOrDefault("render", hideButtonsByDefault ? "hidden" : "normal"));
+            boolean hidden = renderMode.equalsIgnoreCase("hidden") || renderMode.equalsIgnoreCase("invisible");
 
-            ItemStack item = createItem(material, displayName, colorValue, loreValue, amount, glow, player);
+            ItemStack item = createItem(material, displayName, colorValue, loreValue,
+                    hidden ? 1 : amount, glow, player, hidden);
             inventory.setItem(slot, item);
             holder.setAction(slot, action);
         }
 
         player.openInventory(inventory);
+    }
+
+    private TitleSelection selectTitle(Map<String, String> screen, String menuName) {
+        String normalTitle = unquote(screen.getOrDefault("title", menuName));
+        String requestedProvider = unquote(screen.getOrDefault("texture-provider", "auto"))
+                .toLowerCase(Locale.ROOT);
+
+        if (requestedProvider.equals("auto") || requestedProvider.equals("oraxen")) {
+            String oraxenTitle = screen.get("title-oraxen");
+            if (oraxenTitle != null && isEnabled("Oraxen")) {
+                return new TitleSelection(oraxenTitle, true, "Oraxen");
+            }
+            if (requestedProvider.equals("oraxen")) {
+                plugin.getLogger().warning("Menu asks for Oraxen textures, but Oraxen is not enabled. Using normal title.");
+            }
+        }
+
+        if (requestedProvider.equals("auto") || requestedProvider.equals("itemsadder")) {
+            String itemsAdderTitle = screen.get("title-itemsadder");
+            if (itemsAdderTitle != null && isEnabled("ItemsAdder")) {
+                return new TitleSelection(itemsAdderTitle, true, "ItemsAdder");
+            }
+            if (requestedProvider.equals("itemsadder")) {
+                plugin.getLogger().warning("Menu asks for ItemsAdder textures, but ItemsAdder is not enabled. Using normal title.");
+            }
+        }
+
+        return new TitleSelection(normalTitle, false, "none");
+    }
+
+    private boolean isEnabled(String pluginName) {
+        Plugin dependency = Bukkit.getPluginManager().getPlugin(pluginName);
+        return dependency != null && dependency.isEnabled();
     }
 
     public void performAction(Player player, String action) {
@@ -156,24 +202,35 @@ public final class CssGuiEngine {
     }
 
     private ItemStack createItem(Material material, String name, String colorValue, String loreValue,
-                                 int amount, boolean glow, Player player) {
+                                 int amount, boolean glow, Player player, boolean hidden) {
         ItemStack item = new ItemStack(material, amount);
         ItemMeta meta = item.getItemMeta();
 
-        String resolvedName = applyPlaceholders(name, player);
-        TextColor color = colorValue == null ? null : TextColor.fromHexString(unquote(colorValue));
-        Component displayName = color == null ? Component.text(resolvedName) : Component.text(resolvedName, color);
-        meta.displayName(displayName);
+        if (hidden) {
+            // The item remains its real Bukkit material and continues to occupy/capture the slot.
+            // A client resource pack maps this item_model to minecraft:empty.
+            meta.setItemModel(INVISIBLE_MODEL);
+            meta.setHideTooltip(true);
+            meta.displayName(Component.empty());
+            meta.lore(null);
+        } else {
+            String resolvedName = applyPlaceholders(name, player);
+            TextColor color = colorValue == null ? null : TextColor.fromHexString(unquote(colorValue));
+            Component displayName = color == null
+                    ? Component.text(resolvedName)
+                    : Component.text(resolvedName, color);
+            meta.displayName(displayName);
 
-        if (loreValue != null) {
-            String resolvedLore = applyPlaceholders(unquote(loreValue), player);
-            meta.lore(Arrays.stream(resolvedLore.split("\\|", -1))
-                    .map(line -> Component.text(line))
-                    .toList());
+            if (loreValue != null) {
+                String resolvedLore = applyPlaceholders(unquote(loreValue), player);
+                meta.lore(Arrays.stream(resolvedLore.split("\\|", -1))
+                        .map(Component::text)
+                        .toList());
+            }
         }
-        if (glow) {
-            meta.addEnchant(Enchantment.UNBREAKING, 1, true);
-            meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
+
+        if (glow && !hidden) {
+            meta.setEnchantmentGlintOverride(true);
         }
 
         item.setItemMeta(meta);
@@ -219,4 +276,6 @@ public final class CssGuiEngine {
     private boolean startsWithIgnoreCase(String value, String prefix) {
         return value.regionMatches(true, 0, prefix, 0, prefix.length());
     }
+
+    private record TitleSelection(String title, boolean textured, String provider) {}
 }
