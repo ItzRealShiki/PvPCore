@@ -1,36 +1,39 @@
-/* Textured NOVA example.
-   The GUI artwork is a font image/glyph rendered from the inventory title.
-   Buttons are real Minecraft items kept in their normal inventory slots. */
+/* The default dashboard uses a custom 176x166 GUI artwork.
+   Install ItemsAdder or Oraxen and apply the files from the setup folder. */
 screen {
     title: "NOVA Dashboard";
     rows: 6;
     texture-provider: auto;
+    texture-image: "mcss:mcss_dashboard";
     title-oraxen: "<shift:-16><glyph:mcss_dashboard>";
-    title-itemsadder: ":offset_-16::mcss_dashboard:";
     background: AIR;
     hide-buttons: true;
 }
 
 .play {
-    slot: 20;
+    slot: 19;
+    hitbox: 2x2;
     item: DIAMOND_SWORD;
-    action: command:spawn;
+    action: message:Play button clicked!;
 }
 
 .profile {
     slot: 22;
+    hitbox: 2x2;
     item: PLAYER_HEAD;
-    action: open:profile;
+    action: message:Profile button clicked!;
 }
 
 .settings {
-    slot: 24;
+    slot: 25;
+    hitbox: 2x2;
     item: COMPARATOR;
-    action: open:settings;
+    action: message:Settings button clicked!;
 }
 
 .close {
     slot: 49;
+    hitbox: 2x1;
     item: BARRIER;
     action: close;
 }
