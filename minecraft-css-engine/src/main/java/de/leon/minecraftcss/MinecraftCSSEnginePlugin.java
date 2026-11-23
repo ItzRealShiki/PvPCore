@@ -6,11 +6,15 @@ import de.leon.minecraftcss.gui.CssGuiListener;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.List;
+
 public final class MinecraftCSSEnginePlugin extends JavaPlugin {
     private CssGuiEngine guiEngine;
 
     @Override
     public void onEnable() {
+        exportIntegrationSetup();
+
         guiEngine = new CssGuiEngine(this);
         guiEngine.initialize();
 
@@ -27,6 +31,27 @@ public final class MinecraftCSSEnginePlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new CssGuiListener(guiEngine), this);
 
         getLogger().info("Minecraft CSS Engine enabled. Use /mcss to open the example GUI.");
+        getLogger().info("ItemsAdder/Oraxen integration setup files are available in plugins/MinecraftCSSEngine/setup/");
+    }
+
+    private void exportIntegrationSetup() {
+        List<String> resources = List.of(
+                "setup/README.txt",
+                "setup/itemsadder/contents/mcss/configs/gui.yml",
+                "setup/itemsadder/contents/mcss/resourcepack/assets/mcss/items/gui_hidden.json",
+                "setup/itemsadder/contents/mcss/resourcepack/assets/mcss/textures/gui/README.txt",
+                "setup/oraxen/glyphs/mcss.yml",
+                "setup/oraxen/pack/assets/mcss/items/gui_hidden.json",
+                "setup/oraxen/pack/textures/gui/README.txt"
+        );
+
+        for (String resource : resources) {
+            try {
+                saveResource(resource, false);
+            } catch (IllegalArgumentException exception) {
+                getLogger().warning("Could not export integration setup file '" + resource + "': " + exception.getMessage());
+            }
+        }
     }
 
     @Override
