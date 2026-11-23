@@ -25,7 +25,7 @@ public final class LagCommand implements CommandExecutor {
 
         if (args.length > 0 && args[0].equalsIgnoreCase("profile")) {
             boolean started = Bukkit.dispatchCommand(Bukkit.getConsoleSender(),
-                    "spark profiler start --timeout 300");
+                    "spark profiler start --timeout 600");
             if (started) {
                 plugin.message(sender, "&aSpark profiler started for 5 minutes. Check the server console for its report URL.");
             } else {
