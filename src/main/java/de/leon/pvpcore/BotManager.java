@@ -74,6 +74,8 @@ public final class BotManager implements Listener {
             bot.setCustomNameVisible(true);
             bot.setInvulnerable(false);
             bot.setGravity(true);
+            bot.setFallDistance(0.0f);
+            bot.setVelocity(new org.bukkit.util.Vector(0.0, 0.0, 0.0));
             owned.put(owner.getUniqueId(), fake);
             boolean stunSlam = owner.getWorld().getName().equals("prac_void")
                     && plugin.practice().mode(owner) == PracticeManager.Mode.STUN_SLAM;
