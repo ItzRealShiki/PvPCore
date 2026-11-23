@@ -32,6 +32,8 @@ import org.bukkit.scoreboard.Score;
 import io.papermc.paper.scoreboard.numbers.NumberFormat;
 
 import java.util.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 public final class PracticeManager implements Listener {
     public enum Mode { STUN_SLAM, SWORD, CRYSTAL_ANCHOR }
@@ -54,6 +56,8 @@ public final class PracticeManager implements Listener {
 
     private final PvPCore plugin;
     private World world;
+    private boolean practiceWorldDiskStateKnown;
+    private boolean practiceWorldWasMissingOnDisk;
     private final Set<String> builtRoomsThisSession = new HashSet<>();
     private final Map<UUID, Integer> stunCombos = new HashMap<>();
     private final Map<UUID, Integer> swordCombos = new HashMap<>();
@@ -118,11 +122,53 @@ public final class PracticeManager implements Listener {
         return new WorldCreator(PRACTICE_WORLD).generator(voidGenerator).createWorld();
     }
 
-    public void initializePracticeWorld() {
-        if (world == null) {
-            world = Bukkit.getWorld(PRACTICE_WORLD);
-            if (world == null) world = createVoidWorld();
+    private boolean hasSavedPracticeWorld() {
+        Path worldFolder = Bukkit.getWorldContainer().toPath().resolve(PRACTICE_WORLD);
+        return Files.isRegularFile(worldFolder.resolve("level.dat"))
+                || Files.isRegularFile(worldFolder.resolve("level.dat_old"));
+    }
+
+    private void ensurePracticeWorldLoaded() {
+        if (world == null) world = Bukkit.getWorld(PRACTICE_WORLD);
+        if (!practiceWorldDiskStateKnown) {
+            practiceWorldWasMissingOnDisk = !hasSavedPracticeWorld();
+            practiceWorldDiskStateKnown = true;
         }
+        if (world == null) world = createVoidWorld();
+        if (world != null) initializePracticeWorldBuildMetadata();
+    }
+
+    private void initializePracticeWorldBuildMetadata() {
+        String currentWorldId = world.getUID().toString();
+        String storedWorldId = plugin.getConfig().getString("practice.world-id", "");
+
+        if (storedWorldId.isBlank()) {
+            // Upgrade path: existing worlds from older PvPCore versions have no
+            // world-id marker. Trust their completed room records only if the
+            // prac_void save was already present before this plugin loaded it.
+            if (!practiceWorldWasMissingOnDisk) {
+                var players = plugin.getConfig().getConfigurationSection("practice.players");
+                if (players != null) {
+                    for (String playerId : players.getKeys(false)) {
+                        String base = "practice.players." + playerId;
+                        if (plugin.getConfig().getBoolean(base + ".built", false)) {
+                            plugin.getConfig().set(base + ".built-world-id", currentWorldId);
+                        }
+                    }
+                }
+            }
+            plugin.getConfig().set("practice.world-id", currentWorldId);
+            plugin.saveConfig();
+        } else if (!storedWorldId.equals(currentWorldId)) {
+            // The world folder was replaced or recreated. Old room markers must
+            // not be trusted, so each room will be pasted into the new world.
+            plugin.getConfig().set("practice.world-id", currentWorldId);
+            plugin.saveConfig();
+        }
+    }
+
+    public void initializePracticeWorld() {
+        ensurePracticeWorldLoaded();
         if (world == null) {
             plugin.getLogger().severe("Could not create the private Practice void world.");
             return;
@@ -228,10 +274,7 @@ public final class PracticeManager implements Listener {
     public boolean isFighting(Player player) { return fightRooms.containsKey(player.getUniqueId()); }
 
     public void teleportToBox(Player admin, Player owner) {
-        if (world == null) {
-            world = Bukkit.getWorld(PRACTICE_WORLD);
-            if (world == null) world = createVoidWorld();
-        }
+        ensurePracticeWorldLoaded();
         if (world == null) {
             plugin.message(admin, "&cPractice world could not be loaded.");
             return;
@@ -266,10 +309,7 @@ public final class PracticeManager implements Listener {
     }
 
     public void startFight(Player challenger, Player opponent) {
-        if (world == null) {
-            world = Bukkit.getWorld(PRACTICE_WORLD);
-            if (world == null) world = createVoidWorld();
-        }
+        ensurePracticeWorldLoaded();
         if (world == null) {
             plugin.message(challenger, "&cPractice world could not be loaded.");
             plugin.message(opponent, "&cPractice world could not be loaded.");
@@ -805,24 +845,31 @@ public final class PracticeManager implements Listener {
         String builtMap = plugin.getConfig().getString(base + ".built-map", "");
         boolean built = plugin.getConfig().getBoolean(base + ".built", false);
         int builtVersion = plugin.getConfig().getInt(base + ".built-schematic-version", 0);
+        String builtWorldId = plugin.getConfig().getString(base + ".built-world-id", "");
+        String currentWorldId = world.getUID().toString();
         String sessionKey = roomIndex + ":" + selectedMap;
+        boolean sameWorld = currentWorldId.equals(builtWorldId);
+        boolean buildMetadataMatches = built && builtVersion == SCHEMATIC_BUILD_VERSION
+                && selectedMap.equals(builtMap) && sameWorld;
 
-        // The void Practice world is created separately from the server's default
-        // Spawn world. Re-paste each personal arena once per plugin session so a
-        // stale config flag can never leave a newly created prac_void world empty.
-        if (builtRoomsThisSession.contains(sessionKey)
-                && built && builtVersion == SCHEMATIC_BUILD_VERSION && selectedMap.equals(builtMap)) {
+        // Reuse the saved arena when its world identity, map and schematic version
+        // still match. A recreated prac_void has a different UUID and is rebuilt.
+        if (buildMetadataMatches) {
+            builtRoomsThisSession.add(sessionKey);
             return true;
         }
 
-        // Clear the exact previously imported schematic when possible. Old generated
-        // placeholder rooms are handled by the loader's small legacy-room cleanup.
-        String previousMap = ARENA_MAPS.contains(builtMap) ? builtMap : "LEGACY_GENERATED";
+        // Only clear a previous schematic when the current world is known to be
+        // the same world in which that previous schematic was pasted.
+        String previousMap = sameWorld
+                ? (ARENA_MAPS.contains(builtMap) ? builtMap : "LEGACY_GENERATED")
+                : "";
 
         if (buildRoom(roomCenterX(roomIndex), 128, selectedMap, previousMap)) {
             plugin.getConfig().set(base + ".built", true);
             plugin.getConfig().set(base + ".built-map", selectedMap);
             plugin.getConfig().set(base + ".built-schematic-version", SCHEMATIC_BUILD_VERSION);
+            plugin.getConfig().set(base + ".built-world-id", currentWorldId);
             builtRoomsThisSession.add(sessionKey);
             plugin.saveConfig();
             return true;
