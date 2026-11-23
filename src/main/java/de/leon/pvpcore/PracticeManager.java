@@ -88,8 +88,22 @@ public final class PracticeManager implements Listener {
     public PracticeManager(PvPCore plugin) {
         this.plugin = plugin;
         this.world = Bukkit.getWorld(PRACTICE_WORLD);
-        Bukkit.getScheduler().runTaskTimer(plugin, this::updateNearbyArenas, 1L, 10L);
-        Bukkit.getScheduler().runTaskTimer(plugin, this::updateCrystalAnchorTimers, 1L, 5L);
+        Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            long started = System.nanoTime();
+            try {
+                updateNearbyArenas();
+            } finally {
+                plugin.lag().recordOperation("Practice arena updates", System.nanoTime() - started);
+            }
+        }, 1L, 10L);
+        Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            long started = System.nanoTime();
+            try {
+                updateCrystalAnchorTimers();
+            } finally {
+                plugin.lag().recordOperation("Practice timer updates", System.nanoTime() - started);
+            }
+        }, 1L, 5L);
     }
 
     private int roomCenterX(int index) { return 128 + index * ROOM_SPACING; }
@@ -779,6 +793,15 @@ public final class PracticeManager implements Listener {
     }
 
     private boolean ensureRoomBuilt(String base, int roomIndex, String selectedMap) {
+        long started = System.nanoTime();
+        try {
+            return ensureRoomBuiltInternal(base, roomIndex, selectedMap);
+        } finally {
+            plugin.lag().recordOperation("Practice room build [" + selectedMap + "]", System.nanoTime() - started);
+        }
+    }
+
+    private boolean ensureRoomBuiltInternal(String base, int roomIndex, String selectedMap) {
         String builtMap = plugin.getConfig().getString(base + ".built-map", "");
         boolean built = plugin.getConfig().getBoolean(base + ".built", false);
         int builtVersion = plugin.getConfig().getInt(base + ".built-schematic-version", 0);
