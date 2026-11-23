@@ -3,13 +3,19 @@ version: '${project.version}'
 main: de.leon.customguitest.CustomGuiTestPlugin
 api-version: '26.2'
 author: ItzRealShiki
-description: Standalone multi-screen custom GUI and UI test framework.
+description: Paper inventory GUI framework with a CSS-inspired .mcss stylesheet engine.
 commands:
   test:
-    description: Opens one of seven custom GUI test screens.
+    description: Opens the original GUI test screens.
     usage: /test [nova|dashboard|profile|settings|showcase|stats|lab]
     aliases: [testgui]
+  cssui:
+    description: Opens and reloads CSS-styled inventory menus.
+    usage: /cssui [menu|open <menu>|reload]
 permissions:
   customguitest.use:
-    description: Allows use of the custom GUI test menu.
+    description: Allows use of the original GUI test menu.
     default: true
+  customguitest.css:
+    description: Allows opening CSS UI menus and reloading their stylesheets.
+    default: op
