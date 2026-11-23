@@ -724,7 +724,7 @@ public final class PracticeManager implements Listener {
         if (challengeHeight > 0) activeAttempts.add(p.getUniqueId());
 
         if (challengeHeight > 0) {
-            plugin.message(p, "&aStun Slam &7- &e" + difficultyName(challengeHeight) + " &7(" + challengeHeight + " blocks).");
+            plugin.message(p, "&aStun Slam &7- &e" + difficultyName(challengeHeight) + " &7difficulty.");
             plugin.message(p, "&7Score: &a" + score(p) + " &8| &7Land a hit on the bot to earn a point.");
         } else if (mode(p) == Mode.CRYSTAL_ANCHOR) {
             plugin.message(p, "&aEntered Crystal Anchor practice. &7Place an anchor, then explode it to record your time.");
@@ -740,50 +740,30 @@ public final class PracticeManager implements Listener {
         int index = plugin.getConfig().getInt("practice.players." + player.getUniqueId() + ".room", 0);
         Location spawn = arenaSpawnLocation(index, 0, 0);
         if (spawn == null) return null;
-        if (height > 0) spawn.add(0, height, 0);
+
+        // All normal Practice modes, including Stun Slam, begin on the actual
+        // arena floor. The selected height remains a difficulty setting only.
         spawn.setYaw(0.0f);
-        spawn.setPitch(height > 0 ? 90.0f : 0.0f);
+        spawn.setPitch(0.0f);
         return spawn;
     }
 
     public Location botSpawnLocation(Player owner) {
-        int index = plugin.getConfig().getInt("practice.players." + owner.getUniqueId() + ".room", 0);
-        Location playerSpawn = arenaSpawnLocation(index, 0, 0);
-        if (playerSpawn == null) return null;
-        int playerFloorY = playerSpawn.getBlockY() - 1;
-
-        // The bot must not spawn inside the player. Overlapping player hitboxes can
-        // push the fake player upwards on its first physics ticks, making it appear
-        // as though the bot was teleported into the air.
-        int[][] offsets = {
-                {2, 0}, {-2, 0}, {0, 2}, {0, -2},
-                {3, 0}, {-3, 0}, {0, 3}, {0, -3},
-                {2, 2}, {-2, 2}, {2, -2}, {-2, -2}
-        };
-        for (int[] offset : offsets) {
-            Location candidate = arenaSpawnLocation(index, offset[0], offset[1]);
-            if (candidate == null || candidate.distanceSquared(playerSpawn) < 4.0) continue;
-            if (Math.abs((candidate.getBlockY() - 1) - playerFloorY) > 2) continue;
-
-            int floorY = candidate.getBlockY() - 1;
-            if (isSafeArenaSpawnSurface(candidate.getBlockX(), floorY, candidate.getBlockZ())) {
-                return candidate;
-            }
-        }
-
-        // The center spawn is still guaranteed to be the arena's resolved ground
-        // location if no separate nearby position can be found.
-        return playerSpawn;
+        // The bot uses exactly the same grounded coordinates as the player's
+        // Practice spawn. BotManager also places the owner there before spawning it.
+        return startLocation(owner, 0);
     }
 
     private int highestArenaSurfaceY(int x, int z) {
+        // Arena schematics can contain barrier decorations above their real floor.
+        // Do not stop at the first air block beneath a barrier; keep searching until
+        // a solid floor with two clear blocks above it is found.
         int y = world.getHighestBlockYAt(x, z);
         while (y > world.getMinHeight()) {
-            Material type = world.getBlockAt(x, y, z).getType();
-            if (type != Material.BARRIER && type != Material.LIGHT_BLUE_STAINED_GLASS) break;
+            if (isSafeArenaSpawnSurface(x, y, z)) return y;
             y--;
         }
-        return y;
+        return NO_SAFE_ARENA_SPAWN;
     }
 
     private Location arenaSpawnLocation(int roomIndex, int offsetX, int offsetZ) {
