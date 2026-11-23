@@ -1,75 +1,62 @@
 # Minecraft CSS Engine
 
-Standalone Paper plugin that renders inventory GUIs from CSS-inspired `.mcss` files. It does not depend on PvPCore or CustomGuiTest.
+Standalone Paper plugin that creates inventory GUIs from CSS-inspired `.mcss` files. It does not depend on PvPCore or CustomGuiTest.
 
-## Textured GUI mode (ItemsAdder / Oraxen)
+## Important: custom artwork needs a resource pack
 
-The engine uses a layered design:
+A Paper plugin alone cannot replace the vanilla inventory artwork. The client must receive a resource pack containing the NOVA background glyph and the hidden-item model. This project includes a finished 176x222 dashboard image and setup files for ItemsAdder and Oraxen.
 
-1. Each button is a real Bukkit `ItemStack` of the selected vanilla material (for example `DIAMOND_SWORD`, `PLAYER_HEAD`, or `COMPARATOR`). The item remains in its inventory slot and the engine handles that slot's click action.
-2. In textured mode, the engine assigns the item model `mcss:gui_hidden` and hides its tooltip. The supplied resource-pack model maps to `minecraft:empty`, so the client draws no item icon even though the real item stack remains in the slot.
-3. A large font image/glyph is rendered from the inventory title over the vanilla inventory. The PNG contains the visible button artwork. Set each CSS `slot` to the slot beneath the matching button in your PNG.
+After the plugin starts once, its setup files are exported to `plugins/MinecraftCSSEngine/setup/`.
 
-### Setup files included in the JAR
-
-After installing the JAR and starting the server once, the plugin exports integration files to:
-
-`plugins/MinecraftCSSEngine/setup/`
-
-Choose ONE provider.
-
-**ItemsAdder**
+### ItemsAdder (recommended)
 1. Copy `plugins/MinecraftCSSEngine/setup/itemsadder/contents/mcss` into `plugins/ItemsAdder/contents/mcss`.
-2. Put your background image at `plugins/ItemsAdder/contents/mcss/resourcepack/assets/mcss/textures/gui/dashboard.png`.
-3. Run `/iazip`.
+2. Run `/iazip`.
+3. Make sure the generated ItemsAdder pack is enabled and sent to your client.
+4. Run `/mcss`.
 
-The included config registers `mcss_dashboard`. The menu title uses `:offset_-16::mcss_dashboard:`.
+The included `mcss.yml` registers `mcss_dashboard` as a font image. The PNG is already in `textures/gui/dashboard.png`; no extra image download is required.
 
-**Oraxen**
-1. Copy `plugins/MinecraftCSSEngine/setup/oraxen/glyphs/mcss.yml` into `plugins/Oraxen/glyphs/mcss.yml`.
-2. Copy `plugins/MinecraftCSSEngine/setup/oraxen/pack/assets/mcss/items/gui_hidden.json` into `plugins/Oraxen/pack/assets/mcss/items/gui_hidden.json`.
-3. Put your background image at `plugins/Oraxen/pack/textures/gui/dashboard.png`.
-4. Run `/oraxen reload all`.
+### Oraxen
+1. Copy `setup/oraxen/glyphs/mcss.yml` into `plugins/Oraxen/glyphs/mcss.yml`.
+2. Copy `setup/oraxen/pack/assets/mcss/items/gui_hidden.json` into `plugins/Oraxen/pack/assets/mcss/items/gui_hidden.json`.
+3. Copy `setup/oraxen/pack/textures/gui/dashboard.png` into `plugins/Oraxen/pack/textures/gui/dashboard.png`.
+4. Run `/oraxen reload all`, ensure the generated pack is enabled and sent to your client, then run `/mcss`.
 
-The included glyph config registers `mcss_dashboard`. The menu title uses `<shift:-16><glyph:mcss_dashboard>`.
+The provider is optional at runtime, but required to see the custom image. If neither provider is available, the engine falls back to a normal inventory and keeps the Minecraft items visible.
 
-Only one provider is required. When both are installed, `texture-provider: auto` prefers Oraxen. Choose `itemsadder` or `oraxen` explicitly to select one.
+## How the buttons work
 
-The PNG is your actual GUI artwork. It should contain the visible button designs at positions that align with your chosen inventory slots. The plugin intentionally does not invent a default background image.
+The artwork is a font image/glyph drawn over the inventory. Every button is a real Bukkit ItemStack stored in ordinary inventory slots. In textured mode, the engine assigns `mcss:gui_hidden` as its item model. The supplied resource-pack definition maps this to `minecraft:empty`, hiding the item icon while keeping the real item in the slot. Inventory clicks still trigger the button's configured action.
 
-## Example textured menu
+The `hitbox` property lets a button span adjacent slots:
+- `hitbox: 1x1` — one slot (default)
+- `hitbox: 3x2` — six adjacent slots share one action
+- Width can be 1–9 and height 1–6, provided the area stays in the menu and does not overlap another button.
+
+The sample dashboard uses Play at slot 27 (3x2), Profile at slot 30 (3x2), Settings at slot 33 (3x2), and Close at slot 52 (2x1).
+
+For ItemsAdder, the engine uses the official `TexturedInventoryWrapper` API and checks that the font image is registered before opening the GUI. For Oraxen, it uses the glyph in the inventory title. Missing texture setup is logged and the engine falls back to a visible-item inventory rather than silently hiding every button.
+
+## Example
 
 ```css
 screen {
     title: "NOVA Dashboard";
     rows: 6;
     texture-provider: auto;
-    title-oraxen: "<shift:-16><glyph:mcss_dashboard>";
-    title-itemsadder: ":offset_-16::mcss_dashboard:";
+    texture-image: "mcss:mcss_dashboard";
+    title-oraxen: "<glyph:mcss_dashboard>";
     background: AIR;
     hide-buttons: true;
 }
 
 .play {
-    slot: 20;
+    slot: 27;
+    hitbox: 3x2;
     item: DIAMOND_SWORD;
     action: command:spawn;
 }
-
-.profile {
-    slot: 22;
-    item: PLAYER_HEAD;
-    action: open:profile;
-}
-
-.close {
-    slot: 49;
-    item: BARRIER;
-    action: close;
-}
 ```
-
-`item` chooses the actual Minecraft item stack used as a click target. In textured mode, `hide-buttons: true` sets the invisible model by default. Use `render: normal` for an individual visible item or `render: hidden` to hide one explicitly. If no supported provider is active, the engine falls back to a normal title and leaves the button items visible by default.
 
 ## Commands
 
@@ -77,19 +64,15 @@ screen {
 - `/mcss <name>` — open a menu by name
 - `/mcss open <name>` — open a menu explicitly
 - `/mcss list` — list available menus (admin)
-- `/mcss reload` — ensure the menu directory/default file exists (admin); menu files are parsed on open
+- `/mcss reload` — ensure the menu directory/default file exists (admin); menu files are parsed when opened
 
 ## Supported properties
 
-- `screen`: `title`, `rows` (1–6), `background`, `texture-provider` (`auto`, `oraxen`, `itemsadder`, `none`), `title-oraxen`, `title-itemsadder`, `hide-buttons`
-- Components (`.className` or `#id`): `slot`, `item` (or `material`), `text`, `color`, `lore`, `amount`, `glow`, `render` (`hidden`/`normal`), `action`
+- `screen`: `title`, `rows` (1–6), `background`, `texture-provider` (`auto`, `itemsadder`, `oraxen`, `none`), `texture-image`, `title-oraxen`, `title-offset`, `texture-offset`, `hide-buttons`
+- Components: `slot`, `hitbox`, `item` (or `material`), `text`, `color`, `lore`, `amount`, `glow`, `render` (`hidden`/`normal`), `action`
 - Actions: `close`, `message:<text>`, `command:<player command>`, `open:<menu name>`
 - Placeholders: `%player%`, `%world%`, `%online%`, `%max_players%`, `%x%`, `%y%`, `%z%`
 
-## Platform limitations
-
-This is a CSS-inspired language for Paper inventory GUIs, not browser CSS. Inventory clicks remain slot-based. The custom image is rendered from the inventory title as a font glyph, not as a native Minecraft window texture. Arbitrary pixel-based click hitboxes, HTML elements, and browser hover states are not supported.
-
 ## Build
 
-Run `mvn --batch-mode clean package` inside this directory. Output: `target/MinecraftCSSEngine-1.0.0.jar`.
+Run `mvn --batch-mode clean package` inside `minecraft-css-engine`. Output: `target/MinecraftCSSEngine-1.0.0.jar`.
