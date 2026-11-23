@@ -30,7 +30,7 @@ commands:
     usage: /setspawn
   lag:
     description: Opens Prac performance diagnostics and lag analysis.
-    usage: /lag [report|profile]
+    usage: /lag [copy|report|profile]
   admin:
     description: Opens the administration dashboard.
     usage: /admin
