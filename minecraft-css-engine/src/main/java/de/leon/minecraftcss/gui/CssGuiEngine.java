@@ -372,7 +372,7 @@ public final class CssGuiEngine {
         return value.regionMatches(true, 0, prefix, 0, prefix.length());
     }
 
-    private String rootMessage(Exception exception) {
+    private String rootMessage(Throwable exception) {
         Throwable cause = exception instanceof InvocationTargetException invocation && invocation.getCause() != null
                 ? invocation.getCause() : exception;
         return cause.getMessage() == null ? cause.getClass().getSimpleName() : cause.getMessage();
