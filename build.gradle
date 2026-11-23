@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'de.leon'
-version = '1.0.18' // Keep Practice bots on nearby safe ground instead of overlapping the player
+version = '1.0.19' // Search the full playable arena for verified player spawn positions
 
 repositories {
     mavenCentral()
