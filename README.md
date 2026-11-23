@@ -19,7 +19,7 @@ Output: `target/PvPCore-1.0.0.jar`
 - `/admin` — Opens the administration GUI.
 - `/lag` — Opens the Prac lag diagnostics dashboard (Admin.Core).
 - `/lag report` — Prints a text diagnostics report.
-- `/lag profile` — Starts Paper's Spark profiler for 5 minutes; check the server console for the report URL.
+- `/lag profile` — Starts Paper's Spark profiler for 10 minutes; check the server console for the report URL.
 - `/gm` or `/gamemode` — Opens the selector GUI; accepts a mode and optional player.
 - `/gms [player]` — Sets Survival mode.
 - `/gmc [player]` — Sets Creative mode.
