@@ -1009,7 +1009,7 @@ public final class WorldManager {
      * been successfully unloaded.
      */
     public void cleanupUnusedWorldsWhenReady(int attempt) {
-        final String marker = "worlds.only-spawn-and-prac-cleaned-v1";
+        final String marker = "worlds.only-spawn-and-prac-cleaned-v2";
         if (plugin.getConfig().getBoolean(marker, false)) return;
 
         World spawnWorld = Bukkit.getWorld(SPAWN_WORLD_NAME);
