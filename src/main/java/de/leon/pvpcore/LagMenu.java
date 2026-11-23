@@ -141,7 +141,7 @@ public final class LagMenu implements Listener {
         inv.setItem(45, item(Material.SPECTRAL_ARROW, "&f&lREFRESH",
                 "&7Take a fresh snapshot and update this panel."));
         inv.setItem(49, item(Material.SPYGLASS, "&d&lSTART SPARK PROFILE",
-                "&7Runs Paper's Spark profiler for 5 minutes.",
+                "&7Runs Paper's Spark profiler for 10 minutes.",
                 "&7The report URL appears in the server console.",
                 "&cUse while the lag is actually happening.",
                 "&eClick to start"));
@@ -284,7 +284,7 @@ public final class LagMenu implements Listener {
 
         inv.setItem(45, item(Material.ARROW, "&f&lBACK", "&7Return to overview."));
         inv.setItem(49, item(Material.SPYGLASS, "&d&lSTART SPARK PROFILE",
-                "&7Runs for 5 minutes. Check the console for the report URL.",
+                "&7Runs for 10 minutes. Check the console for the report URL.",
                 "&eClick to start"));
         inv.setItem(53, item(Material.BARRIER, "&c&lCLOSE"));
         return inv;
@@ -324,7 +324,7 @@ public final class LagMenu implements Listener {
     private void startSpark(Player player) {
         boolean started = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "spark profiler start --timeout 300");
         if (started) {
-            plugin.message(player, "&aSpark profiler started for 5 minutes. Check the server console for its report URL.");
+            plugin.message(player, "&aSpark profiler started for 10 minutes. Check the server console for its report URL.");
         } else {
             plugin.message(player, "&cSpark is not available on this server.");
         }
