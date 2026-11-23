@@ -160,6 +160,8 @@ public final class BotManager implements Listener {
     }
 
     private void removeOutOfRangeBots() {
+        long started = System.nanoTime();
+        try {
         for (Map.Entry<UUID, Mannequin> entry : new HashMap<>(owned).entrySet()) {
             Player owner = Bukkit.getPlayer(entry.getKey());
             Mannequin mannequin = entry.getValue();
@@ -172,6 +174,9 @@ public final class BotManager implements Listener {
                     || location.distanceSquared(owner.getLocation()) > OWNER_RADIUS_SQUARED) {
                 removeOwned(entry.getKey());
             }
+        }
+        } finally {
+            plugin.lag().recordOperation("Bot cleanup (" + owned.size() + " active)", System.nanoTime() - started);
         }
     }
 
