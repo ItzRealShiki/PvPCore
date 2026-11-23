@@ -1,0 +1,33 @@
+/* Minecraft CSS Engine - first example */
+screen {
+    title: "NOVA • CSS Engine";
+    rows: 3;
+    background: BLACK_STAINED_GLASS_PANE;
+}
+
+.home {
+    slot: 10;
+    material: NETHER_STAR;
+    text: "NOVA Dashboard";
+    color: #8b5cf6;
+    lore: "Rendered by .mcss|Paper inventory UI";
+    action: message:Welcome to the CSS Engine!;
+}
+
+.settings {
+    slot: 13;
+    material: COMPARATOR;
+    text: "Settings";
+    color: #38bdf8;
+    lore: "Your next custom menu starts here.";
+    action: message:Settings component clicked!;
+}
+
+.close {
+    slot: 16;
+    material: BARRIER;
+    text: "Close";
+    color: #fb7185;
+    lore: "Close this screen";
+    action: close;
+}
