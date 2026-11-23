@@ -44,6 +44,7 @@ public final class PracticeManager implements Listener {
     private static final int ARENA_FORCE_FIELD_HEIGHT = 200;
     private static final Material FORCE_FIELD_BLOCK = Material.BARRIER;
     private static final int LEGACY_GLASS_HEIGHT = 12;
+    private static final int NO_SAFE_ARENA_SPAWN = Integer.MIN_VALUE;
     // Horizontal centers of the nine tall ice-spike groups detected in Arena 1's schematic.
     // The wall is interpolated smoothly between these anchors, keeping it centered between spikes.
     private static final int[][] ARENA_1_ICICLE_POINTS = {
@@ -287,7 +288,15 @@ public final class PracticeManager implements Listener {
             return;
         }
 
-        ensureRoomBuilt(base, index, arenaMap(owner));
+        if (!ensureRoomBuilt(base, index, arenaMap(owner))) {
+            plugin.message(admin, "&cThe player's Practice arena could not be loaded.");
+            return;
+        }
+        Location adminSpawn = arenaSpawnLocation(index, 0, 0);
+        if (adminSpawn == null) {
+            plugin.message(admin, "&cNo safe spawn position was found in that Practice arena.");
+            return;
+        }
         adminBoxVisits.put(admin.getUniqueId(), index);
         int radius = arenaForceFieldRadius(index);
         if (!activeForceFields.contains(index)) {
@@ -298,7 +307,7 @@ public final class PracticeManager implements Listener {
             forceFieldHeights.put(index, ARENA_FORCE_FIELD_HEIGHT);
             forceFieldRadii.put(index, radius);
         }
-        admin.teleport(arenaSpawnLocation(index, 0, 0));
+        admin.teleport(adminSpawn);
         Bukkit.getScheduler().runTask(plugin, () -> updatePlayerVisibility(admin));
         plugin.message(admin, "&aTeleported to &f" + owner.getName() + "&a's box.");
     }
@@ -326,7 +335,18 @@ public final class PracticeManager implements Listener {
         }
         int cx = roomCenterX(index), cz = 128;
         clearPlatform(cx, cz);
-        ensureRoomBuilt(base, index, arenaMap(challenger));
+        if (!ensureRoomBuilt(base, index, arenaMap(challenger))) {
+            plugin.message(challenger, "&cThe Practice arena could not be loaded.");
+            plugin.message(opponent, "&cThe Practice arena could not be loaded.");
+            return;
+        }
+        Location challengerSpawn = fightSpawnLocation(index, -3);
+        Location opponentSpawn = fightSpawnLocation(index, 3);
+        if (challengerSpawn == null || opponentSpawn == null) {
+            plugin.message(challenger, "&cNo safe spawn positions were found in this arena.");
+            plugin.message(opponent, "&cNo safe spawn positions were found in this arena.");
+            return;
+        }
         plugin.bots().removeOwned(challenger);
         plugin.bots().removeOwned(opponent);
         activeAttempts.remove(challenger.getUniqueId());
@@ -349,7 +369,7 @@ public final class PracticeManager implements Listener {
             fighter.setGameMode(GameMode.SURVIVAL);
             fighter.setFallDistance(0);
             fighter.setVelocity(new org.bukkit.util.Vector(0, 0, 0));
-            fighter.teleport(fightSpawnLocation(index, fightSpawnOffsets.get(fighter.getUniqueId())));
+            fighter.teleport(fighter.equals(challenger) ? challengerSpawn : opponentSpawn);
             applyFightKit(fighter, selected);
             fighter.setHealth(20.0);
             fighter.setFoodLevel(20);
@@ -362,6 +382,7 @@ public final class PracticeManager implements Listener {
 
     private Location fightSpawnLocation(int room, int offset) {
         Location spawn = arenaSpawnLocation(room, offset, 0);
+        if (spawn == null) return null;
         spawn.setYaw(offset < 0 ? -90.0f : 90.0f);
         spawn.setPitch(0.0f);
         return spawn;
@@ -677,10 +698,16 @@ public final class PracticeManager implements Listener {
             plugin.message(p, "&cYour arena could not be loaded. Please contact an administrator; the console contains the loader error.");
             return;
         }
+        Location practiceSpawn = startLocation(p, challengeHeight);
+        if (practiceSpawn == null) {
+            plugin.message(p, "&cNo safe spawn position was found in this Practice arena. Please contact an administrator.");
+            return;
+        }
         plugin.bots().removeOwned(p);
         p.setGameMode(GameMode.SURVIVAL);
         p.setFallDistance(0);
-        p.teleport(startLocation(p, challengeHeight));
+        p.setVelocity(new org.bukkit.util.Vector(0, 0, 0));
+        p.teleport(practiceSpawn);
         Bukkit.getScheduler().runTask(plugin, () -> updatePlayerVisibility(p));
         applyKit(p);
         stunCombos.putIfAbsent(p.getUniqueId(), 0);
@@ -712,6 +739,7 @@ public final class PracticeManager implements Listener {
     private Location startLocation(Player player, int height) {
         int index = plugin.getConfig().getInt("practice.players." + player.getUniqueId() + ".room", 0);
         Location spawn = arenaSpawnLocation(index, 0, 0);
+        if (spawn == null) return null;
         if (height > 0) spawn.add(0, height, 0);
         spawn.setYaw(0.0f);
         spawn.setPitch(height > 0 ? 90.0f : 0.0f);
@@ -721,6 +749,7 @@ public final class PracticeManager implements Listener {
     public Location botSpawnLocation(Player owner) {
         int index = plugin.getConfig().getInt("practice.players." + owner.getUniqueId() + ".room", 0);
         Location playerSpawn = arenaSpawnLocation(index, 0, 0);
+        if (playerSpawn == null) return null;
         int playerFloorY = playerSpawn.getBlockY() - 1;
 
         // The bot must not spawn inside the player. Overlapping player hitboxes can
@@ -733,7 +762,7 @@ public final class PracticeManager implements Listener {
         };
         for (int[] offset : offsets) {
             Location candidate = arenaSpawnLocation(index, offset[0], offset[1]);
-            if (candidate.distanceSquared(playerSpawn) < 4.0) continue;
+            if (candidate == null || candidate.distanceSquared(playerSpawn) < 4.0) continue;
             if (Math.abs((candidate.getBlockY() - 1) - playerFloorY) > 2) continue;
 
             int floorY = candidate.getBlockY() - 1;
@@ -809,28 +838,55 @@ public final class PracticeManager implements Listener {
         }
 
         if (bestY == Integer.MIN_VALUE) {
-            double nearest = Double.MAX_VALUE;
-            for (int dx = -16; dx <= 16; dx++) {
-                for (int dz = -16; dz <= 16; dz++) {
-                    int x = targetX + dx;
-                    int z = targetZ + dz;
-                    if (!insideSafeArenaSpawnArea(roomIndex, x, z)) continue;
-                    int floorY = highestArenaSurfaceY(x, z);
-                    if (!isSafeArenaSpawnSurface(x, floorY, z)) continue;
-                    double distance = dx * dx + dz * dz;
-                    if (distance < nearest) {
-                        nearest = distance;
-                        bestX = x;
-                        bestZ = z;
-                        bestY = floorY;
+            // The center can be occupied by arena geometry or a barrier column.
+            // Expand the search over the whole playable footprint instead of
+            // teleporting to the unchecked center as a last resort.
+            int maxRadius = arenaMap(roomIndex).equals("ARENA_1")
+                    ? 84 : (int) Math.ceil(arenaForceFieldRadius(roomIndex));
+            for (int radius = 0; radius <= maxRadius; radius++) {
+                int ringBestY = Integer.MIN_VALUE;
+                int ringBestX = targetX;
+                int ringBestZ = targetZ;
+                double ringBestScore = Double.MAX_VALUE;
+
+                for (int dx = -radius; dx <= radius; dx++) {
+                    for (int dz = -radius; dz <= radius; dz++) {
+                        if (Math.max(Math.abs(dx), Math.abs(dz)) != radius) continue;
+                        int x = targetX + dx;
+                        int z = targetZ + dz;
+                        if (!insideSafeArenaSpawnArea(roomIndex, x, z)) continue;
+
+                        int floorY = highestArenaSurfaceY(x, z);
+                        if (!isSafeArenaSpawnSurface(x, floorY, z)) continue;
+
+                        double horizontalDistance = dx * dx + dz * dz;
+                        double verticalDifference = referenceFloorY == null
+                                ? 0.0 : Math.abs(floorY - referenceFloorY);
+                        double score = horizontalDistance + verticalDifference * 4.0;
+                        if (score < ringBestScore) {
+                            ringBestScore = score;
+                            ringBestX = x;
+                            ringBestZ = z;
+                            ringBestY = floorY;
+                        }
                     }
+                }
+
+                // The first ring containing a valid surface is the nearest safe
+                // playable ring; never fall back to an unchecked or barrier block.
+                if (ringBestY != Integer.MIN_VALUE) {
+                    bestX = ringBestX;
+                    bestZ = ringBestZ;
+                    bestY = ringBestY;
+                    break;
                 }
             }
         }
 
         if (bestY == Integer.MIN_VALUE) {
-            int floorY = Math.max(world.getMinHeight(), highestArenaSurfaceY(targetX, targetZ));
-            return new Location(world, targetX + 0.5, floorY + 1.0, targetZ + 0.5);
+            plugin.getLogger().severe("No safe ground position exists in Practice room "
+                    + roomIndex + " (" + arenaMap(roomIndex) + "). Player teleport was cancelled.");
+            return null;
         }
         return new Location(world, bestX + 0.5, bestY + 1.0, bestZ + 0.5);
     }
@@ -964,14 +1020,17 @@ public final class PracticeManager implements Listener {
     }
 
     private int arenaFloorY(int roomIndex) {
-        return arenaFloorCache.computeIfAbsent(roomIndex,
-                index -> arenaSpawnLocation(index, 0, 0).getBlockY() - 1);
+        return arenaFloorCache.computeIfAbsent(roomIndex, index -> {
+            Location spawn = arenaSpawnLocation(index, 0, 0);
+            return spawn == null ? NO_SAFE_ARENA_SPAWN : spawn.getBlockY() - 1;
+        });
     }
 
     private void buildForceField(int cx, int cz, int ignoredHeight, int arenaRadius) {
         if (world == null) return;
         int roomIndex = Math.floorDiv(cx - 128, ROOM_SPACING);
         int floorY = arenaFloorY(roomIndex);
+        if (floorY == NO_SAFE_ARENA_SPAWN) return;
         int topY = Math.min(world.getMaxHeight() - 1, floorY + ARENA_FORCE_FIELD_HEIGHT);
 
         if (arenaMap(roomIndex).equals("ARENA_1")) {
@@ -1042,6 +1101,7 @@ public final class PracticeManager implements Listener {
         if (remaining > activationDistance) return;
 
         int floorY = arenaFloorY(Math.floorDiv(cx - 128, ROOM_SPACING));
+        if (floorY == NO_SAFE_ARENA_SPAWN) return;
         Particle.DustOptions energy = new Particle.DustOptions(Color.fromRGB(65, 205, 255), 1.15f);
         double angle = Math.atan2(relativeZ, relativeX);
         double arcHalfWidth = 8.0 / Math.max(1.0, arenaRadius);
@@ -1065,6 +1125,7 @@ public final class PracticeManager implements Listener {
         if (world == null) return;
         int roomIndex = Math.floorDiv(cx - 128, ROOM_SPACING);
         int floorY = arenaFloorY(roomIndex);
+        if (floorY == NO_SAFE_ARENA_SPAWN) return;
         int topY = Math.min(world.getMaxHeight() - 1, floorY + ARENA_FORCE_FIELD_HEIGHT);
         int steps = Math.max(240, arenaRadius * 12);
         for (int i = 0; i < steps; i++) {
@@ -1150,9 +1211,14 @@ public final class PracticeManager implements Listener {
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             resetting.remove(id);
             if (!p.isOnline() || p.getWorld() != world) return;
+            Location resetSpawn = startLocation(p, selectedHeight(p));
+            if (resetSpawn == null) {
+                plugin.message(p, "&cNo safe Practice spawn position was found. Please contact an administrator.");
+                return;
+            }
             p.setFallDistance(0);
             p.setVelocity(new org.bukkit.util.Vector(0, 0, 0));
-            p.teleport(startLocation(p, selectedHeight(p)));
+            p.teleport(resetSpawn);
             activeAttempts.add(id);
         }, 10L);
     }
