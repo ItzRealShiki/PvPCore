@@ -1,0 +1,10 @@
+info:
+  namespace: mcss
+
+font_images:
+  mcss_dashboard:
+    path: gui/dashboard.png
+    scale_ratio: 256
+    y_position: 45
+    show_in_gui: false
+    suggest_in_command: false
