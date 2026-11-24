@@ -115,6 +115,9 @@ final class SchematicLoader {
                 for (int x = 0; x < schematic.width; x++) {
                     BlockData state = schematic.palette[schematic.blockIndices[index++] & 0xFFFF];
                     if (state == null || state.getMaterial().isAir()) continue;
+                    // Arena 3 gets its only barrier from the generated circular perimeter.
+                    // Ignore barrier blocks stored inside the schematic so no inner pillars remain.
+                    if ("ARENA_3".equals(arena) && state.getMaterial() == Material.BARRIER) continue;
                     if (state instanceof Leaves leaves) leaves.setPersistent(true);
                     world.getBlockAt(schematicX + x, worldY, schematicZ + z).setBlockData(state, false);
                 }
