@@ -53,7 +53,7 @@ public final class PracticeManager implements Listener {
     };
     private static final List<String> ARENA_MAPS = List.of("ARENA_1", "ARENA_3");
     private static final String PRACTICE_WORLD = "prac_void";
-    private static final int SCHEMATIC_BUILD_VERSION = 5;
+    private static final int SCHEMATIC_BUILD_VERSION = 6;
 
     private final PvPCore plugin;
     private World world;
@@ -1048,8 +1048,16 @@ public final class PracticeManager implements Listener {
             int z = cz + (int) Math.round(Math.sin(angle) * arenaRadius);
             for (int y = floorY + 1; y <= topY; y++) world.getBlockAt(x, y, z).setType(FORCE_FIELD_BLOCK, false);
         }
-        // Arena 3 uses an open-top cylindrical perimeter only.
-        // Do not fill the top disk; the barrier must exist solely around the rim.
+        // Close Arena 3 with a circular barrier disk at exactly 200 blocks
+        // above the arena floor, keeping the cylindrical wall open below it.
+        int radiusSquared = arenaRadius * arenaRadius;
+        for (int dx = -arenaRadius; dx <= arenaRadius; dx++) {
+            for (int dz = -arenaRadius; dz <= arenaRadius; dz++) {
+                if (dx * dx + dz * dz <= radiusSquared) {
+                    world.getBlockAt(cx + dx, topY, cz + dz).setType(FORCE_FIELD_BLOCK, false);
+                }
+            }
+        }
     }
 
     private boolean insideArenaOneBarrierPolygon(int x, int z) {
