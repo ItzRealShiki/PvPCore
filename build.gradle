@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'de.leon'
-version = '1.0.21' // Preserve all Prac worlds during automatic world cleanup
+version = '1.0.22' // Arena 3 open cylindrical barrier perimeter
 
 repositories {
     mavenCentral()
