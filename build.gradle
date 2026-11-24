@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'de.leon'
-version = '1.0.23' // Add Arena 3 barrier ceiling at 200 blocks
+version = '1.0.24' // Recycle modified Practice arena blocks between sessions
 
 repositories {
     mavenCentral()
