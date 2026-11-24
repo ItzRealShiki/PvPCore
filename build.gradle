@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'de.leon'
-version = '1.0.20' // Spawn player and Practice bot together on the resolved arena floor
+version = '1.0.21' // Preserve all Prac worlds during automatic world cleanup
 
 repositories {
     mavenCentral()
